@@ -1,11 +1,19 @@
-import numpy     as     np
-from numba       import jit
+import numpy   as     np
+from   numba   import jit
+from   pathlib import Path
 
 ###############################################################################
 #Non-Standard Imports
 ###############################################################################
-import integration   as itg
-import model_handler as mh
+try:
+    import dunlin._utils_model.integration as itg
+    import dunlin.model_handler            as mh
+except Exception as e:
+    if Path.cwd() == Path(__file__).parent:
+        import _utils_model.integration as itg
+        import model_handler            as mh
+    else:
+        raise e
 
 ###############################################################################
 #High-level Preprocessing
@@ -136,9 +144,10 @@ def wrap_get_SSE_dataset(model, dataset):
                                                        )
             
             for state, y_d in y_data[scenario].items():    
-                rows     = t_indices[(state, scenario, 'Time')]
-                col      = state_index[state]
-                y_m      = y_model[rows, col]
+                cols    = t_indices[(state, scenario, 'Time')]
+                row     = state_index[state]
+
+                y_m     = y_model[row, cols]
                 
                 SSE_ = get_SSE_vector(y_d, y_m)
                 SSE += SSE_
@@ -154,6 +163,7 @@ def get_SSE_vector(data_vector, model_vector):
     
     :meta private:
     '''
+    
     return -np.sum((data_vector - model_vector)**2)
 
 ###############################################################################
@@ -209,9 +219,8 @@ def make_fixed_args(model, dataset):
     int_args = {'function'    : model.func,
                 'tspan'       : sse_tspan,
                 'modify'      : model.modify,
-                'solver_args' : model.solver_args,
-                 }
-        
+                }
+    int_args.update(model.solver_args)
     return y_data, t_indices, int_args, state_index, init_dict, inputs_dict
 
 ###############################################################################
@@ -303,14 +312,14 @@ if __name__ == '__main__':
     y_data1 = np.e**(-np.linspace(0, 1, 21))
     y_data2 = 2 -2*np.e**(-np.linspace(0, 2, 21))
     dataset = {('x', 0, 'Data') : y_data1,
-                ('x', 0, 'Time') : time1,
-                ('x', 1, 'Data') : y_data2,
-                ('x', 1, 'Time') : time2,
-                ('w', 0, 'Data') : y_data1,
-                ('w', 0, 'Time') : time1,
-                ('w', 1, 'Data') : y_data2,
-                ('w', 1, 'Time') : time2,               
-                }
+               ('x', 0, 'Time') : time1,
+               ('x', 1, 'Data') : y_data2,
+               ('x', 1, 'Time') : time2,
+               ('w', 0, 'Data') : y_data1,
+               ('w', 0, 'Time') : time1,
+               ('w', 1, 'Data') : y_data2,
+               ('w', 1, 'Time') : time2,               
+               }
     
     #Read model
     model_data = mh.read_ini('_test/TestCurveFit_1.ini')
@@ -351,9 +360,9 @@ if __name__ == '__main__':
     #Test SSE Calculation
     state    = 'x'
     y_d      = y_data[(state, scenario, 'Data')]
-    rows     = t_indices[(state, scenario, 'Time')]
-    col      = state_index['x']
-    y_m      = y_model[rows, col]
+    cols     = t_indices[(state, scenario, 'Time')]
+    row      = state_index['x']
+    y_m      = y_model[row, cols]
     assert y_m.shape == y_d.shape
     
     SSE0     = get_SSE_vector(y_d, y_m)
@@ -403,7 +412,7 @@ if __name__ == '__main__':
     sse_calcs = {key: wrap_get_SSE_dataset(model, exp_data[key]) for key, model in models.items()}
     get_SSE   = wrap_get_SSE(param_index, sse_calcs)
     SSE0      = get_SSE(params_array)
-    assert np.isclose(SSE0, -44.49428)
+    assert np.isclose(SSE0, -44.49428, atol=5e-2)
     
     params_array                       = np.array([1, 1, 2, 1, 2])
     models['model_2'].init_vals.loc[1] = 0
@@ -411,12 +420,12 @@ if __name__ == '__main__':
     sse_calcs = {key: wrap_get_SSE_dataset(model, exp_data[key]) for key, model in models.items()}
     get_SSE   = wrap_get_SSE(param_index, sse_calcs)
     SSE1      = get_SSE(params_array)
-    assert np.isclose(SSE1, 0)
+    assert np.isclose(SSE1, 0, atol=5e-2)
     
     #Test single-step preprocessing
     param_names, get_SSE = preprocess_SSE(models, exp_data)
     SSE2                 = get_SSE(params_array)
-    assert np.isclose(SSE2, 0)
+    assert np.isclose(SSE2, 0, atol=5e-2)
     
     #Read model
     model_data2 = mh.read_ini('_test/TestCurveFit_3.ini')
@@ -424,6 +433,6 @@ if __name__ == '__main__':
     
     param_names, get_SSE = preprocess_SSE(models2, exp_data)
     SSE3                 = get_SSE(params_array)
-    assert np.isclose(SSE3, 0)
+    assert np.isclose(SSE3, 0, atol=5e-2)
     
    

@@ -1,7 +1,7 @@
-import numpy     as     np
-import pandas    as     pd
-from numba       import jit
-from scipy.stats import norm
+import numpy       as     np
+import pandas      as     pd
+from   numba       import jit
+from   scipy.stats import norm
 
 ###############################################################################
 #Optimizers
@@ -44,9 +44,10 @@ def simulated_annealing(func, guess, transition, check_bounds=None, iterations=1
     posterior          = [curr_log_posterior]
     
     for i in range(iterations):
+        
         next_params = transition(curr_params)
         
-        if check_bounds is not None:
+        if check_bounds is not None:   
             if not check_bounds(next_params):
                 continue
                 
@@ -231,6 +232,8 @@ def wrap_get_log_prior(priors_dict, param_index):
     if priors_dict is None:
         return None
     elif type(priors_dict) == dict:
+        if len(priors_dict) == 0:
+            return None
         
         temp = [param for param in priors_dict if param not in param_index]
         if temp:

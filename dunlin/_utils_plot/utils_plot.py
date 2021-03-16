@@ -16,29 +16,38 @@ palette_types = {'color':     lambda n_colors, **kwargs : sns.color_palette(n_co
                  }    
 #Refer for details: https://xkcd.com/color/rgb/
 colors    = sns.colors.xkcd_rgb
+    
+###############################################################################
+#Nested Args
+###############################################################################
+def parse_recursive(nested_args, *keys, apply=True):
+    if apply:
+        return {key: recurse(value, *keys) for key, value in nested_args.items()}
+    
+    else:
+        return recurse(nested_args, *keys)
+    
+def recurse(data, *keys):
+    if type(data) == dict and len(keys):
 
-###############################################################################
-#Colors
-###############################################################################
-def auto_color(iterable):
-    return dict(zip( iterable, palette_types['color'](len(iterable)) ))
-    
-###############################################################################
-#Line Args
-###############################################################################
-def parse_line_args(line_args):
-    fixed_kwargs = {}
-    var_kwargs   = {}
-    
-    for key, value in line_args.items():
-        if type(value) == dict:
-            for model_key, value_ in value.items():
-                var_kwargs.setdefault(model_key, {})[key] = value_
+        if keys[0] in data:
+            return recurse(data[keys[0]], *keys[1:])
         else:
-            fixed_kwargs[key] = value
+            return data
+    else:
+        return data
     
-    return fixed_kwargs, var_kwargs
-
+###############################################################################
+#Legend
+###############################################################################
+def apply_legend(AX, legend_args=None):
+    if type(AX) == dict:
+        [apply_legend(value, parse_recursive(legend_args, key, apply=False) ) for key, value in AX.items()]
+    elif legend_args:
+        AX.legend(**legend_args)
+    else:
+        AX.legend()
+    
 ###############################################################################
 #Figure
 ###############################################################################
@@ -114,7 +123,7 @@ def make_AX(plot_index):
                 AX_list += AX_
                 
             AX = {model_key: dict(zip(variables, AX_list))}
-                
+
     else:
         n_ax   = {}
     

@@ -1,6 +1,20 @@
-import numpy  as np
-import pandas as pd
+import numpy   as np
+import pandas  as pd
+from   pathlib import Path
 
+###############################################################################
+#Non-Standard Imports
+###############################################################################
+try:
+    import dunlin._utils_model.model_coder as coder
+except Exception as e:
+    if Path.cwd() == Path(__file__).parent:
+        import model_coder as coder
+    elif Path.cwd() == Path(__file__).parent.parent:
+        import _utils_model.model_coder as coder
+    else:
+        raise e
+        
 ###############################################################################
 #Error Message Formatter
 ###############################################################################
@@ -21,6 +35,24 @@ def wrap_try(name=''):
 ###############################################################################
 #Input Parsers
 ###############################################################################
+# @wrap_try('equations')
+# def read_equations(equations, solver='odeint'):
+#     #Function generation
+#     if callable(equations):
+#         code = ''
+#         func = equations
+        
+#     elif type(equations) == str:
+#         model_dict = self.as_dict()
+#         func, code = coder.model2func(model_dict, use_numba=False)
+        
+        
+      
+#     else:
+#         raise TypeError('equation argument must be a function or a string that can be executed as a function.')
+    
+#     return code, func
+    
 @wrap_try('init')        
 def read_init(init_data):
     if type(init_data) in [list, tuple]:
@@ -45,6 +77,7 @@ def read_init(init_data):
     
     if type(init_vals) == pd.DataFrame:
         init_vals.index.name = 'scenario'
+        init_vals            = init_vals[list(states)]
         
     return states, init_vals
 
@@ -72,6 +105,7 @@ def read_params(param_data):
     
     if type(param_vals) == pd.DataFrame:
         param_vals.index.name = 'estimate'
+        param_vals            = param_vals[list(names)]
         
     return names, param_vals
 
@@ -81,7 +115,7 @@ def read_inputs(input_data):
         names      = ()
         input_vals = None
         
-    if type(input_data) in [list, tuple]:
+    elif type(input_data) in [list, tuple]:
         names      = tuple(input_data)
         input_vals = None
         
@@ -89,20 +123,17 @@ def read_inputs(input_data):
         names  = [key[0] for key in input_data.keys()]
         names  = tuple(dict.fromkeys(names))
         input_vals = pd.DataFrame.from_dict(input_data).astype(np.float64)
-        input_vals = input_vals.sort_index(axis=1)
         input_vals = input_vals.stack(level=1)
     
     elif type(input_data) == pd.DataFrame:
         names  = input_data.columns.get_level_values(0)
         names  = tuple(dict.fromkeys(names))
         input_vals = input_data.astype(np.float64)
-        # input_vals = input_vals.sort_index(axis=1)
         
     elif type(input_data) == pd.Series:
         names  = tuple(input_data.index.get_level_values(0))
         names  = tuple(dict.fromkeys(names))
         input_vals = pd.DataFrame(input_data, dtype=np.float64).T
-        # input_vals = input_vals.sort_index(axis=1)
         input_vals = input_vals.stack(level=1)
     
     else:
@@ -110,7 +141,8 @@ def read_inputs(input_data):
     
     if type(input_vals) == pd.DataFrame:
         input_vals.index.names = ['scenario', 'segment']
-        
+        input_vals             = input_vals[list(names)]
+
     return names, input_vals
 
 @wrap_try('tspan')  

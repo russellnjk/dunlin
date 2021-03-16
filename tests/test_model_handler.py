@@ -1,13 +1,21 @@
 import numpy  as np
 import pandas as pd
 
+###############################################################################
+#Non-Standard Imports
+###############################################################################
 import addpath
 from dunlin import *
-# import dunlin as dn
-import dunlin.engine.integration as itg
+import dunlin._utils_model.integration as itg
 
+###############################################################################
+#Globals
+###############################################################################
 model = None
 
+###############################################################################
+#Test Classes
+###############################################################################
 class TestModelInstance:
     
     def test_1(self):
@@ -53,28 +61,25 @@ class TestModelInstance:
         t = 0
         f = model.func
         
-        r = f(y, t, p, i0)
+        r = f(t, y, p, i0)
         assert all(r)
         
         #Test integration
         y_model, t_model = itg.piecewise_integrate(model.func, tspan, y, p, i, scenario=0)
         
-        assert y_model.shape == (62, 3)
+        assert y_model.shape == (3, 62)
         
         #Test objective function
         objectives = read_ini('_test/TestModel_2.ini')['model_1']['objectives']
         obj_1      = objectives['growth']
         
-        y_ = np.array([y, y+r])
-        p_ = np.array([p, p])
-        t_ = t_model[:2, None]
-        i_ = np.array([i0, i0])
+        y_df      = pd.DataFrame([y, y+r], columns=model.states)
+        t_df      = pd.DataFrame(t_model[:2][:,None], columns=['Time'])
+        params_df = pd.DataFrame([p, p], columns=model.params)
+        inputs_df = pd.DataFrame([i0, i0], columns=model.inputs)
+        table     = pd.concat((t_df, y_df, params_df, inputs_df), axis=1)
         
-        columns = ('Time', ) + model.states + model.params + model.inputs
-        df      = np.concatenate((t_, y_, p_, i_), axis=1)
-        df      = pd.DataFrame(df, columns=columns)
-        
-        xo1, yo1 = obj_1(df)
+        xo1, yo1 = obj_1(table)
         assert all(xo1 == t_model[:2])
         assert np.isclose(yo1[0], r[0])
     

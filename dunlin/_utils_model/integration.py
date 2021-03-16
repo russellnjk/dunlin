@@ -1,28 +1,32 @@
 import numpy             as np
 from   numba             import jit
-from   scipy.integrate   import odeint
+from   scipy.integrate   import solve_ivp
 
 ###############################################################################
 #Piecewise Integration
 ###############################################################################    
-def piecewise_integrate(function, tspan, init, params, inputs, scenario, modify=None, solver_args={}, solver=odeint, overlap=True, args=()):
-    solver_args_ = solver_args if solver_args else {}
+def piecewise_integrate(function, tspan, init, params, inputs, scenario, modify=None, overlap=True, args=(), **solver_args):
+    solver_args_ = solver_args if solver_args else {'method': 'LSODA'}
     args_        = tuple(args)
-    
+
     init_, y_args = int_args_helper(init, params, inputs, 0, scenario, modify, args_)
+    
     tspan_  = tspan[0]
-    y_model = solver(function, init_, tspan_, args=y_args, **solver_args_)
+    sol     = solve_ivp(function, (tspan_[0], tspan_[-1]), init_, t_eval=tspan_, args=y_args, **solver_args_)
+    y_model = sol.y
     t_model = tspan[0]
     
     for segment in range(1, len(tspan)):
         
-        init_, y_args = int_args_helper(y_model[-1], params, inputs, segment, scenario, modify, args_)
+        init_, y_args = int_args_helper(y_model[:,-1], params, inputs, segment, scenario, modify, args_)
             
         tspan_  = tspan[segment]
-        y_      = solver(function, init_, tspan_, args=y_args, **solver_args_)
-        y_model = np.concatenate((y_model, y_    ), axis=0) if overlap else np.concatenate((y_model[:-1], y_    ), axis=0)   
-        t_model = np.concatenate((t_model, tspan_), axis=0) if overlap else np.concatenate((t_model[:-1], tspan_), axis=0)
-     
+        sol     = solve_ivp(function, (tspan_[0], tspan_[-1]), init_, t_eval=tspan_, args=y_args, **solver_args_)
+        y_      = sol.y  
+
+        y_model = np.concatenate((y_model, y_    ), axis=1) if overlap else np.concatenate((y_model[:,:-1], y_    ), axis=1)   
+        t_model = np.concatenate((t_model, tspan_), axis=0) if overlap else np.concatenate((t_model[:-1],   tspan_), axis=0)
+        
     return y_model, t_model
 
 def int_args_helper(init, params, inputs, segment, scenario, modify=None, args=()):
@@ -74,7 +78,7 @@ if __name__ == '__main__':
     
     #Preprocessing
     @jit(nopython=True)
-    def model(y, t, params, inputs):
+    def model(t, y, params, inputs):
         a = y[0]
         b = y[1]
         
@@ -107,16 +111,16 @@ if __name__ == '__main__':
     init   = np.array([10,  0])
     params = np.array([0.2, 0.5])
     
-    # #Test integration
-    # y_model, t_model = piecewise_integrate(model, tspan, init, params, inputs, scenario)
+    #Test integration
+    y_model, t_model = piecewise_integrate(model, tspan, init, params, inputs, scenario)
     
-    # fig = plt.figure()
-    # AX  = [fig.add_subplot(2, 1, i+1) for i in range(2)]
+    fig = plt.figure()
+    AX  = [fig.add_subplot(2, 1, i+1) for i in range(2)]
     
-    # for i, ax in enumerate(AX):
-    #     ax.plot(t_model, y_model[:,i])
+    for i, ax in enumerate(AX):
+        ax.plot(t_model, y_model[i])
     
-    # assert y_model.shape == (63, 2)
+    assert y_model.shape == (2, 63)
     
     #Test modifier
     def modify1(init, params, inputs, scenario, segment):
@@ -134,9 +138,9 @@ if __name__ == '__main__':
     AX  = [fig.add_subplot(2, 1, i+1) for i in range(2)]
     
     for i, ax in enumerate(AX):
-        ax.plot(t_model, y_model[:,i])
+        ax.plot(t_model, y_model[i])
     
-    assert y_model.shape == (63, 2)
+    assert y_model.shape == (2, 63)
     
     
   

@@ -43,19 +43,26 @@ def parse_section(name, config):
         if key == 'priors':
             section_data['priors'] = parse_priors(name, config)
         
-        #Bounds
-        if key == 'bounds':
-            section_data['bounds'] = parse_bounds(name, config)
+        #Parameter bounds
+        if key == 'param_bounds':
+            section_data['param_bounds'] = parse_bounds(name, config, 'param_bounds')
         
         #Step size
         if key == 'step_size':
             section_data['step_size'] = parse_step_size(name, config)
         
-        #Iterations
-        if key == 'iterations':
-            section_data['iterations'] = parse_iterations(name, config)
+        #Curve-fitting iterations
+        if key == 'cf_iterations':
+            section_data['cf_iterations'] = parse_iterations(name, config, 'cf_iterations')
         
+        #Combinations
+        if key == 'combinations':
+            section_data['combinations'] = parse_combinations(name, config)
             
+        #Combination spacing
+        if key == 'combination_spacing':
+            section_data['combination_spacing'] = parse_combination_spacing(name, config)
+        
         #Measured states
         #Decomposition
     
@@ -74,11 +81,16 @@ def parse_model_args(name, config):
     #Process int_args 
     init_dict   = parse_init(data['states'])
     params_dict = parse_params(data['params'])
-    inputs_mode = data.get('input_mode', 'scenario')
-    inputs_dict = parse_inputs(data.get('inputs'), inputs_mode)
+    
+    if 'inputs' in data:
+        inputs_mode = data.get('input_mode', 'scenario')
+        inputs_dict = parse_inputs(data['inputs'])
+    else:
+        inputs_dict = None
 
-    #Process solver_args
+    #Process solver_args and other stuff
     solver_args = parse_solver_args(data.get('solver_args', {}))
+    use_numba   = data.get('use_numba', True)
     
     #Compile model args
     model = {'name'        : name,
@@ -88,7 +100,8 @@ def parse_model_args(name, config):
              'meta'        : parse_meta(data.get('meta')),
              'equations'   : data['equations'],
              'tspan'       : tspan,
-             'solver_args' : solver_args
+             'solver_args' : solver_args,
+             'use_numba'   : use_numba
              }
     
     return model, tspan, init_dict, params_dict, inputs_dict
@@ -125,10 +138,10 @@ def parse_priors(name, config):
     return priors_dict
 
 @wrap_try('bounds')
-def parse_bounds(name, config):
+def parse_bounds(name, config, key='bounds'):
     data = config[name]
     
-    bounds_dict = parse_params(data['bounds'])
+    bounds_dict = parse_params(data['param_bounds'])
     return bounds_dict
 
 @wrap_try('step_size')
@@ -149,12 +162,28 @@ def parse_step_size(name, config):
     return step_size_dict
 
 @wrap_try('iterations')
-def parse_iterations(name, config):
+def parse_iterations(name, config, key='iterations'):
     data = config[name]
     
-    iterations = int(data['iterations'])
+    iterations = int(data[key])
     return iterations
-      
+
+@wrap_try('combinations')
+def parse_combinations(name, config):
+    data = config[name]
+    try:
+        int(data['combinations'])
+    except:
+        combinations_dict = parse_params(data['combinations'])
+    return combinations_dict
+
+@wrap_try('combination_spacing')
+def parse_combination_spacing(name, config):
+    data = config[name]
+    
+    combination_spacing = data['combination_spacing']
+    return combination_spacing
+
 ###############################################################################
 #Supporting Functions
 ###############################################################################

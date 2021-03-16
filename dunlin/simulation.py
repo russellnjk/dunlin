@@ -1,12 +1,28 @@
-import numpy           as np
-import pandas          as pd
+import numpy   as np
+import pandas  as pd
+from   pathlib import Path
 
 ###############################################################################
 #Non-Standard Imports
 ###############################################################################
-import model_handler as mh
-import integration   as itg
-import utils_plot    as utp
+try:
+    import dunlin.model_handler            as mh
+    import dunlin._utils_model.integration as itg
+    import dunlin._utils_plot.utils_plot   as utp
+except Exception as e:
+    if Path.cwd() == Path(__file__).parent:
+        import model_handler            as mh
+        import _utils_model.integration as itg
+        import _utils_plot.utils_plot   as utp
+    else:
+        raise e
+
+###############################################################################
+#Globals
+###############################################################################
+colors        = utp.colors
+palette_types = utp.palette_types
+fs            = utp.fs
 
 ###############################################################################
 #High-Level Functions
@@ -111,7 +127,7 @@ def integrate_models(sim_args):
     simulation_results = {}
     for key, value in sim_args.items():
         
-        check_model(model)
+        check_model(value['model'])
         
         simulation_results[key] = integrate_model(**value)
     return simulation_results
@@ -146,11 +162,19 @@ def integrate_model(model, objectives=None, args=(), _tspan=None, _init=None, _p
         the return values of the objective functions.
     '''
     #Format and check
-    tspan   = model.tspan                                                   if _tspan  is None else _tspan
-    init_   = dict(zip(model.init_vals.index,  model.init_vals.values))     if _init   is None else _init
-    params_ = dict(zip(model.param_vals.index, model.param_vals.values))    if _params is None else _params
-    inputs_ = {i: df.values for i, df in model.input_vals.groupby(level=0)} if _inputs is None else _inputs
+    init_vals  = model.init_vals[list(model.states)]
+    param_vals = model.param_vals[list(model.params)]
     
+    tspan   = model.tspan                                       if _tspan  is None else _tspan
+    init_   = dict(zip(init_vals.index,  init_vals.values))     if _init   is None else _init
+    params_ = dict(zip(param_vals.index, param_vals.values))    if _params is None else _params
+    
+    if model.inputs:
+        input_vals = model.input_vals[list(model.inputs)]
+        inputs_ = {i: df.values for i, df in input_vals.groupby(level=0)} if _inputs is None else _inputs
+    else:
+        inputs_ = None
+        
     #Iterate across each scenario
     result = {}
     
@@ -167,9 +191,9 @@ def integrate_model(model, objectives=None, args=(), _tspan=None, _init=None, _p
                                                        inputs      = inputs, 
                                                        scenario    = scenario,
                                                        modify      = model.modify,
-                                                       solver_args = model.solver_args,
                                                        args        = args,
-                                                       overlap     = True
+                                                       overlap     = True,
+                                                       **model.solver_args
                                                        )
             
             #Tabulate
@@ -206,9 +230,10 @@ def tabulate(y_model, t_model, params, inputs, scenario, model, args=()):
     '''
     :meta private:
     '''
+    y_model_   = y_model.T
     tspan      = model.tspan
-    p_array    = np.zeros((len(y_model), len(params)))
-    y_last     = y_model[0]
+    p_array    = np.zeros((len(y_model_), len(params)))
+    y_last     = y_model_[0]
     p_last     = params
     seg_start  = 0
     seg_stop   = len(tspan[0]) 
@@ -216,19 +241,19 @@ def tabulate(y_model, t_model, params, inputs, scenario, model, args=()):
     if inputs is None:
         for segment in range(len(tspan)):
             _, y_args  = itg.int_args_helper(y_last, p_last, inputs, segment, scenario, modify=model.modify, args=args)#model.modify(y_last, p_last, i_last, scenario, segment)
-            p_, i_     = y_args[:2]
+            p_         = y_args[:1]
             seg_stop   = seg_start + len(tspan[segment])
             
             p_array[seg_start: seg_stop] = p_
             
-            y_last    = y_model[seg_stop-1]  
+            y_last    = y_model_[seg_stop-1]  
             p_last    = p_
             seg_start = seg_stop 
     
-        table = np.concatenate((t_model[:,None], y_model, p_array), axis=1)
+        table = np.concatenate((t_model[:,None], y_model_, p_array), axis=1)
         cols  = ('Time',) + model.states + model.params
     else:
-        i_array    = np.zeros((len(y_model), len(inputs[0])))
+        i_array    = np.zeros((len(y_model_), len(inputs[0])))
         
         for segment in range(len(tspan)):
             _, y_args  = itg.int_args_helper(y_last, p_last, inputs, segment, scenario, modify=model.modify, args=args)#model.modify(y_last, p_last, i_last, scenario, segment)
@@ -238,12 +263,11 @@ def tabulate(y_model, t_model, params, inputs, scenario, model, args=()):
             p_array[seg_start: seg_stop] = p_
             i_array[seg_start: seg_stop] = i_
             
-            y_last    = y_model[seg_stop-1]
+            y_last    = y_model_[seg_stop-1]
             p_last    = p_
             seg_start = seg_stop 
     
-    
-        table = np.concatenate((t_model[:,None], y_model, p_array, i_array), axis=1)
+        table = np.concatenate((t_model[:,None], y_model_, p_array, i_array), axis=1)
         cols  = ('Time',) + model.states + model.params + model.inputs  
     
     table = pd.DataFrame(table, columns=cols)
@@ -254,9 +278,10 @@ def check_model(model):
     '''
     :meta private:
     '''
-    if len(model.init_vals) != len(model.input_vals.index.unique(0)):
-        msg = 'Number of scenarios do not match for model {}.'
-        raise ValueError(msg.format(model.name))
+    if model.inputs:
+        if len(model.init_vals) != len(model.input_vals.index.unique(0)):
+            msg = 'Number of scenarios do not match for model {}.'
+            raise ValueError(msg.format(model.name))
     
 ###############################################################################
 #Plotting
@@ -294,18 +319,14 @@ def plot_simulation_results(plot_index, simulation_results, AX=None, **line_args
 
     '''
     figs, AX1 = (None, AX) if AX else utp.make_AX(plot_index)
-    
-    if 'color' not in line_args:
-        line_args['color'] = {model_key: utp.auto_color(simulation_result) for model_key, simulation_result in simulation_results.items()}
-    
-    fixed_kwargs, var_kwargs = utp.parse_line_args(line_args)
-    
+     
     for model_key, variables in plot_index.items():
         simulation_result = simulation_results[model_key]
-        model_AX          = AX1[model_key]
+        AX_               = utp.parse_recursive(AX1, model_key, apply=False)
+        line_args_        = utp.parse_recursive(line_args, model_key)
         
         try:
-            plot_simulation_result(variables, simulation_result, model_AX, **fixed_kwargs, **var_kwargs.get(model_key, {}))
+            plot_simulation_result(variables, simulation_result, AX_, **line_args_)
         except Exception as e:
             msg    = 'Error in plotting {}'.format(model_key)
             args   = (msg,) + e.args
@@ -314,13 +335,10 @@ def plot_simulation_results(plot_index, simulation_results, AX=None, **line_args
             
             raise e
     
-    for model_key, model_AX in AX1.items():
-        for ax in model_AX.values():
-            ax.legend()
-            
+    # utp.apply_legend(AX)
     return figs, AX1
 
-def plot_simulation_result(variables, simulation_result, model_AX, **line_args):
+def plot_simulation_result(variables, simulation_result, AX, **line_args):
     '''
     Plots simulation result for a single model.
 
@@ -332,7 +350,7 @@ def plot_simulation_result(variables, simulation_result, model_AX, **line_args):
         A dict nested according to scenario -> estimate -> (table, obj_vals) where 
         where table is a DataFrame of the time response and obj_vals is a dict 
         containing the return values of the objective functions.
-    model_AX : dict
+    AX : dict
         A dict in the form {<state>: <matplotlib  Axes>}. Tells the function where 
         to plot the results.
     **line_args : dict
@@ -343,36 +361,47 @@ def plot_simulation_result(variables, simulation_result, model_AX, **line_args):
     
     Returns
     -------
-    model_AX : dict
+    AX : dict
         A dict in the form {<state>: <matplotlib  Axes>}.
     '''
-    fixed_kwargs, var_kwargs = utp.parse_line_args(line_args)
     label_scheme             = line_args.get('label')
 
     for scenario, scenario_result in simulation_result.items():
-            
         first = True
         for estimate, estimate_result in scenario_result.items():
-            
-            if label_scheme == 'scenario':
-                label = {'label': scenario} if first else {'label': '_nolabel'}
-                
-            else:
-                label = {'label': (scenario, estimate)}
-            
             for variable in variables:
+                
                 r  = get_result(variable, estimate_result, (scenario, estimate))
-                ax = model_AX[variable]
+                ax = utp.parse_recursive(AX, variable, scenario, estimate, apply=False)
+
+                #Parse labeling
+                if not label_scheme:
+                    label = {'label': '{} {} {}'.format(variable, scenario, estimate)}
+                elif label_scheme == 'state':
+                    label = {'label':'{}'.format(variable)} if first else {'label': '_nolabel'}
+                elif label_scheme == 'state, scenario':
+                    label = {'label':'{} {}'.format(variable, scenario)} #if first else {'label': '_nolabel'}
+                elif label_scheme == 'state, estimate':
+                    label = {'label':'{} {}'.format(variable, estimate)}
+                elif label_scheme == 'scenario':
+                    label = {'label':'{}'.format(scenario)} if first else {'label': '_nolabel'}
+                elif label_scheme == 'scenario, estimate':
+                    label = {'label': '{} {}'.format(scenario, estimate)}
+                elif label_scheme == 'estimate':
+                    label = {'label':'{}'.format(estimate)}
+                else:
+                    label = {}
 
                 try:
                     if type(r) == dict:
-                        args = {**fixed_kwargs, **var_kwargs.get(scenario, {}), **label, **r}
+                        args = {**line_args, **label, **r}
                         ax.plot(**args)
                     else:
                         
-                        args  = {**fixed_kwargs, **var_kwargs.get(scenario, {}), **label}
+                        args = {**line_args, **label}
+                        args = utp.parse_recursive(args, scenario, estimate, variable)
                         ax.plot(*r, **args)
-                        
+                    ax.legend()
                 except Exception as e:
                     msg    = ('Error in plotting scenario {}, variable {}'.format(scenario, variable), ) + e.args
                     e.args = ('\n'.join(msg) ,) 
@@ -380,8 +409,7 @@ def plot_simulation_result(variables, simulation_result, model_AX, **line_args):
             
             first = False
                 
-    return model_AX
-
+    return AX
 
 ###############################################################################
 #Supporting Functions for Plotting
@@ -542,23 +570,23 @@ if __name__ == '__main__':
     assert len(AX['model_1']['b'].lines) == 4
     assert len(AX['model_1'][  2].lines) == 4
     
-    #Test line args
-    plot_index = {'model_1': ['x', 'b', 1, 2],
-                  'model_2': ['x', 'b', 1, 2]
-                  }
-    color      = {'model_1': {0: utp.colors['cobalt'],
-                              1: utp.colors['marigold']
-                              },
-                  'model_2': utp.colors['teal']
-                  }
-    figs, AX   = plot_simulation_results(plot_index, simulation_results, color=color, label='scenario')
+    # #Test line args
+    # plot_index = {'model_1': ['x', 'b', 1, 2],
+    #               'model_2': ['x', 'b', 1, 2]
+    #               }
+    # color      = {'model_1': {0: colors['cobalt'],
+    #                           1: colors['marigold']
+    #                           },
+    #               'model_2': colors['teal']
+    #               }
+    # figs, AX   = plot_simulation_results(plot_index, simulation_results, color=color, label='scenario')
     
-    assert AX['model_1']['x'].lines[-1].get_label() == '_nolabel'
+    # assert AX['model_1']['x'].lines[-1].get_label() == '_nolabel'
     
-    #Test high-level
-    model_data, sim_args = read_ini('_test/TestModel_2.ini')
-    plot_index           = {'model_1': ['x', 's', 'b', 'growth']}
-    simulation_results   = integrate_models(sim_args)
-    figs, AX             = plot_simulation_results(plot_index, simulation_results, color={'model_1': utp.colors['cobalt']})
+    # #Test high-level
+    # model_data, sim_args = read_ini('_test/TestModel_2.ini')
+    # plot_index           = {'model_1': ['x', 's', 'b', 'growth']}
+    # simulation_results   = integrate_models(sim_args)
+    # figs, AX             = plot_simulation_results(plot_index, simulation_results, color={'model_1': colors['cobalt']})
     
     

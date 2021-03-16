@@ -1,12 +1,21 @@
-# import sys
-# from os       import getcwd, listdir
-# from os.path  import abspath, dirname, join
+import sys
+import os
+from os.path  import dirname, join
 
-# #Add BMSS path
-# _dir = dirname(dirname(__file__))
-# sys.path.insert(0, _dir)
+#Add path
+_dir = dirname(__file__)
+sys.path.insert(0, _dir)
 
-from .engine.model_handler     import *
-from .engine import simulation as     simulation
-from .engine import curvefit   as     curvefit
-from .engine import optimize   as     optimize
+from .model_handler          import *
+from ._utils_plot.utils_plot import colors, palette_types
+
+styles = {}
+
+_utils_plot_path = join(_dir, '_utils_plot')
+for file in os.listdir(_utils_plot_path):
+    try:
+        name, ext = file.split('.')
+        if ext == 'mplstyle':
+            styles[name] = join(_utils_plot_path, file)
+    except:
+        pass

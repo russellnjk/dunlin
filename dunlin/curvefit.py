@@ -1,27 +1,46 @@
-import numpy as np
-import pandas as pd
+import numpy   as np
+import pandas  as pd
+from   pathlib import Path
 
 ###############################################################################
 #Non-Standard Imports
 ###############################################################################
-if __name__ == '__main__':
-    import addpath
-    import model_handler as mh
-    import utils_plot    as utp
-    import optimize      as opt
-    import wrapSSE       as ws
-    import simulation    as sim
+try:
+    import dunlin.model_handler                as mh
+    import dunlin._utils_optimization.optimize as opt
+    import dunlin._utils_optimization.wrapSSE  as ws
+    import dunlin.simulation                   as sim
+    import dunlin._utils_plot.utils_plot       as utp
+    from   dunlin._utils_optimization.dataparser import read_csv
+except Exception as e:
+    if Path.cwd() == Path(__file__).parent:
+        import model_handler                as mh
+        import _utils_optimization.optimize as opt
+        import _utils_optimization.wrapSSE  as ws
+        import simulation                   as sim
+        import _utils_plot.utils_plot       as utp
+        from   _utils_optimization.dataparser import read_csv
+    else:
+        raise e
+
+###############################################################################
+#Globals
+###############################################################################
+colors        = utp.colors
+palette_types = utp.palette_types
+fs            = utp.fs
 
 ###############################################################################
 #High-Level Functions
 ###############################################################################
 def integrate_and_plot(plot_index, sim_args, posterior=None, guesses=None, exp_data=None, AX=None, **line_args):
+
     figs, AX1                    = (None, AX) if AX else utp.make_AX(plot_index)
     posterior_simulation_results = None
     guess_simulation_results     = None
     
     if posterior is not None:
-        figs, AX1, posterior_simulation_results = integrate_and_plot_posterior(plot_index, sim_args, posterior, AX1, **line_args)
+        _, AX1, posterior_simulation_results = integrate_and_plot_posterior(plot_index, sim_args, posterior, AX1, **line_args)
     
     if guesses is not None:
         if type(guesses) == dict:
@@ -29,12 +48,12 @@ def integrate_and_plot(plot_index, sim_args, posterior=None, guesses=None, exp_d
         else:
             guesses_ = guesses
         
-        guess_line_args = {**line_args, **{'linestyle': ':'}}
+        guess_line_args = {**line_args, **{'linestyle': ':', 'label': '_nolabel'}}
         
         _, AX1, guess_simulation_results = integrate_and_plot_posterior(plot_index, sim_args, guesses_, AX1, **guess_line_args)
     
     if exp_data is not None:
-        exp_line_args = {**line_args, **{'linestyle': '', 'marker': '+'}}
+        exp_line_args = {**line_args, **{'linestyle': '', 'marker': '+', 'label': '_nolabel'}}
         
         _, AX1 = plot_exp_data(plot_index, exp_data, AX1, **exp_line_args)
     
@@ -77,7 +96,7 @@ def read_ini(filename, sampler='sa'):
     else:
         raise NotImplementedError('Not implemented yet!')
 
-def get_sa_args(model_data):   
+def get_sa_args(model_data, exp_data=None):   
     '''
     Extracts the arguments required for running simulated annealing.
 
@@ -109,10 +128,10 @@ def get_sa_args(model_data):
             guesses.setdefault(k, v).update(v)
             
         priors.update( value.get('priors', {}) )
-        bounds.update( value.get('bounds', {}) )
+        bounds.update( value.get('param_bounds', {}) )
         
-        if 'iterations' in value:
-            iterations.append(value['iterations'])
+        if 'cf_iterations' in value:
+            iterations.append(value['cf_iterations'])
         
         if 'step_size' in value:
             step_size.update(value['step_size'])
@@ -123,7 +142,8 @@ def get_sa_args(model_data):
                'priors'     : priors,
                'bounds'     : bounds,
                'iterations' : iterations,
-               'step_size'  : step_size 
+               'step_size'  : step_size,
+               'exp_data'   : exp_data
                }
     
     return guesses, cf_args
@@ -305,7 +325,7 @@ def format_exp_data(exp_data):
     else:
         raise TypeError('exp_data must be a dict or pandas.DataFrame.')
       
-    formatted = {key: format_dataset(dataset, key) for key, dataset in exp_data.items()}
+    formatted = {key: format_dataset(dataset, key) for key, dataset in exp_data_.items()}
     return formatted
 
 def format_dataset(dataset, key):
@@ -316,7 +336,20 @@ def format_dataset(dataset, key):
     msg1 = 'keys must be a tuple formatted as (<state>, <scenario>, <"Data" or "Time">)'
     msg2 = 'Missing data for ({}, {}, {})'
     msg3 = 'Mismatched Time/Data lengths for {}, {}'
+    msg4 = 'Array for {} must be 1-D but has shape {}'
     
+    def check_shape(y_data, time):
+        if len(y_data.shape) != 1:
+            raise ExperimentalDataError(msg4.format(key, y_data.shape))
+        elif len(time.shape) != 1:
+            raise ExperimentalDataError(msg4.format(key, time.shape))
+    
+    def check_key(key, key_):
+        if key_ not in dataset:
+            raise ExperimentalDataError(msg0 + msg2.format(*key_))
+        elif len(dataset[key]) != len(dataset[key_]):
+            raise ExperimentalDataError(msg0 + msg3.format(key[0], key[1]))
+            
     formatted = {}
     
     for key, value in dataset.items():
@@ -329,24 +362,33 @@ def format_dataset(dataset, key):
             raise ExperimentalDataError(msg0 + msg1)
         elif key[2] != 'Data' and key[2] != 'Time':
             raise ExperimentalDataError(msg0 + msg1)
+
         elif key[2] == 'Data':
             key_ = (key[0], key[1], 'Time')
-            if key_ not in dataset:
-                raise ExperimentalDataError(msg0 + msg2.format(*key_))
-            elif len(value) != len(dataset[key_]):
-                raise ExperimentalDataError(msg0 + msg3.format(key[0], key[1]))
-            else:
-                formatted[key]  = np.array(value)
-                formatted[key_] = np.array(dataset[key_])
+            
+            check_key(key, key_)
+            
+            y_data = np.array(value)
+            time   = np.array(dataset[key_])
+            
+            check_shape(y_data, time)
+            
+            formatted[key]  = y_data
+            formatted[key_] = time
+                
         elif key[2] == 'Time':
             key_ = (key[0], key[1], 'Data')
-            if key_ not in dataset:
-                raise ExperimentalDataError(msg0 + msg2.format(*key_))
-            elif len(value) != len(dataset[key_]):
-                raise ExperimentalDataError(msg0 + msg3.format(key[0], key[1]))
-            else:
-                formatted[key]  = np.array(value)
-                formatted[key_] = np.array(dataset[key_])
+            
+            check_key(key, key_)
+            
+            time   = np.array(value)
+            y_data = np.array(dataset[key_])
+            
+            check_shape(y_data, time)
+            
+            formatted[key]  = time
+            formatted[key_] = y_data
+        
     return formatted
             
 class ExperimentalDataError(Exception):
@@ -497,7 +539,9 @@ def plot_exp_data_model(variables, exp_data_model, model_AX, model_key, **line_a
     
     :meta private:
     '''
-    fixed_kwargs, var_kwargs = utp.parse_line_args({**{'marker': '+', 'linestyle': ''}, **line_args})
+    # fixed_kwargs, var_kwargs = utp.parse_line_args({**{'marker': '+', 'linestyle': ''}, **line_args})
+    
+    line_args_ = {**{'marker': '+', 'linestyle': ''}, **line_args}
     
     for (variable, scenario, data_type) in exp_data_model:
         if data_type == 'Time':
@@ -514,10 +558,11 @@ def plot_exp_data_model(variables, exp_data_model, model_AX, model_key, **line_a
                 msg = 'Measurements for variable {}, scenario {} not in data for model {}, .'
                 raise Exception(msg.format(variable, scenario, model_key))
             
-            r  = exp_data_model[t_key], exp_data_model[y_key]
-            ax = model_AX[variable]
+            r    = exp_data_model[t_key], exp_data_model[y_key]
+            ax   = model_AX[variable]
+            args = utp.parse_recursive(line_args_, model_key, scenario, variable) 
             
-            ax.plot(*r, **fixed_kwargs, **var_kwargs.get(scenario, {}))
+            ax.plot(*r, **args)
                 
     return model_AX
 
@@ -678,10 +723,10 @@ if __name__ == '__main__':
                   'model_2': ['x', 'w'],
                   }
     
-    colors   = {'model_1': {0 : utp.colors['cobalt'],
-                            1 : utp.colors['coral'],
+    colors   = {'model_1': {0 : colors['cobalt'],
+                            1 : colors['coral'],
                             },
-                'model_2': utp.colors['marigold']
+                'model_2': colors['marigold']
                 } 
     
     sim_args         = sim.get_sim_args(model_data)
@@ -699,7 +744,7 @@ if __name__ == '__main__':
                                         sim_args   = sim_args, 
                                         posterior  = posterior, 
                                         guesses    = guesses, 
-                                        exp_data   = exp_data
+                                        exp_data   = exp_data,
+                                        color      = colors
                                         )
-    
     
