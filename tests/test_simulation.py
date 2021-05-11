@@ -20,27 +20,23 @@ class TestSimulation:
         model_data = mh.read_ini('_test/TestModel_1.ini')
         model      = model_data['model_1']['model']
         
-        def obj1(table):
-            s = table['s']
+        def obj1(t, y, p, u):
+            s = y[0]
             
-            mu_max = table['mu_max']
-            ks     = table['ks']
-            
-            t = table['Time']
+            mu_max = p[0]
+            ks     = p[1]
             
             mu = mu_max*s/(s+ks)
             
             return t, mu
         
-        def obj2(table):
-            x = table['x']
-            s = table['s']
+        def obj2(t, y, p, u):
+            x = y[0]
+            s = y[1]
             
-            mu_max = table['mu_max']
-            ks     = table['ks']
-            ys     = table['ys']
-            
-            t = table['Time']
+            mu_max = p[0]
+            ks     = p[1]
+            ys     = p[2]
             
             mu = mu_max*s/(s+ks)
         
@@ -48,7 +44,7 @@ class TestSimulation:
             
             return t, dx/ys
         
-        def modify1(init, params, inputs, scenario, segment):
+        def modify1(function, init, params, inputs, scenario, segment):
             new_init   = init.copy()
             new_params = params.copy()
             new_inputs = inputs.copy()
@@ -64,12 +60,13 @@ class TestSimulation:
         table             = simulation_result[scenario][estimate][0]
         assert table.shape == (62, 9)
         
-        #Test simulation with objective function
-        objectives        = {1 : obj1, 2: obj2}
-        simulation_result = sim.integrate_model(model, objectives=objectives)
+        #Test simulation with exv function
+        model.exvs        = {1 : obj1, 2: obj2}
+        simulation_result = sim.integrate_model(model)
         scenario          = 0
         estimate          = 0
         table, obj_vals   = simulation_result[scenario][estimate]
+        model.exvs        = {}
         
         xo1, yo1 = obj_vals[1]
         xo2, yo2 = obj_vals[2]
@@ -78,19 +75,20 @@ class TestSimulation:
         fig = plt.figure()
         AX  = [fig.add_subplot(5, 1, i+1) for i in range(5)]
         
-        AX[0].plot(table['Time'], table['x'])
-        AX[1].plot(table['Time'], table['s'])
-        AX[2].plot(table['Time'], table['b'])
-        AX[3].plot(xo1.values, yo1.values)
-        AX[4].plot(xo2.values, yo2.values)
+        AX[0].plot(table['t'], table['x'])
+        AX[1].plot(table['t'], table['s'])
+        AX[2].plot(table['t'], table['b'])
+        AX[3].plot(xo1, yo1)
+        AX[4].plot(xo2, yo2)
         
         #Test modifier
         model.modify      = modify1
-        objectives        = {1 : obj1, 2: obj2}
-        simulation_result = sim.integrate_model(model, objectives=objectives)
+        model.exvs        = {1 : obj1, 2: obj2}
+        simulation_result = sim.integrate_model(model)
         scenario          = 0
         estimate          = 0 
-        table, obj_vals   = simulation_result[scenario][estimate]
+        table, obj_vals   = sim.simulation_result[scenario][estimate]
+        model.exvs        = {}
         
         xo1, yo1 = obj_vals[1]
         xo2, yo2 = obj_vals[2]
@@ -105,26 +103,23 @@ class TestSimulation:
         fig = plt.figure()
         AX  = [fig.add_subplot(5, 1, i+1) for i in range(5)]
         
-        AX[0].plot(table['Time'], table['x'])
-        AX[1].plot(table['Time'], table['s'])
-        AX[2].plot(table['Time'], table['b'])
-        AX[3].plot(xo1.values, yo1.values)
-        AX[4].plot(xo2.values, yo2.values)
+        AX[0].plot(table['t'], table['x'])
+        AX[1].plot(table['t'], table['s'])
+        AX[2].plot(table['t'], table['b'])
+        AX[3].plot(xo1, yo1)
+        AX[4].plot(xo2, yo2)
         
         #Test multi-model
-        sim_args = {'model_1'    : {'model': model,
-                                    'objectives' : {1 : obj1, 2: obj2}
-                                    },
-                    'model_2'    : {'model': model,
-                                    'objectives' : {1 : obj1, 2: obj2}
-                                    }
-                    }
+        model.exvs = {1 : obj1, 2: obj2}
+        sim_args  = {'model_1'    : {'model': model},
+                     'model_2'    : {'model': model}
+                     }
         
         simulation_results = sim.integrate_models(sim_args)
         model_key          = 'model_1'
         scenario           = 0
         estimate           = 0 
-        table, obj_vals    = simulation_results[model_key][scenario][estimate]
+        table, obj_vals    = sim.simulation_results[model_key][scenario][estimate]
         
         xo1, yo1 = obj_vals[1]
         xo2, yo2 = obj_vals[2]
@@ -135,13 +130,10 @@ class TestSimulation:
         assert yo2.shape == (62,)
         
         #Test plotting
-        sim_args = {'model_1'    : {'model': model,
-                                    'objectives' : {1 : obj1, 2: obj2}
-                                    },
-                    'model_2'    : {'model': model,
-                                    'objectives' : {1 : obj1, 2: obj2}
-                                    }
-                    }
+        model.exvs = {1 : obj1, 2: obj2}
+        sim_args   = {'model_1' : {'model' : model},
+                      'model_2' : {'model' : model}
+                      }
         
         simulation_results = sim.integrate_models(sim_args)
         
@@ -167,11 +159,11 @@ class TestSimulation:
         assert AX['model_1']['x'].lines[-1].get_label() == '_nolabel'
         
         #Test high-level
-        model_data, sim_args = sim.read_ini('_test/TestModel_2.ini')
+        model_data, sim_args = mh.read_ini('_test/TestModel_2.ini')
         plot_index           = {'model_1': ['x', 's', 'b', 'growth']}
         simulation_results   = sim.integrate_models(sim_args)
         figs, AX             = sim.plot_simulation_results(plot_index, simulation_results, color={'model_1': sim.colors['cobalt']})
-        
+    
         return
 
 if __name__ == '__main__':

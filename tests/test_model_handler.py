@@ -9,33 +9,18 @@ from dunlin import *
 import dunlin._utils_model.integration as itg
 
 ###############################################################################
-#Globals
-###############################################################################
-model = None
-
-###############################################################################
 #Test Classes
 ###############################################################################
 class TestModelInstance:
     
-    def test_1(self):
+    def test_read_1(self):
         #Read .ini
-        #Case 1: Basic arguments
         model = read_ini('_test/TestModel_1.ini')['model_1']['model']
-        assert model.states == ('x', 's', 'p')
-        assert model.params == ('ks', 'mu_max', 'synp', 'ys')
+        assert model.states == ('x', 's', 'h')
+        assert model.params == ('ks', 'mu_max', 'synh', 'ys')
         assert model.inputs == ('b',)
     
-    
-        #Case 2: With objective
-        model = read_ini('_test/TestModel_2.ini')['model_1']['model']
-        assert model.states == ('x', 's', 'p')
-        assert model.params == ('ks', 'mu_max', 'synp', 'ys')
-        assert model.inputs == ('b',)
-        
-        objectives = read_ini('_test/TestModel_2.ini')['model_1']['objectives']
-        assert len(objectives) == 1
-        
+    def test_integrate_1(self):
         #Test attributes related to integration   
         model    = read_ini('_test/TestModel_1.ini')['model_1']['model']
         
@@ -53,36 +38,199 @@ class TestModelInstance:
         assert all(p == [20, 0.1, 1, 2])
         
         inputs = model.input_vals
-        i      = inputs.loc[0].values
-        i0     = i[0]
-        assert all(i0 == [2])
+        u      = inputs.loc[0].values
+        u0     = u[0]
+        assert all(u0 == [2])
         
         #Test model function
         t = 0
         f = model.func
         
-        r = f(t, y, p, i0)
+        r = f(t, y, p, u0)
         assert all(r)
         
         #Test integration
-        y_model, t_model = itg.piecewise_integrate(model.func, tspan, y, p, i, scenario=0)
+        y_model, t_model = itg.piecewise_integrate(model.func, tspan, y, p, u, scenario=0)
         
         assert y_model.shape == (3, 62)
+    
+    def test_exv_1(self):
+        #Test exv function
+        model  = read_ini('_test/TestModel_2.ini')['model_1']['model']
+        exvs   = model.exvs
+        exv_1  = exvs['growth']
+        assert model.states == ('x', 's', 'h')
+        assert model.params == ('ks', 'mu_max', 'synh', 'ys')
+        assert model.inputs == ('b',)
+    
         
-        #Test objective function
-        objectives = read_ini('_test/TestModel_2.ini')['model_1']['objectives']
-        obj_1      = objectives['growth']
+        tspan    = model.tspan
+        assert len(tspan) == 2
+        assert all( np.isclose(tspan[0], np.linspace(  0, 300, 31)) )
+        assert all( np.isclose(tspan[1], np.linspace(300, 600, 31)) )
         
-        y_df      = pd.DataFrame([y, y+r], columns=model.states)
-        t_df      = pd.DataFrame(t_model[:2][:,None], columns=['Time'])
-        params_df = pd.DataFrame([p, p], columns=model.params)
-        inputs_df = pd.DataFrame([i0, i0], columns=model.inputs)
-        table     = pd.concat((t_df, y_df, params_df, inputs_df), axis=1)
+        init = model.init_vals
+        y    = init.loc[0].values
+        assert all(y == 1)
         
-        xo1, yo1 = obj_1(table)
+        params = model.param_vals
+        p      = params.loc[0].values
+        assert all(p == [20, 0.1, 1, 2])
+        
+        inputs = model.input_vals
+        u      = inputs.loc[0].values
+        u0     = u[0]
+        assert all(u0 == [2])
+        
+        #Test model function
+        t = 0
+        f = model.func
+        
+        r = f(t, y, p, u0)
+        assert all(r)
+        
+        #Test integration
+        y_model, t_model = itg.piecewise_integrate(model.func, tspan, y, p, u, scenario=0)
+        
+        assert y_model.shape == (3, 62)
+    
+        t1 = t_model[:2]
+        y1 = np.array([y, y+r]).T
+        p1 = np.array([p, p]).T
+        u1 = np.array([u0, u0]).T 
+        
+        xo1, yo1 = exv_1(t1, y1, p1, u1)
         assert all(xo1 == t_model[:2])
         assert np.isclose(yo1[0], r[0])
     
+    def test_write_low_level_1(self):
+        #Test writing .ini
+        #Test updating
+        c = '''
+        [model_1]
+        states = 
+            x0 = [0, 1],
+            x1 = [2, 3]
+            
+        params = 
+            p0 = [0, 1],
+            p1 = [2, 3]
+            
+        inputs =
+            u0 = [[0, 0], [1, 1]],
+            u1 = [[0, 1], [1, 0]]
+    
+        tspan =
+            linspace(0, 100, 11)
+        
+        equations = 
+            dx0 = -p0*x0 -u0*x1
+            dx1 = -p1*x1 -u1*x0
+            
+        '''
+        model_data  = read_inicode(c)
+        model       = model_data['model_1']['model']
+        ini_section = model_data['model_1']['ini_section']
+        
+        ix = pd.MultiIndex.from_tuples(((0, 0), (0, 1), (1, 0), (1, 1)), names=['scenario', 'segment'])
+        df = pd.DataFrame([[1, 2], [3, 4], [5, 6], [7, 80]], 
+                          columns = ['u0', 'u1'], 
+                          index   = ix
+                          )
+        
+        tspan = np.array([[0, 1, 2], [2, 3, 4]])
+        
+        #Update
+        input_vals = df
+        result     = uiw.inputs2str(input_vals)
+        ini_section['inputs'] = result
+        
+        init_vals = df.xs(0, level=1)
+        init_vals.columns = ['x0', 'x1']
+        result    = uiw.init2str(init_vals)
+        ini_section['state'] = result
+        
+        param_vals = df.xs(0, level=1)
+        param_vals.columns = ['p0', 'p1']
+        result     = uiw.params2str(param_vals)
+        ini_section['params'] = result
+        
+        new_config     = uiw.make_config(model_data)
+        new_model_data = read_config(new_config)
+        new_model      = new_model_data['model_1']['model']
+        
+        assert all(input_vals == new_model.input_vals)
+        assert all(param_vals == new_model.param_vals)
+        assert all(init_vals  == new_model.init_vals )
+    
+    def test_write_high_level_1(self):
+        #Test writing .ini
+        #Test updating
+        c = '''
+        [model_1]
+        states = 
+            x0 = [0, 1],
+            x1 = [2, 3]
+            
+        params = 
+            p0 = [0, 1],
+            p1 = [2, 3]
+            
+        inputs =
+            u0 = [[0, 0], [1, 1]],
+            u1 = [[0, 1], [1, 0]]
+    
+        tspan =
+            linspace(0, 100, 11)
+        
+        equations = 
+            dx0 = -p0*x0 -u0*x1
+            dx1 = -p1*x1 -u1*x0
+            
+        '''
+        model_data  = read_inicode(c)
+        model       = model_data['model_1']['model']
+        ini_section = model_data['model_1']['ini_section']
+        
+        ix = pd.MultiIndex.from_tuples(((0, 0), (0, 1), (1, 0), (1, 1)), names=['scenario', 'segment'])
+        df = pd.DataFrame([[1, 2], [3, 4], [5, 6], [7, 80]], 
+                          columns = ['u0', 'u1'], 
+                          index   = ix
+                          )
+        
+        tspan = np.array([[0, 1, 2], [2, 3, 4]])
+        
+        #Update
+        input_vals = df
+        result     = uiw.inputs2str(input_vals)
+        ini_section['inputs'] = result
+        
+        init_vals = df.xs(0, level=1)
+        init_vals.columns = ['x0', 'x1']
+        
+        param_vals = df.xs(0, level=1)
+        param_vals.columns = ['p0', 'p1']
+        
+        to_update_model_1 = {'states': init_vals,
+                             'params': param_vals,
+                             'inputs': input_vals
+                             }
+        
+        new_filename   = '_test/writeModel_1.ini' 
+        new_config     = uiw.make_config(model_data, filename=new_filename, model_1=to_update_model_1)
+        print(new_config)
+        new_model_data = read_ini(new_filename)
+        new_model      = new_model_data['model_1']['model']
+        
+        assert all(input_vals == new_model.input_vals)
+        assert all(param_vals == new_model.param_vals)
+        assert all(init_vals  == new_model.init_vals )
+        
+        
 if __name__ == '__main__':
     T = TestModelInstance()
-    T.test_1()
+    # T.test_read_1()
+    # T.test_integrate_1()
+    # T.test_exv_1()
+    # T.test_write_low_level_1()
+    T.test_write_high_level_1()

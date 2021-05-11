@@ -6,8 +6,8 @@ from os.path  import dirname, join
 _dir = dirname(__file__)
 sys.path.insert(0, _dir)
 
-from .model_handler          import *
-from ._utils_plot.utils_plot import colors, palette_types
+from .model_handler    import *
+from ._utils_plot.axes import colors, palette_types
 
 styles = {}
 
