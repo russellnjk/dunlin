@@ -7,17 +7,17 @@ from   pathlib      import Path
 #Non-Standard Imports
 ###############################################################################
 try:
-    import dunlin._utils_model.model_coder  as coder
-    import dunlin._utils_model.ini_reader   as uir
-    import dunlin._utils_model.ini_writer   as uiw 
-    import dunlin._utils_model.attr_checker as uac
-    import dunlin._utils_model.integration  as itg
+    import dunlin._utils_model.model_coder as coder
+    import dunlin._utils_model.ini_reader  as uir
+    import dunlin._utils_model.ini_writer  as uiw 
+    import dunlin._utils_model.attr_reader as uar
+    import dunlin._utils_model.integration as itg
 except Exception as e:
     if Path.cwd() == Path(__file__).parent:
-        import _utils_model.model_coder  as coder
-        import _utils_model.ini_reader   as uir
-        import _utils_model.ini_writer   as uiw 
-        import _utils_model.attr_checker as uac
+        import _utils_model.model_coder as coder
+        import _utils_model.ini_reader  as uir
+        import _utils_model.ini_writer  as uiw 
+        import _utils_model.attr_reader as uar
         import _utils_model.integration as itg
     else:
         raise e
@@ -25,9 +25,9 @@ except Exception as e:
 ###############################################################################
 #Globals
 ###############################################################################
-display_settings   = {'verbose' : False}
-update_ini_section = uiw.update_ini_section
-make_config        = uiw.make_config
+display_settings      = {'verbose' : False}
+make_updated_inicode  = uiw.make_updated_inicode
+make_updated_section  = uiw.make_updated_section
 
 ###############################################################################
 #.ini Constructors
@@ -124,12 +124,12 @@ def read_config(config, append_model_name=False):
 
 def parse_model(name, config, append_model_name=False):
     '''
-    Parses data indexed under name from a configparser exvect.
+    Parses data indexed under name from a configparser.
     
     :meta private:
     '''
     data          = uir.parse_section(name, config)
-    data['model'] = Model(append_model_name=append_model_name, **data['model'])
+    data['model'] = Model(**data['model'])
     
     return data
 
@@ -156,16 +156,16 @@ class Model():
             raise TypeError('equations must be a string.')
         
         #Get names of states, params and inputs with checks
-        state_names, init_vals  = uac.read_init(states)
-        param_names, param_vals = uac.read_params(params)
-        input_names, input_vals = uac.read_inputs(inputs)
-        tspan_                  = uac.read_tspan(tspan)
+        state_names, init_vals  = uar.read_init(states)
+        param_names, param_vals = uar.read_params(params)
+        input_names, input_vals = uar.read_inputs(inputs)
+        tspan_                  = uar.read_tspan(tspan)
         solver_args_            = solver_args if solver_args else {'method': 'LSODA'}
         
-        uac.check_names(state_names, param_names, input_names)
+        uar.check_names(state_names, param_names, input_names)
         
         #Append model name if required
-        param_names_ = [p + '_' + name] if append_model_name else param_names
+        param_names_ = [p + '_' + name for p in param_names] if append_model_name else param_names
         
         set_attr = super().__setattr__
         
@@ -222,22 +222,22 @@ class Model():
         func_msg    = 'The "{}" attribute for Model "{}" must be a function.'
         dict_msg    = 'The "{}" attribute for Model {} must be a dict.'
         if attr == 'init_vals':
-            states, value_ = uac.read_init(value)
-            if set(states).difference(self.states):
+            states, value_ = uar.read_init(value)
+            if set(states) != set(self.states):
                 raise ValueError('Attempted to assign init_vals but names of states do not match those of model.')
             super().__setattr__(attr, value_[list(self.states)])
         elif attr == 'param_vals':
-            names, value_ = uac.read_params(value)
-            if set(names).difference(self.params):
+            names, value_ = uar.read_params(value)
+            if set(names) != set(self.params):
                 raise ValueError('Attempted to assign param_vals but names of params do not match those of model.')
             super().__setattr__(attr, value_[list(self.params)])
         elif attr == 'input_vals':
-            names, value_ = uac.read_inputs(value)
-            if set(names).difference(self.params):
+            names, value_ = uar.read_inputs(value)
+            if set(names) != set(self.params):
                 raise ValueError('Attempted to assign input_vals but names of inputs do not match those of model.')
             super().__setattr__(attr, value_[list(self.inputs)])
         elif attr == 'tspan':
-            value_ = uac.read_tspan(value)
+            value_ = uar.read_tspan(value)
             super().__setattr__(attr, value_)
         elif attr == 'exvs':
             if type(value) != dict and value is not None:
@@ -251,10 +251,11 @@ class Model():
             elif value.__code__.co_argcount < 5 and not self.inputs:
                 raise ValueError(arg_msg.format(attr, self.name, 5, 'model_func, init, params, scenario, segment'))
             elif value.__code__.co_argcount < 6 and self.inputs:
-                print(attr, self.name, 6, 'model_func')
                 raise ValueError(arg_msg.format(attr, self.name, 6, 'model_func, init, params, inputs, scenario, segment'))
             super().__setattr__(attr, value)
         elif attr in ['meta', 'solver_args']:
+            if type(attr) != dict:
+                raise TypeError(dict_msg(attr, self.name))
             super().__setattr__(attr, value)
         elif hasattr(self, attr):
             msg = "Model object's {} attribute is fixed.".format(attr)
@@ -300,7 +301,7 @@ class Model():
     ###############################################################################
     #Integration
     ###############################################################################
-    def __call__(self, init, params, inputs, scenario=None, args=(), _tspan=None, **_solver_args):
+    def __call__(self, init, params, inputs, scenario=None, _tspan=None, **_solver_args):
         tspan       = self.tspan       if _tspan       is None else _tspan
         solver_args = self.solver_args if _solver_args is None else _solver_args
         
@@ -311,23 +312,11 @@ class Model():
                                                    inputs, 
                                                    scenario = scenario, 
                                                    modify   = self.modify,
-                                                   args     = args,
                                                    **solver_args
                                                    )
         
-        return y_model, t_model
-    
-    # def integrate_array(self, scenario, estimate, _tspan=None, _init=None, _params=None, _inputs=None, _solver_args=None):
-    #     tspan       = self.tspan                    if _tspan       is None else _tspan
-    #     y           = self.init_vals.loc[scenario]  if _init        is None else _init
-    #     p           = self.param_vals.loc[estimate] if _params      is None else _params
-    #     u           = self.input_vals.loc[scenario] if _inputs      is None else _inputs
-    #     solver_args = self.solver_args              if _solver_args is None else _solver_args
-        
-    #     y_model, t_model = itg.piecewise_integrate(self.func, tspan, y, p, u, scenario=scenario, **solver_args)
-        
-    #     return y_model, t_model
-    
+        return y_model, t_model   
+
 if __name__ == '__main__':    
     import _utils_model.integration as itg
     # #Read .ini
@@ -374,7 +363,7 @@ if __name__ == '__main__':
     assert all(r)
     
     #Test integration
-    y_model, t_model = itg.piecewise_integrate(model.func, tspan, y, p, u, scenario=0)
+    y_model, t_model = model(y, p, u, _tspan=tspan, scenario=0)
     assert y_model.shape == (3, 62)
     
     #Test exv function

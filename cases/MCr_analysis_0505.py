@@ -114,13 +114,13 @@ colors = [c for c in colors for i in range(3)]
 labels = list(data['R_frac1'].columns)
 
 for label, color in zip(labels, colors):
-    AX[0].plot(t, data['R_frac1'][label].values, '+', label=label, color=color)
+    AX[0].plot(t, data['RFP/OD'][label].values, '+', label=label, color=color)
     AX[1].plot(t, data['mu'][label].values,      '+', label=label, color=color)
     AX[2].plot(t, data['OD'][label].values,      '+', label=label, color=color)
     AX[3].plot(t, data['R_frac2'][label].values, '+', label=label, color=color)
     AX[4].plot(t, data['GFP/OD'][label].values,  '+', label=label, color=color)
     
-    AX[0].set_title('R_frac1')
+    AX[0].set_title('RFP/OD')
     AX[1].set_title('mu')
     AX[2].set_title('OD')
     AX[3].set_title('R_frac2')

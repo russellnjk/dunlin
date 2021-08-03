@@ -1,478 +1,377 @@
-import numpy       as     np
-import pandas      as     pd
-from   numba       import jit
-from   scipy.stats import norm
-
-try:
-    from tqdm import tqdm
-except:
-    tqdm = None
+import numpy             as     np
+import pandas            as     pd
+import scipy.optimize    as     sop
+from numba               import njit
+from scipy.stats         import norm, laplace, lognorm, loglaplace, uniform
 
 ###############################################################################
-#Optimizers
+#Non-Standard Imports
 ###############################################################################
-# class DunlinOptimizer():
-    
-#     def __init__(self):
-#         pass
-    
-#     def simulated_annealing(self, func, guess, transition, check_bounds=None, iterations=10000, SA=True, progress_bar=True, raise_error=True):
-        
-#         curr_params        = np.array(list(guess.values()))
-#         next_params        = None
-#         self.curr          = curr_params
-#         try:
-#             curr_log_posterior = func(curr_params)
-#         except Exception as e:
-#             msg = f'An error occured when trying to evaluate the first posterior value: {dict(zip(guess.keys(), curr_params))}'
-#             msg = '\n'.join((msg,) + e.args)
-#             raise Exception( msg )
-        
-#         accept     = True
-#         accepted   = [curr_params]
-#         posterior  = [curr_log_posterior]
-        
-#         for i in iterator(range(iterations), progress_bar=progress_bar):
-            
-#             next_params = transition(curr_params)
-#             self.next   = next_params    
-            
-#             if check_bounds is not None:   
-#                 if not check_bounds(next_params):
-#                     continue
-    
-#             try:        
-#                 next_log_posterior = func(next_params)
-#             except Exception as e:
-#                 if raise_error:
-#                     msg = f'An error occured when trying to evaluate this array: {dict(zip(guess.keys(), next_params))}'
-#                     msg = '\n'.join((msg,) + e.args)
-#                     raise Exception( msg )
-#                 else:
-#                     print('Skipped an iteration due to error in posterior calculation.')
-#                     continue
-                
-#             temp   = (1-1*i/iterations) if SA else 1
-#             accept = acceptance_criterion(next_log_posterior, curr_log_posterior, temp)
-            
-#             #Collect sample
-#             if accept:
-#                 curr_params        = next_params
-#                 curr_log_posterior = next_log_posterior
-#                 accepted.append(next_params)
-#                 posterior.append(next_log_posterior)
-#         print()        
-#         self.accepted = accepted
-#         self.values   = posterior
-#         return {'accepted': accepted, 'values': posterior}
-    
-def simulated_annealing(func, guess, transition, check_bounds=None, iterations=10000, SA=True, progress_bar=True, raise_error=True):
-    '''
-    Finds the parameters that MAXIMIZE an objective function.
+import dunlin.model                    as dml
+import dunlin.simulation               as sim
+import dunlin._utils_optimize.wrap_SSE as ws
+import dunlin.optimize                 as opt
+import dunlin._utils_model.base_error  as dbe
+import dunlin._utils_plot.plot         as upp
 
-    Parameters
-    ----------
-    func : function
-        The function to be maximized that accepts a Numpy array and returns a 
-        single numerical value.
-    guess : dict
-        A dictionary in the form {<param_name>: <param_value>}.
-    transition : function
-        A function that accepts a Numpy array and returns a new array.
-    check_bounds : function, optional
-        A function for checking the validity of a set of parameters that accepts 
-        a Numpy array and returns a boolean. The parameter set is rejected if 
-        the function returns False and vice versa. The default is None.
-    iterations : int, optional
-        The number of iterations to take. The default is 10000.
-    SA : bool, optional
-        If True, the temperature parameter of the acceptance criterion changes 
-        with each step. If False, the temperature remains constant and the algorithm
-        becomes a typial Gibbs sampler. The default is True.
+###############################################################################
+#Globals
+###############################################################################
+figure        = upp.figure
+gridspec      = upp.gridspec
+colors        = upp.colors
+palette_types = upp.palette_types
+fs            = upp.fs
+make_AX       = upp.make_AX
+scilimit      = upp.scilimit
+save_figs     = upp.save_figs
+truncate_axis = upp.truncate_axis
 
-    Returns
-    -------
-    optimization_result: dict
-        A dict in the form {'accepted': accepted, 'values': posterior}.
-
-    '''
-        
-    curr_params        = np.array(list(guess.values()))
-    next_params        = None
-    try:
-        curr_log_posterior = func(curr_params)
-    except Exception as e:
-        msg = f'An error occured when trying to evaluate the first posterior value: {dict(zip(guess.keys(), curr_params))}'
-        msg = '\n'.join((msg,) + e.args)
-        raise Exception( msg )
+###############################################################################
+#Dunlin Errors
+###############################################################################
+class DunlinOptimizationError(dbe.DunlinBaseError):
     
-    accept     = True
-    accepted   = [curr_params]
-    posterior  = [curr_log_posterior]
+    @classmethod
+    def prior_type(cls, arg, value, correct):
+        return cls.raise_template(f'Invalid {arg}: {value}\nValue must be in {correct} ', 0)
     
-    for i in iterator(range(iterations), progress_bar=progress_bar):
+    @classmethod
+    def prior_format(cls, arg, value, correct):
+        return cls.raise_template(f'Invalid {arg} format: {value}\nValue must be {correct} ', 1)
+    
+    @classmethod
+    def no_opt_result(cls):
+        return cls.raise_template('No optimization yet. Make sure you have run one of the optimization algorithms.', 10)
+    
+    @classmethod
+    def no_algo(cls, algo):
+        return cls.raise_template(f'No algorithm called "{algo}".', 11)
+    
+    
+###############################################################################
+#High-level Functions
+###############################################################################    
+def optimize_models(models, to_minimize=None, algo='differential_evolution'):
+    all_opt_results = {}
+    
+    for model_key, model in models.items():
+        #Parse arguments
+        to_minimize_ = to_minimize[model_key] if hasattr(to_minimize, 'items') else to_minimize
+        algo_        = algo[model_key]        if hasattr(algo,        'items') else algo
         
-        next_params = transition(curr_params)
+        #Call and assign
+        all_opt_results[model_key] = optimize_model(model, to_minimize_, algo_)
         
-        if check_bounds is not None:   
-            if not check_bounds(next_params):
-                continue
+    return all_opt_results
 
-        try:        
-            next_log_posterior = func(next_params)
-        except Exception as e:
-            if raise_error:
-                msg = f'An error occured when trying to evaluate this array: {dict(zip(guess.keys(), next_params))}'
-                msg = '\n'.join((msg,) + e.args)
-                raise Exception( msg )
+def fit_models(models, all_datasets, algo='differential_evolution'):
+    all_opt_results = {}
+    
+    for model_key, model in models.items():
+        #Parse arguments
+        dataset = all_datasets[model_key]
+        algo_   = algo[model_key] if hasattr(algo, 'items') else algo
+        
+        #Call and assign
+        all_opt_results[model_key] = fit_model(model, dataset, algo_)
+        
+    return all_opt_results
+    
+def fit_model(model, dataset, algo='differential_evolution'):
+    get_SSE     = ws.SSECalculator(model, dataset)
+    opt_results = optimize_model(model, get_SSE, algo)
+    return opt_results
+        
+def optimize_model(model, to_minimize=None, algo='differential_evolution'):
+    opt_results = OptResult.from_model(model, to_minimize)
+    
+    for estimate, optimizer in opt_results.items():
+        func = getattr(optimizer, algo, None)
+        if func is None:
+            raise DunlinOptimizationError.no_algo(algo)
+        func()
+    return opt_results
+    
+###############################################################################
+#Dunlin Classes
+###############################################################################    
+class SampledParam():
+    
+    _scale = {'lin'   : lambda x: x,
+              'log'   : lambda x: np.log(x),
+              'log10' : lambda x: np.log10(x)
+              }
+    
+    _unscale = {'lin'   : lambda x: x,
+                'log'   : lambda x: np.exp(x),
+                'log10' : lambda x: 10**x
+                }
+    
+    _priors = {'uniform'    : lambda lb, ub    : uniform(lb, ub-lb),
+               'normal'     : lambda mean, sd  : norm(mean, sd),
+               'laplace'    : lambda loc, scale: laplace(loc, scale),
+               'logNormal'  : lambda mean, sd  : lognorm(mean, sd),
+               'logLaplace' : lambda loc, scale: loglaplace(loc, scale),
+               }
+    
+    _priors['parameterScaleUniform'] = _priors['uniform']
+    _priors['parameterScaleNormal' ] = _priors['normal' ]
+    _priors['parameterScaleLaplace'] = _priors['laplace' ]
+    
+    _priors['uni']     = _priors['uniform']
+    _priors['norm']    = _priors['normal']
+    _priors['lap']     = _priors['laplace']
+    _priors['lognorm'] = _priors['logNormal']
+    _priors['loglap']  = _priors['logLaplace']
+    
+    _priors['u']  = _priors['uniform']
+    _priors['n']  = _priors['normal']
+    _priors['l']  = _priors['laplace']
+    _priors['ln'] = _priors['logNormal']
+    _priors['ll'] = _priors['logLaplace']
+    
+    @classmethod
+    def read_prior(cls, prior, scale, _name='prior'):
+        try:
+            if hasattr(prior, 'items'):
+                ptype, a, b = prior['type'], prior['loc'], prior['scale']
             else:
-                print('Skipped an iteration due to error in posterior calculation.')
-                continue
+                ptype, a, b = prior
+
+            func = cls._priors[ptype]
+        except KeyError:
+            raise DunlinOptimizationError.prior_type(_name, prior, list(cls._priors.keys()))
+        except:
+            raise DunlinOptimizationError.prior_format(_name, prior, 'list/tuple in the order [type, loc, scale] or dict with keys type, loc and scale')
+        return ptype, func(a, b)
             
-        temp   = (1-1*i/iterations) if SA else 1
-        accept = acceptance_criterion(next_log_posterior, curr_log_posterior, temp)
+    def __init__(self, name, bounds, prior=None, sample=None, scale='lin'):
+        #Set name
+        self.name  = name
         
-        #Collect sample
-        if accept:
-            curr_params        = next_params
-            curr_log_posterior = next_log_posterior
-            accepted.append(next_params)
-            posterior.append(next_log_posterior)
-    print()        
-    return {'accepted': accepted, 'values': posterior}
-
-@jit(nopython=True)
-def get_exp_substract(a, b):
-    '''
-    :meta private:
-    '''
-    return np.exp(a-b)
-
-@jit(nopython=True)
-def acceptance_criterion(next_log_posterior, curr_log_posterior, temp):
-    '''
-    :meta private:
-    '''
-    test     = np.random.rand()
-    p_accept = np.exp(next_log_posterior - curr_log_posterior)
-    return p_accept > test**temp
-
-###############################################################################
-#Transition
-###############################################################################
-def wrap_transition(step_size, param_index, n_iterations=10000):
-    '''
-    Returns a function for performing the transition step in simulated annealing.
-
-    Parameters
-    ----------
-    step_size : dict
-        A dict in the form {<param_name>: <std_dev>}.
-    param_index : dict
-        DESCRIPTION.
-    n_iterations : int, optional
-        The number of iterations. The default is None.
-
-    Returns
-    -------
-    transition: function
-        A function that accepts a Numpy array and returns a new array.
-    '''
-    pairs   = []
-    for param, value in step_size.items():
-        if value == 0:
-            continue
-        
-        try:
-            index = param_index[param]
-        except:
-            msg = 'Could not find {} in param_names.'
-            raise KeyError(msg.format(param))
-        
-        try:
-            index = int(index)
-        except:
-            msg = 'Could not convert the value indexed at {} in param_names into an int: {}'
-            raise TypeError(msg.format(param, index))
-        
-        pair = [value, index]
-        pairs.append(pair)
-    
-    pairs   = np.array(sorted(pairs, key=lambda pair: pair[1]))
-    indices = pairs[:,1].astype(np.int64)
-    stepper = norm(loc=0, scale=pairs[:,0]).rvs
-    
-    def transition(params_array):
-        delta            = stepper()
-        new_params_array = copy_add(params_array, indices, delta)
-
-        return new_params_array
-    return transition
-
-@jit(nopython=True)
-def copy_add(params_array, indices, delta):
-    '''
-    :meta private:
-    '''
-    new_params_array           = params_array.copy().astype(np.float64)
-    new_params_array[indices] += delta
-    return new_params_array
-    
-###############################################################################
-#Log-Posterior Calculation
-###############################################################################
-def wrap_get_log_posterior(get_log_likelihood, get_log_prior=None, callback=None):
-    '''
-    Returns a function for calculating the log-posterior of a parameter set.
-
-    Parameters
-    ----------
-    get_log_likelihood : function
-        A function for calculating the log-likelihood a parameter set that accepts 
-        a Numpy array and returns a single numerical value.
-    get_log_prior: function, optional
-        A function for calculating the log-prior of a parameter set that accepts 
-        a Numpy array and returns a single numerical value. The default is None.
-    callback : function or tuple of functions, optional
-        A function(s) to be called using func(log_posterior, log_prior, log_likelihood). 
-        Keywords are not to be used. The default is None.
-
-    Returns
-    -------
-    get_log_posterior: function
-        A function to be maximized that accepts a Numpy array and returns a 
-        single numerical value.
-    '''
-
-    if not callable(get_log_likelihood):
-        msg = 'get_log_likelihood must be a function. Received: {}'
-        raise TypeError(msg.format(get_log_likelihood))
-        
-    callbacks     = []
-    if callback:
-        if callable(callback):
-            callbacks = [callback]
-        elif type(callback) in [list, tuple]:
-            callbacks = tuple(callbacks)
-        elif type(callback) == dict:
-            callbacks = tuple(callbacks.values())
+        #Set bounds
+        if hasattr(bounds, 'items'):
+            self.bounds      = bounds['lb'], bounds['ub']
         else:
-            msg = 'callback must be a function, a list of functions or a dict of indexed functions. Received {} instead.'
-            raise TypeError(msg)
+            self.bounds      = tuple(bounds)
+    
+        #Create priors
+        prior_                        = ['uniform', *self.bounds] if prior is None else prior
+        sample_                       = prior_ if sample is None else sample
+        self.prior_type, self.prior   = self.read_prior(prior_,   scale)
+        self.sample_type, self.sample = self.read_prior(sample_, scale, 'sample')
         
-        if not all([callable(func) for func in callbacks]):
-            msg = 'callback must be a function, a list of functions or a dict of indexed functions. Detected non-function objects.'
-            raise TypeError(msg)
+        #Set scale
+        if scale not in self._scale:
+            raise DunlinOptimizationError('scale', scale, list(self._scale.values()))
+        self.scale_type = scale
+        
+    def scale(self, x):
+        return self._scale[self.scale_type](x)
+    
+    def unscale(self, x):
+        return self._unscale[self.scale_type](x)
+    
+    def get_prior(self, x):
+        if self.prior_type in ['uniform', 'normal', 'laplace', 'logNormal', 'logLaplace']:
+            x_ = self.unscale(x)
+        else:
+            x_ = x
+
+        prior_value = self.prior.pdf(x_)
+        return prior_value
+    
+    def get_opt_bounds(self):
+        if 'parameterScale' in self.prior_type:
+            lb, ub = self.bounds
+            return self.scale(lb), self.scale(ub)
+        else:
+            return self.bounds
             
-    def get_log_posterior(params_array):
-        log_prior      = get_log_prior(params_array) if get_log_prior else 0
-        log_likelihood = get_log_likelihood(params_array) 
-        log_posterior  = log_prior + log_likelihood
         
-        if callbacks:
-            try:
-                [func(params_array, log_posterior, log_prior, log_likelihood) for func in callbacks]
-            except Exception as e:
-                msg    = '\n'.join( ('An error occured in trying to evaluate a callback function.',) )
-                e.args = (msg,)
-                raise e
+    def __call__(self, x):
+        return self.get_prior(x)
+    
+    def to_dict(self):
+        return {'name'   : self.name,  
+                'bounds' : self.bounds,     
+                'prior'  : [self.prior_type, *self.prior.args], 
+                'sample' : [self.sample_type, *self.sample.args],
+                'scale'  : self.scale_type
+                }
+
+class OptResult():
+    '''
+    Note: Many optimization algorithms seek to MINIMIZE an objective function, 
+    while Bayesian approaches attempt to MAXIMIZE the objective function.
+    
+    Therefore, the NEGATIVE of the log-likelihood should be used instead of the 
+    regular log-likelihood for instantiation. The argument "to_minimize" is therefore
+    stored under the attribute "neg_log_likelihood". For curve-fitting, this is 
+    simply the SSE function.
+    '''
+    @classmethod
+    def parameter_estimation(cls, model, dataset, **kwargs):
+        get_SSE = ws.SSECalculator(model, dataset)
+        return cls.from_model(model, get_SSE, **kwargs)
+    
+    @classmethod
+    def from_model(cls, model, to_minimize=None, _attr='optim_args'):
+        kwargs     = getattr(model, _attr, {})
+        optimizers = {}
+        if to_minimize is not None:
+            if callable(to_minimize):
+                to_minimize_ = to_minimize
+            else:
+                raise NotImplementedError('Still in the works.')
+                to_minimize_ = model.get_exv(to_minimize)
+            kwargs    = {**kwargs, **{'to_minimize': to_minimize_}}
+        
+        for estimate, nominal in model.params.to_dict('index').items():
+            optimizer = cls(nominal=nominal, **kwargs)
+            optimizers[estimate] = optimizer
+        
+        return optimizers
+    
+    def __init__(self, nominal, free_params, to_minimize, **kwargs):
+        self.settings           = kwargs.get('settings', {})
+        self.line_args          = kwargs.get('line_args', {})
+        self.sampled_params     = []
+        self.sampled_index      = np.zeros(len(free_params), dtype=np.int32)
+        self.nominal            = np.array(list(nominal.values()))
+        self.neg_log_likelihood = to_minimize
+        self.names              = tuple(nominal.keys())
+        self.opt_result         = {}
+        
+        c = 0
+        
+        for i, p in enumerate(nominal):
+            if p in free_params:
+                sampled_param = SampledParam(p, **free_params[p])
+                self.sampled_params.append(sampled_param)
+                self.sampled_index[c] = i
                 
-        return log_posterior
+                c += 1
+    def get_objective(self, free_params_array, _a=None, _p=None):
+        priors = np.zeros(len(free_params_array))
+        scaled = np.zeros(len(free_params_array))
+        for i, (x, sp) in enumerate( zip(free_params_array, self.sampled_params) ):
+            priors[i] = sp(x)
+            scaled[i] = sp.unscale(x)
+        
+        params_array  = reconstruct(self.nominal, self.sampled_index, scaled)
+        neg_posterior = self.neg_log_likelihood(params_array) - logsum(priors)
+        
+        if _a is not None:
+            _a.append(params_array)
+        if _p is not None:
+            _p.append(neg_posterior)
+            
+        return neg_posterior
     
-    return get_log_posterior
+    def get_bounds(self):
+        return [p.get_opt_bounds() for p in self.sampled_params]
+        
+    def differential_evolution(self, **kwargs):
+        a        = []
+        p        = []
+        func     = self.get_objective 
+        bounds   = self.get_bounds()
+        settings = {**{'bounds': bounds}, **self.settings, **kwargs}
+        result   = sop.differential_evolution(func, args=(a, p), **settings)
+        cols     = [*self.names, '_posterior']
+        p        = np.array(p)[:,np.newaxis]
+        a        = np.concatenate((a, p), axis=1)
+        opt_result = {'o': result, 
+                      'a': pd.DataFrame(a, columns=cols)
+                      }
+        self.opt_result = opt_result
+        return opt_result
     
-###############################################################################
-#Log-Prior Calculation
-###############################################################################
-def wrap_get_log_prior(priors_dict, param_index):
-    '''
-    Returns a function for calculating the log-prior of a parameter set.
-
-    Parameters
-    ----------
-    priors_dict : dict
-        A dict of the form {<param_name>: [<mean>, <std_dev>]}. You do not need 
-        to provide a prior for every parameter.
-    param_index : dict
-        A dict in the form {<param_name>: <index>}. The index indicates the order 
-        of the parameters and must start from 0.
-
-    Returns
-    -------
-    get_log_prior: function
-        A function for calculating the log-prior of a parameter set that accepts 
-        a Numpy array and returns a single numerical value.
-    '''
-    #Check priors
-    if priors_dict is None:
-        return None
-    elif type(priors_dict) == dict:
-        if len(priors_dict) == 0:
-            return None
+    def __getitem__(self, key):
+        try:
+            df = self.opt_result['a']
+        except:
+            raise DunlinOptimizationError.no_opt_result()
         
-        temp = [param for param in priors_dict if param not in param_index]
-        if temp:
-            msg = 'Detected unexpected keys in priors: {}'
-            raise ValueError(msg.format(temp))
-        
-        temp    = [[value[0], value[1], param_index[param]] for param, value in priors_dict.items()]
-        temp    = np.array(sorted(temp, key=lambda x: x[2]))
-        indices = temp[:,2].astype(np.int64)
-        priors  = norm(loc=temp[:,0], scale=temp[:,1]).pdf
-        
-    else:
-        msg = 'priors must be a dict. Received {} instead.'
-        raise TypeError(msg.format(type(priors_dict)))
-        
-    def get_log_prior(params_array):
-        prior_values = priors(params_array[indices])
-        return log_sum(prior_values)
+        return df[key]
     
-    return get_log_prior
+    def __getattr__(self, attr):
+        if attr == 'posterior':
+            return self.opt_result.get('a', None)
+        elif attr in self.opt_result:
+            return self.opt_result[attr]
+        else:
+            raise AttributeError(f'"{type(self).__name__}" does not have attribute "{attr}"')
+    
+@njit
+def logsum(arr):
+    return np.sum(np.log(arr))
 
-@jit(nopython=True)
-def log_sum(a):
-    '''
-    :meta private:
-    '''
-    return np.log(a).sum()
+@njit
+def reconstruct(nominal, sampled_index, scaled_free_params_array):
+    params                = nominal.copy()
+    params[sampled_index] = scaled_free_params_array
+    
+    return params
 
 ###############################################################################
-#Bounds Checking
-###############################################################################
-def wrap_check_bounds(bounds_dict, param_index):
-    '''
-    Returns a function for checking the validity of a parameter set.
-
-    Parameters
-    ----------
-    bounds_dict : dict
-        A dict in the form {<param_name>: [<lower>, <upper>]}. You do not need 
-        to provide bounds for every single parameter.
-    param_index : dict
-        A dict in the form {<param_name>: <index>}. The index indicates the order 
-        of the parameters and must start from 0.
-
-    Returns
-    -------
-    check_bounds: function
-        A function for checking the validity of a set of parameters that accepts 
-        a Numpy array and returns a boolean. The parameter set is rejected if 
-        the function returns False and vice versa.
-    '''
-    if not bounds_dict:
-        return None
-    elif type(bounds_dict) == dict:
-        temp    = [[value[0], value[1], param_index[param]] for param, value in bounds_dict.items()]
-        temp    = np.array(sorted(temp, key=lambda x: x[2]))
-        indices = temp[:,2].astype(np.int64)
-        upper   = temp[:,1]
-        lower   = temp[:,0]
-
-        if not all(upper > lower):
-            raise ValueError('Detected upper bounds that were lower or equal to lower bounds.')
-    else:
-        msg = 'bounds must be a dict. Received {} instead.'
-        raise TypeError(msg.format(type(bounds_dict)))
+#Plotting
+###############################################################################    
+def plot_all_opt_results(all_opt_results, AX, **line_args):
+    AX1 = AX
+    for model_key, opt_results in all_opt_results.items():
+        AX_model = AX.get(model_key, None)
+        
+        if not AX_model:
+            continue
+        line_args_model = {k: v.get(model_key, {}) if type(v) == dict else v for k,v in line_args.items()}
+        AX1[model_key]  = plot_opt_results(opt_results, AX_model, **line_args_model)
+    return AX1
+    
+def plot_opt_results(opt_results, AX, palette=None, **line_args):
+    AX1       = AX
+    for estimate, opt_result in opt_results.items(): 
+        for var, ax_ in AX1.items():
+            
+            ax             = upp.recursive_get(ax_, estimate, var) 
+            line_args_     = {**opt_result.line_args, **line_args}
+            line_args_     = {k: upp.recursive_get(v, estimate, var) for k, v in line_args_.items()}
+            
+            #Process special keywords
+            color = line_args_.get('color')
+            if type(color) == str:
+                line_args_['color'] = colors[color]
                 
-    def check_bounds(params_array):
-        temp = params_array[indices] < lower
-        if temp.any():
-            return False
-        
-        temp = params_array[indices] > upper
-        if temp.any():
-            return False
-        
-        return True
-    return check_bounds
-
-###############################################################################
-#Progress Bar
-###############################################################################
-def iterator(r, progress_bar=True, **kwargs):
-    global tqdm
-    if progress_bar and tqdm:
-        return tqdm(r, **kwargs)
-    elif progress_bar and not tqdm:
-        raise Exception('Progress bar not available. Check tqdm module is installed.')
-    else:
-        return r
-
-if __name__ == '__main__':
-    #Test prior
-    priors_dict   = {'a': np.array([1, 0.1]), 'b': np.array([1, 0.05])}
-    param_index   = {'a': 0, 'b': 1, 'c': 2}
-    get_log_prior = wrap_get_log_prior(priors_dict, param_index)
+            label_scheme   = line_args_.get('label', 'scenario, estimate')
+            if label_scheme == 'estimate':
+                label = f'{estimate}'
+            elif label_scheme == 'model_key':
+                label = f'{opt_result.model_key}'
+            elif label_scheme == 'model_key, estimate':
+                label = f'{opt_result.model_key}, {estimate}'
+            else:
+                label = f'{estimate}'
+            
+            line_args_['label'] = label
+            plot_type           = line_args_.get('plot_type', 'line')
+            
+            #Plot
+            if plot_type == 'line':
+                if line_args_.get('marker', None) and 'linestyle' not in line_args_:
+                    line_args_['linestyle'] = 'None'
+                
+                if type(var) == tuple:
+                    x_vals, y_vals = opt_result[var[0]].values, opt_result[var[1]].values
+                    ax.plot(x_vals, y_vals, **line_args_)
+                    ax.set_xlabel(var[0])
+                    ax.set_ylabel(var[0])
+                else:
+                    y_vals = opt_result[var].values
+                    ax.plot(y_vals, **line_args_)
+                    ax.set_ylabel(var)
+            else:
+                raise ValueError(f'Unrecognized plot_type {plot_type}')
     
-    log_prior1    = get_log_prior(np.array([0.9, 0.95, 2]))
-    log_prior0    = get_log_prior(np.array([  1,    1, 2]))
-    assert np.isclose(log_prior1/log_prior0, 0.711019, atol=1e-3)
-    
-    #Test transition
-    step_size        = {'a': 0.05, 'b': 0.05}
-    param_index      = {'a': 0, 'b': 1, 'c': 2}
-    transition       = wrap_transition(step_size, param_index)
-    new_params_array = transition(np.array([0, 0, 0]))
-    assert len(new_params_array) == 3
-    assert new_params_array[2]   == 0
-    
-    #Test bounds check
-    bounds_dict  = {'a': np.array([0.1, 1]), 'b': np.array([0.05, 1])}
-    param_index  = {'a': 0, 'b': 1, 'c': 2}
-    check_bounds = wrap_check_bounds(bounds_dict, param_index)
-    in_bounds    = check_bounds(np.array([0.5, 0.5, 0.5]))
-    assert in_bounds == False
-    
-    bounds_dict  = {'a': np.array([0.1, 1]), 'b': np.array([0.05, 1])}
-    param_index  = {'a': 0, 'b': 1, 'c': 2}
-    check_bounds = wrap_check_bounds(bounds_dict, param_index)
-    in_bounds    = check_bounds(np.array([0.5, 0, 0.5]))
-    assert in_bounds == True
-    
-    #Test posterior
-    param_index        = {'a': 0, 'b': 1, 'c': 2}
-    get_log_likelihood = lambda params: np.sum(-(params - 1)**2)
-    get_log_posterior  = wrap_get_log_posterior(get_log_likelihood)
-    r                  = get_log_posterior(np.array([1, 1, 1]))
-    assert r == 0
-    
-    get_log_posterior  = wrap_get_log_posterior(get_log_likelihood)
-    r                  = get_log_posterior(np.array([0, 1, 2]))
-    assert r == -2
-    
-    get_log_posterior  = wrap_get_log_posterior(get_log_likelihood)
-    r                  = get_log_posterior(np.array([2, 1, 2]))
-    assert r == -2
-    
-    get_log_posterior  = wrap_get_log_posterior(get_log_likelihood)
-    r                  = get_log_posterior(np.array([1, 1, 3]))
-    assert r == -4 
-    
-    #Test simulated annealing
-    guess       = {'a': 2, 'b': 2, 'c': 0}
-    priors_dict = {'a': np.array([1, 0.1]), 'b': np.array([1, 0.05])}
-    bounds_dict = {'a': np.array([1, 0.1]), 'b': np.array([1, 0.05])}
-    step_size   = {'a': 0.05, 'b': 0.05}
-    param_index = {'a': 0, 'b': 1, 'c': 2}
-    
-    transition         = wrap_transition(step_size, param_index)
-    check_bounds       = wrap_check_bounds(bounds_dict, param_index)
-    get_log_prior      = wrap_get_log_prior(priors_dict, param_index)
-    get_log_likelihood = lambda params: np.sum(-(params - 1)**2)
-    get_log_posterior  = wrap_get_log_posterior(get_log_prior, get_log_likelihood)
-    
-    result   = simulated_annealing(get_log_posterior, guess, transition, check_bounds, iterations = 500)
-    accepted = result['accepted']
-    adf      = pd.DataFrame(accepted, columns=list(param_index.keys()) )
-    assert all(adf['c'] == 0)
-    assert all(np.isclose(adf.iloc[-1].values, [1, 1, 0], atol=1e-1))
-    
-    # #Visual check
-    # import matplotlib.pyplot as plt
-    # plt.close('all')
-    # fig = plt.figure()
-    # ax  = fig.add_subplot(1, 1, 1)
-    # ax.plot(adf['a'], adf['b'], marker='o', markersize=4)    
-
-    
+    return AX1

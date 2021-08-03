@@ -186,33 +186,33 @@ exp_data['coarse_1'][('R_frac_ss', 'Variance')] = 1e-3
 #Read models
 model_filename = 'TestMCr_1.ini'
 model_data     = dn.read_ini(model_filename)
-print(f'Running test_MCr_3 with {model_filename}')
-guesses, cf_args = cf.get_sa_args(model_data, exp_data)
-sim_args         = sim.get_sim_args(model_data)
+# print(f'Running test_MCr_3 with {model_filename}')
+# guesses, cf_args = cf.get_sa_args(model_data, exp_data)
+# sim_args         = sim.get_sim_args(model_data)
 
-#Simulation settings
-coarse_1   = model_data['coarse_1']['model']
-coarse_1s  = list(coarse_1.states)
-coarse_1e  = list(coarse_1.exvs)
-coarse_1a  = ['x', 'S'] + coarse_1e
-coarse_1a.remove('R_frac_ss')
+# #Simulation settings
+# coarse_1   = model_data['coarse_1']['model']
+# coarse_1s  = list(coarse_1.states)
+# coarse_1e  = list(coarse_1.exvs)
+# coarse_1a  = ['x', 'S'] + coarse_1e
+# coarse_1a.remove('R_frac_ss')
 
-#Renumber index
-scenarios                = scenarios_ + list(range(len(scenarios_), len(coarse_1.init_vals)))
-coarse_1.init_vals.index = scenarios
-coarse_1.input_vals.index.set_levels(scenarios, level=0, inplace=True)
+# #Renumber index
+# scenarios                = scenarios_ + list(range(len(scenarios_), len(coarse_1.init_vals)))
+# coarse_1.init_vals.index = scenarios
+# coarse_1.input_vals.index.set_levels(scenarios, level=0, inplace=True)
 
-#Set colors
-palette_1 = [sim.colors['cobalt'], sim.colors['coral'],
-             sim.colors['cobalt'], sim.colors['coral'], 
-             sim.colors['ocean'],  sim.colors['gold'  ],
-             ]
-color  = {'coarse_1': dict(zip(scenarios, palette_1)),
-          }
+# #Set colors
+# palette_1 = [sim.colors['cobalt'], sim.colors['coral'],
+#              sim.colors['cobalt'], sim.colors['coral'], 
+#              sim.colors['ocean'],  sim.colors['gold'  ],
+#              ]
+# color  = {'coarse_1': dict(zip(scenarios, palette_1)),
+#           }
 
-vs_marker    = {v: '^' if 'vs' in v else None for v in coarse_1a}
-vs_marker    = {estimate: vs_marker for estimate in guesses}
-guess_marker = {'coarse_1': {s: vs_marker for s in scenarios}}
+# vs_marker    = {v: '^' if 'vs' in v else None for v in coarse_1a}
+# vs_marker    = {estimate: vs_marker for estimate in guesses}
+# guess_marker = {'coarse_1': {s: vs_marker for s in scenarios}}
 
 # ###############################################################################
 # #Test models
@@ -240,23 +240,23 @@ guess_marker = {'coarse_1': {s: vs_marker for s in scenarios}}
 # save_figs('scale1n2', figs, t_figs, k_figs, folder=folder)
 # save_best('scale1n2', best, collected3, folder=folder)
 
-#New Test
-collected2 = {}
-folder     = 'testMCr_output'
+# #New Test
+# collected2 = {}
+# folder     = 'testMCr_output'
 
-for guess in guesses.values():
-    guess['n_fr'] = 1
+# for guess in guesses.values():
+#     guess['n_fr'] = 1
 
-#Run curve-fitting
-cf_args['raise_error'] = False
+# #Run curve-fitting
+# cf_args['raise_error'] = False
 
-traces, posteriors, opt_results, best = cf.apply_simulated_annealing(guesses, **cf_args)
+# traces, posteriors, opt_results, best = cf.apply_simulated_annealing(guesses, **cf_args)
     
-#Plot
-plt.close('all')
-figs, AX, psim, gsim       = plot_fit(coarse_1a, sim_args, guesses, exp_data, posterior=best, color=color, label='scenario', guess_marker=guess_marker)
-t_figs, t_ax, k_figs, k_AX = plot_trace(traces, cf_args, bw_adjust=1)
+# #Plot
+# plt.close('all')
+# figs, AX, psim, gsim       = plot_fit(coarse_1a, sim_args, guesses, exp_data, posterior=best, color=color, label='scenario', guess_marker=guess_marker)
+# t_figs, t_ax, k_figs, k_AX = plot_trace(traces, cf_args, bw_adjust=1)
 
-#Save
-save_figs('scale1n1', figs, t_figs, k_figs, folder=folder)
-save_best('scale1n1', best, collected2, folder=folder)
+# #Save
+# save_figs('scale1n1', figs, t_figs, k_figs, folder=folder)
+# save_best('scale1n1', best, collected2, folder=folder)

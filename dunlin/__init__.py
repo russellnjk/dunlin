@@ -4,10 +4,15 @@ from os.path  import dirname, join
 
 #Add path
 _dir = dirname(__file__)
-sys.path.insert(0, _dir)
+if _dir not in sys.path:
+    sys.path.insert(0, _dir)
 
-from .model_handler    import *
+# from .model_handler    import *
 from ._utils_plot.axes import colors, palette_types
+
+#New files
+from .model            import read_file, make_models, Model
+from ._utils_plot.plot import figure, gridspec, colors, scilimit
 
 styles = {}
 

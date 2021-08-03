@@ -61,18 +61,20 @@ def dai(mu):
     return mu*gradient + intercept
 
 plt.close('all')
-plt.style.use(dn.styles['dark_style_multi'])
+plt.style.use(dn.styles['light_style_multi'])
+# plt.style.use(dn.styles['dark_style_multi'])
 
 df = pd.read_csv('data_MCr_AU.csv', header=[0, 1])
-
-idx  = list(range(50))[::2] + list(range(50, len(df)))[::10]
+# df = df.groupby(np.arange(len(df))//2).mean()
+idx  = list(range(50))[::1] + list(range(50, len(df)))[::10]
+idx  = list(range(len(df)))
 time = df['Time']['Time']
 data = df.iloc[idx]
 t = time.values[idx]
 data.index= t
 
 
-fig, AX = sim.figure(2, 3, None)
+fig, AX = sim.figure(3, 2, None)
 w       = lambda name, func, *states, **kwargs: apply2data(data, name, func, *states, **kwargs)
 
 RFP_OD2Molar   = 1/18.84/30/1e6
@@ -98,25 +100,42 @@ colors = sim.palette_types['light'](len(LB['R_frac1'].columns), color=sim.colors
 labels = list(LB['R_frac1'].columns)
 
 for color, label in zip(colors, labels):
-    AX[0].plot(t, LB['R_frac1'][label].values, '+', label=label, color=color)
+    AX[0].plot(t, LB['OD'][label].values, '+', label=label, color=color)
     AX[1].plot(t, LB['mu'][label].values,      '+', label=label, color=color)
-    AX[2].plot(t, LB['OD'][label].values,      '+', label=label, color=color)
-    AX[3].plot(t, LB['R_frac2'][label].values, '+', label=label, color=color)
+    AX[2].plot(t, LB['RFP/OD'][label].values,      '+', label=label, color=color)
+    
+    m = 50
+    n = 200
+    
+    x = LB['mu'][label].loc[m+30:n+30].values
+    y = LB['RFP/OD'][label].loc[m:n].values
+    AX[3].plot(x, y, '+', label=label, color=color)
     
 M9 = data[[c for c in data.columns if 'M9' in c[1]]]
 colors = sim.palette_types['light'](len(M9['R_frac1'].columns), color=sim.colors['faded red'])
 labels = list(M9['R_frac1'].columns)
 
 for color, label in zip(colors, labels):
-    AX[0].plot(t, M9['R_frac1'][label].values, '+', label=label, color=color)
+    AX[0].plot(t, M9['OD'][label].values, '+', label=label, color=color)
     AX[1].plot(t, M9['mu'][label].values,      '+', label=label, color=color)
-    AX[2].plot(t, M9['OD'][label].values,      '+', label=label, color=color)
-    AX[3].plot(t, M9['R_frac2'][label].values, '+', label=label, color=color)
+    AX[2].plot(t, M9['RFP/OD'][label].values,      '+', label=label, color=color)
+    
+    # m = 80
+    # n = 180
+    
+    # x = M9['mu'][label].loc[m:n].values
+    # y = M9['RFP/OD'][label].loc[m:n].values
+    # AX[3].plot(x, y, '+', label=label, color=color)
+    
     
 AX[0].legend()
 AX[1].legend()
 AX[2].legend()
 AX[3].legend()
+AX[0].set_title('OD')
+AX[1].set_title('mu')
+AX[2].set_title('RFP/OD')
+AX[3].set_title('RFP/OD vs mu')
 
 scale = dai(LB['mu'])/LB['R_frac2']
 scale = scale.loc[150:400].mean().values[0]

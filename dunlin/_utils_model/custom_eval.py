@@ -1,16 +1,6 @@
 import re
-from   numpy import linspace
 
-
-safefuncs = {'range'    : range, 
-             'list'     : list, 
-             'linspace' : linspace
-             }
-whitelist = {'__builtins__': safefuncs,
-             }
-
-#'[A-Za-z]'
-def safe_eval(string, patterns = ('__', '[A-Za-z]\.', ';', 'f"', "f'")):
+def safe_eval(string, patterns = ('__', '[A-Za-z]\.', 'lambda +[\w]'), locals=None):
     '''
     For safe evaluation of strings.
     
@@ -19,13 +9,13 @@ def safe_eval(string, patterns = ('__', '[A-Za-z]\.', ';', 'f"', "f'")):
     string
     
     for pattern in patterns:
-        r = re.findall(pattern, string)
+        r = re.search(pattern, string)
 
         if r:
             msg = 'This string contains invalid characters and might be unsafe: \n{}'
             raise ValueError(msg.format(string))
     
-    return eval(string, whitelist)
+    return eval(string, locals)
 
 if __name__ == '__main__':
     

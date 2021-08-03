@@ -9,6 +9,8 @@ import scipy.optimize as opt
 from   numba  import jit 
 #Do NOT remove these imports. They are needed to run dynamically compiled functions.
 
+#Future: Check function dependencies with [\w.]+\([^\)]*\)
+
 ###############################################################################
 #Function Generation
 ###############################################################################
@@ -23,7 +25,7 @@ def exvs2func(model_dict, exvs, *args, **kwargs):
     code  = exvs2code(model_dict, exvs, *args, **kwargs)
     funcs = {}
     
-    exec(code, None, )
+    exec(code)
 
     for exv_name in exvs:
         func_name       = 'exv_{}_{}'.format(model_dict['name'], exv_name)
@@ -33,7 +35,6 @@ def exvs2func(model_dict, exvs, *args, **kwargs):
 
 def modify2func(model_dict, modifier, *args, **kwargs):
     code      = modify2code(model_dict, modifier, *args, **kwargs)
-    
     exec(code)
     
     func_name = 'modify_' + model_dict['name']
@@ -42,45 +43,33 @@ def modify2func(model_dict, modifier, *args, **kwargs):
     
 ###############################################################################
 #High-level Code Generation
-###############################################################################
-def model2code(model_dict, filename='', include_imports=True):
+###############################################################################    
+def model2code(model_dict):
     use_numba  = '@use_numba' in model_dict['equations']
-    imports    = 'import numpy as np\nfrom numba import jit' if use_numba else 'import numpy as np'
-    result     = imports if include_imports else ''
-    func_name  = 'model_' + model_dict['name']
-    func_args  = '(t, y, p, u):' if model_dict['inputs'] else '(t, y, p):'
-    func_def   = '@jit(nopython=True)\ndef '    if use_numba            else 'def ' 
-    func_def   = func_def + func_name + func_args
+    func_def   = make_def(use_numba, 'model', model_dict) 
     states     = vars2code('y', model_dict['states'])
     params     = vars2code('p', model_dict['params'])
     equations  = equations2code(model_dict['equations'].replace('@use_numba', ''), model_dict['states'], indent=1)
 
     if model_dict['inputs']:
         inputs     = vars2code('u', model_dict['inputs'])
-        result     = '\n\n'.join([result, func_def, states, params, inputs, equations])
+        result     = '\n\n'.join([func_def, states, params, inputs, equations])
     else:
-        result     = '\n\n'.join([result, func_def, states, params, equations])
+        result     = '\n\n'.join([func_def, states, params, equations])
 
-    if filename:
-        with open(filename, 'w') as file:
-            file.write(result)
     return result
 
-def exvs2code(model_dict, exvs, filename='', include_imports=True):
+def exvs2code(model_dict, exvs):
     states        = vars2code('y', model_dict['states'])
     params        = vars2code('p', model_dict['params'])
     inputs        = vars2code('u', model_dict['inputs']) if model_dict['inputs'] else ''
     eqns_template = equations2code(model_dict['equations'].replace('@use_numba', ''), indent=1)
     result        = ''
-    import_numba  = False
     
     #Create code for each function
     for exv_name, exv_eqns in exvs.items():
         use_numba  = '@use_numba'  in exv_eqns 
-        func_name  = 'exv_{}_{}'.format(model_dict['name'], exv_name)
-        func_args  = '(t, y, p, u):' if model_dict['inputs'] else '(t, y, p):'
-        func_def   = '@jit(nopython=True)\ndef ' if use_numba else 'def '
-        func_def   = func_def + func_name + func_args
+        func_def   = make_def(use_numba, 'exv', model_dict, exv_name) 
         exv_eqns_  = exv_eqns.replace('@use_numba', '')
         equations  = exv_equations2code(exv_eqns_, eqns_template, indent=1)
 
@@ -89,52 +78,47 @@ def exvs2code(model_dict, exvs, filename='', include_imports=True):
         else:
             result = '\n\n'.join([result, func_def, states, params, equations])
         
-        if use_numba:
-            import_numba = True
-    
-    #Add import statements if required
-    if import_numba and include_imports:
-        result = 'import numpy as np\nfrom numba import jit\n\n' + result
-    elif include_imports:
-        result = 'import numpy as np\n\n' + result
-        
-    if filename:
-        with open(filename, 'w') as file:
-            file.write(result)
     return result
 
-def modify2code(model_dict, modifier, filename='', include_imports=True):
-    imports    = 'import numpy  as np'
-    result     = imports if include_imports else ''
-    func_name  = 'modify_' + model_dict['name']
+def modify2code(model_dict, modifier):
+    use_numba  = '@use_numba' in modifier
+    signature  = 'function', 'init', 'params', 'inputs', 'scenario', 'segment'  
+    func_def   = make_def(use_numba, 'modify', model_dict, signature=signature)
     states     = vars2code('init', model_dict['states'])
     params     = vars2code('params', model_dict['params'])
-    inputs     = vars2code('inputs', model_dict['inputs']) if model_dict['inputs'] else ''
+    equations  = modify_equations2code(modifier.replace('@use_numba', ''))
     
     #Return values
     return_init   = '\tnew_init   = np.array([{}])'.format(', '.join(model_dict['states']))
     return_params = '\tnew_params = np.array([{}])'.format(', '.join(model_dict['params']))
-    return_inputs = '\tnew_inputs = np.array([{}])'.format(', '.join(model_dict['inputs'])) if model_dict['inputs'] else ''
     
     if model_dict['inputs']:
-        func_def   = 'def ' + func_name + '(function, init, params, inputs, scenario, segment):' 
-        equations  = modify_equations2code(modifier)
-        return_val = '\treturn new_init, new_params, new_inputs'
-        result     = '\n\n'.join([result, func_def, states, params, inputs, equations, return_init, return_params, return_inputs, return_val])
+        inputs        = vars2code('inputs', model_dict['inputs']) 
+        return_inputs = '\tnew_inputs = np.array([{}])'.format(', '.join(model_dict['inputs']))
+        return_val    = '\treturn new_init, new_params, new_inputs'
+        result        = '\n\n'.join([func_def, states, params, inputs, equations, return_init, return_params, return_inputs, return_val])
     else: 
-        func_def   = 'def ' + func_name + '(function, init, params, scenario, segment):'
-        equations  = modify_equations2code(modifier)
         return_val = '\treturn new_init, new_params'
-        result     = '\n\n'.join([result, func_def, states, params, equations, return_init, return_params, return_val])
+        result     = '\n\n'.join([func_def, states, params, equations, return_init, return_params, return_val])
     
     return result
+
+###############################################################################
+#Check for Submodels
+###############################################################################     
+def find_func_calls(code):
+    pattern    = '([\w.]+)\(([^\)]*)\)'
+    func_calls = re.findall(pattern, code)
+    
+    for func_name, func_args in func_calls:
+        if 'np.' in func_name:
+            continue
+
     
 ###############################################################################
 #Code Generation for Modifier
 ###############################################################################     
 def modify_equations2code(mod_eqns, indent=1): 
-    # equations_ = re.sub('@short .*(\n?:.*)+', lambda m: parse_short(m[0]),      equations )
-    # equations_ = re.sub('(\|+)(.*)', lambda m: parse_tabs(m[1], m[2]), equations_)    
     equations_ = parse_shorthand(mod_eqns)
     
     result = '\n'.join( [t(indent) + line for line in equations_.split('\n')] )
@@ -151,8 +135,6 @@ def modify_vars2code(name, lst, indent=1):
 #Code Generation for exv Functions
 ###############################################################################    
 def exv_equations2code(exv_eqns, eqns_template, indent=1):
-    # equations_ = re.sub('@short .*(\n?:.*)+', lambda m: parse_short(m[0]),      exv_eqns  )
-    # equations_ = re.sub('(\|+)(.*)', lambda m: parse_tabs(m[1], m[2]), equations_)   
     equations_ = parse_shorthand(exv_eqns)
     
     result = '\n'.join([t(indent) + line for line in equations_.split('\n')])
@@ -172,8 +154,6 @@ def vars2code(name, lst, indent=1):
     return result
     
 def equations2code(equations, states=None, indent=1):
-    # equations_ = re.sub('@short .*(\n?:.*)+', lambda m: parse_short(m[0]),      equations )
-    # equations_ = re.sub('(\|+)(.*)', lambda m: parse_tabs(m[1], m[2]), equations_)   
     equations_ = parse_shorthand(equations)
     
     result = '\n'.join([t(indent) + line for line in equations_.split('\n')])
@@ -210,6 +190,18 @@ def parse_short(string):
     
     return result
 
+def parse_rxn(string):
+    
+    string_ = split_top_level(string[5:], delimiter=':')
+    
+    
+    values = [[v.strip() for v in split_top_level(vals)] for vals in string_[2:]]
+    zipped  = zip(*values)
+        
+    terms = [[t.strip() for t in term.split('*')] for term in string_[1].split(',')]    
+    
+    
+    
 def replace_null(string):
     return ' '*len(string)
 
@@ -252,6 +244,20 @@ def split_top_level(string, delimiter=','):
 ###############################################################################
 #Supporting Functions
 ###############################################################################
+def make_def(use_numba, prefix, model_dict, *names, signature=None):
+    if signature:
+        func_args = '(' + ','.join(signature) + '):'
+    elif model_dict['inputs']:
+        func_args = '(t, y, p, u):'
+    else:
+        func_args = '(t, y, p):'
+        
+    func_name = '_'.join([prefix, model_dict['name'], *names])
+    func_def  = '@jit(nopython=True)\ndef ' if use_numba else 'def '
+    func_def  = func_def + func_name + func_args
+    
+    return func_def
+
 def sp(longest, state):
     return ' '*(longest - len(state) + 1)
 
@@ -353,10 +359,22 @@ if __name__ == '__main__':
     modifier   = 'if segment == 0:\n|x = 0'
     model_func = lambda x: x
     
-    mod, mod_code = modify2func(__model__, modifier, model_func)
+    mod, mod_code = modify2func(__model__, modifier)
     
     new_init, new_params, new_inputs = mod(func, y0, params, inputs, 0, 0)    
     
     assert all(new_init == [0, 1, 1])
     assert all(new_params == params)
     assert all(new_inputs == inputs)
+    
+    #Test model import
+    g = []
+    s = '''
+def black_box():
+    dy = func(t0, y0, params, inputs)
+    return dy
+g.append(black_box)
+    '''
+    exec(s)
+    r = g[0]()
+    assert all(r == dy)

@@ -1,605 +1,362 @@
-import numpy   as np
-import pandas  as pd
+import matplotlib.pyplot as plt
+import numpy             as np
+import pandas            as pd
 from   pathlib import Path
 
 ###############################################################################
 #Non-Standard Imports
 ###############################################################################
-try:
-    import dunlin.model_handler            as mh
-    import dunlin._utils_model.integration as itg
-    import dunlin._utils_plot.axes         as uax
-except Exception as e:
-    if Path.cwd() == Path(__file__).parent:
-        import model_handler            as mh
-        import _utils_model.integration as itg
-        import _utils_plot.axes         as uax
-    else:
-        raise e
+import dunlin.model            as dml
+import dunlin._utils_plot.plot as upp
 
 ###############################################################################
 #Globals
 ###############################################################################
-figure        = uax.figure
-colors        = uax.colors
-palette_types = uax.palette_types
-fs            = uax.fs
-make_AX       = uax.make_AX
-wrap_axfig    = uax.wrap_axfig
-scilimit      = uax.scilimit
-truncate_time = uax.truncate_time
-save_figs     = uax.save_figs
+figure        = upp.figure
+gridspec      = upp.gridspec
+colors        = upp.colors
+palette_types = upp.palette_types
+fs            = upp.fs
+make_AX       = upp.make_AX
+scilimit      = upp.scilimit
+save_figs     = upp.save_figs
+truncate_axis = upp.truncate_axis
 
 ###############################################################################
 #High-Level Functions
 ###############################################################################
-def integrate_and_plot(sim_args, plot_index, AX=None, **kwargs):
+def integrate_and_plot(models, multiply=True, overlap=True, include_events=True, _params=None, _exv_names=None, **kwargs):
     
-    simulation_results = integrate_models(sim_args)
-    figs, AX           = plot_simulation_results(plot_index, simulation_results, AX=AX, **kwargs)
-    
-    return figs, AX, simulation_results
+    if type(models) == dml.Model:
+        sim_results = integrate_model(models, multiply, overlap, include_events, _params, _exv_names)
+        AX1         = plot_sim_results(sim_results, **kwargs)
+        
+        return AX1, sim_results
+    else:
+        all_sim_results = integrate_models(models, multiply, overlap, include_events, _params, _exv_names)
+        AX1              = plot_all_sim_results(all_sim_results, **kwargs)
 
-###############################################################################
-#.ini Parsing
-###############################################################################
-def read_ini(filename):
-    '''
-    Reads a .ini file and extracts model data relevant to simulation. Returns a 
-    dictionary of keyword arguments that can be passed into downstream functions.
-
-    Parameters
-    ----------
-    filename : str or Path-like
-        The file to be read.
-
-    Returns
-    -------
-    model_data : dict
-        The data from the file read using model_handler.read_ini.
-    sim_args : dict
-        A dict in the form: 
-        {<model_key>: {'model'     : <Model>, 
-                       'exvs': <exvs>}
-        }
-        where <exvs> is a dict of <exv_name>: <exv_function> 
-        pairs. 
-    
-    Notes
-    -----
-    Passes the model_data variable to get_sim_args so as to obtain sim_args
-    
-    See Also
-    --------
-    get_sim_args
-    '''
-    model_data = mh.read_ini(filename)
-    sim_args   = get_sim_args(model_data)
-    return model_data, sim_args
-
-def get_sim_args(model_data):
-    '''
-    Reads data extracted from a file.Returns a dictionary of keyword arguments 
-    that can be passed into downstream functions.
-
-    Parameters
-    ----------
-    model_data : dict
-        The data from the file.
-
-    Returns
-    -------
-    sim_args : dict
-        A dict in the form: 
-        {<model_key>: {'model'     : <Model>, 
-                       'exvs': <exvs>}
-        }
-        where <exvs> is a dict of <exv_name>: <exv_function> 
-        pairs. 
-    '''
-    sim_args = {}
-    for key, value in model_data.items():
-        sim_args[key] = {'model'      : value['model']
-                         }
-        if 'args' in value:
-            sim_args['args'] = value['args']
-    return sim_args
+        return AX1, all_sim_results
     
 ###############################################################################
 #Integration
 ###############################################################################
-def integrate_models(sim_args):
-    '''
-    The main function for numerical integration.
-
-    Parameters
-    ----------
-    sim_args : dict
-        A dict in the form: 
-        {<model_key>: {'model'     : <Model>
-        }
-        where <exvs> is a dict of <exv_name>: <exv_function> 
-        pairs.
+def integrate_models(models, multiply=True, overlap=True, include_events=True, _params=None, _exv_names=None):
+    all_sim_results = {}
+    to_iter         = models.values() if type(models) == dict else models
     
-    Returns
-    -------
-    simulation_results : dict
-        A dict nested as model_key -> scenario -> estimate -> (table, obj_vals) 
-        where table is a DataFrame of the time response and obj_vals is a dict 
-        containing the return values of the exv functions.
-    '''
-    simulation_results = {}
-    for key, value in sim_args.items():
-        
-        check_model(value['model'])
-        
-        simulation_results[key] = integrate_model(**value)
-    return simulation_results
+    for model in to_iter:
+        model_key                  = model.model_key 
+        _params_model              = _params    if _params is None else _params.get(model_key, None)
+        _exv_names_model           = _exv_names if _exv_names is None else _exv_names.get(model_key, None)
+        all_sim_results[model_key] = integrate_model(model, 
+                                                     multiply, 
+                                                     overlap, 
+                                                     include_events, 
+                                                     _params_model, 
+                                                     _exv_names_model
+                                                     )
+    return all_sim_results
 
-def integrate_model(model, args=(), _tspan=None, _init=None, _params=None, _inputs=None):
-    '''
-    Handles numerical integration for an individual model.
-
-    Parameters
-    ----------
-    model : Model
-        A Model object to be integrated using the values stored in its tspan, 
-        init_vals, param_vals and input_vals attributes.
-    args : tuple, optional
-        Additional arguments for integration. The default is ().
-    _tspan : list of numpy.ndarray, optional
-        Overrides the tspan in the Model object. For backend use. The default is None.
-    _init : dict, optional
-        Overrides the init_vals in the Model object. For backend use. The default is None.
-    _params : dict, optional
-        Overrides the param_vals in the Model object. For backend use. The default is None.
-    _inputs : dict, optional
-        Overrides the input_vals in the Model object. For backend use. The default is None.
-
-    Returns
-    -------
-    simulation_result : dict
-        A dict nested according to scenario -> estimate -> (table, obj_vals) where 
-        table is a DataFrame of the time response and obj_vals is a dict containing 
-        the return values of the exv functions.
-    '''
-    #Format and check
-    init_vals  = model.init_vals[list(model.states)]
-    param_vals = model.param_vals[list(model.params)]
+def integrate_model(model, multiply=True, overlap=True, include_events=True, _params=None, _exv_names=None):
+    states      = model.states
+    params      = model.params if _params is None else _params
+    sim_results = {}
     
-    tspan   = model.tspan                                       if _tspan  is None else _tspan
-    init_   = dict(zip(init_vals.index,  init_vals.values))     if _init   is None else _init
-    params_ = dict(zip(param_vals.index, param_vals.values))    if _params is None else _params
+    if multiply:
+        for scenario, y0 in zip(states.index, states.values):
+            for estimate, p in zip(params.index, params.values):
     
-    if model.inputs:
-        input_vals = model.input_vals[list(model.inputs)]
-        inputs_ = {i: df.values for i, df in input_vals.groupby(level=0)} if _inputs is None else _inputs
-    else:
-        inputs_ = None
-        
-    #Iterate across each scenario
-    result = {}
-    
-    for scenario, init in init_.items():
-        inputs           = inputs_[scenario] if model.inputs else None
-        result[scenario] = {}
-        
-        for estimate, params_array in params_.items():
-            y_model, t_model = model(init, params_array, inputs, scenario, args=args)
-            
-            #Tabulate
-            p, u        = get_matrices(model.func, tspan, y_model, params_array, inputs, scenario, model.modify, args)
-            exv_results = evaluate_exv(t_model, y_model, p, u, model.exvs)
-            table       = tabulate(model, t_model, y_model, p, u)
-        
-            result[scenario][estimate] = table, exv_results
-        
-    return result
-
-###############################################################################
-#Supporting Functions for Integration
-###############################################################################
-def evaluate_exv(t, y, p, u, exvs):
-    '''
-    :meta private:
-    '''
-    if not exvs:
-        return None
-    
-    exv_results = {}
-    for key, func in exvs.items():
-        try:
-            if u is None:
-                exv_results[key] = func(t, y, p)
-            else:
-                exv_results[key] = func(t, y, p, u)
-        except Exception as e:
-            msg    = 'Error in evaluating exv function "{}".'.format(key)
-            args   = (msg,) + e.args
-            e.args = ('\n'.join(args),)
-            
-            raise e
-    return exv_results
-    
-def tabulate(model, t, y, p, u):
-    '''
-    :meta private:
-    '''
-    if u is None:
-        cols  = ['t'] + list(model.states) + list(model.params)
-        table = np.concatenate((np.array([t]), y, p), axis=0) 
-    else:
-        cols  = ['t'] + list(model.states) + list(model.params) + list(model.inputs)
-        table = np.concatenate((np.array([t]), y, p, u), axis=0) 
-        
-    table = pd.DataFrame(table.T, columns=cols)
-    return table
-
-def get_matrices(model_func, tspan, y_model, params_array, inputs, scenario, modify=None, args=()):
-    '''
-    :meta private:
-    '''
-    p         = np.zeros( (y_model.shape[1], len(params_array)) )
-    y_last    = y_model[:,0]
-    p_last    = params_array
-    seg_start = 0
-    
-    if inputs is None:
-        u = None
-        for segment, tspan_ in enumerate(tspan):
-            _, y_args  = itg.int_args_helper(model_func, y_last, p_last, inputs, scenario, segment, modify=modify, args=args)
-            p_         = y_args[:1]
-            seg_stop   = seg_start + len(tspan_)
-            
-            p[seg_start: seg_stop] = p_
-            
-            y_last    = y_model[:,seg_stop-1]  
-            p_last    = p_
-            seg_start = seg_stop 
-        p = p.T
-        
-    else:
-        u = np.zeros( (y_model.shape[1], len(inputs[0])) )
-        for segment, tspan_ in enumerate(tspan):
-            _, y_args  = itg.int_args_helper(model_func, y_last, p_last, inputs, scenario, segment, modify=modify, args=args)
-            p_, u_     = y_args[:2]
-            seg_stop   = seg_start + len(tspan_)
-            
-            p[seg_start: seg_stop] = p_
-            u[seg_start: seg_stop] = u_
-            y_last    = y_model[:,seg_stop-1]
-            p_last    = p_
-            seg_start = seg_stop 
-        p = p.T
-        u = u.T
-        
-    return p, u
-
-def check_model(model):
-    '''
-    :meta private:
-    '''
-    if model.inputs:
-        if len(model.init_vals) != len(model.input_vals.index.unique(0)):
-            msg = 'Mismatched scenarios for model {}. Check the indices of init_vals and input_vals.'
-            raise ValueError(msg.format(model.name))
-    
-###############################################################################
-#Plotting
-###############################################################################
-def plot_simulation_results(plot_index, simulation_results, AX=None, **line_args):
-    '''
-    Plots the simulation results.    
-
-    Parameters
-    ----------
-    plot_index : dict
-        A dict in the form {<model_key>: <states>} where a state is a column name 
-        in the appropriate table or a key name in the appropriate obj_vals. 
-    simulation_results : dict
-        A dict nested as model_key -> scenario -> estimate -> (table, obj_vals). 
-        Where table is a DataFrame of the time response and obj_vals is a dict 
-        containing the return values of the exv functions.
-    AX : dict, optional
-        A dict in the form {<model_key>: {<state>: <matplotlib Axes>}}. Tells the 
-        function where to plost the results. If this argument is None, the Axes 
-        objects are generated automatically.
-        The default is None.
-    **line_args : dict
-        Keyword arguments for controlling the appearance of the 2D-line objects 
-        to be generated. str and numerical values are applied to every line. If 
-        you want to create different appearances according to model and scenario, 
-        use a dictionary for the value in the form {<model_key>: {<scenario>: value}}
-
-    Returns
-    -------
-    figs : Figure
-        Figure objects generated (if any).
-    AX : dict
-        A dict in the form {<model_key>: {<state>: <matplotlib Axes>}}.
-
-    '''
-    figs, AX1 = (None, AX) if AX else make_AX(plot_index)
-     
-    for model_key, variables in plot_index.items():
-        simulation_result = simulation_results[model_key]
-        AX_               = uax.parse_recursive(AX1, model_key, apply=False)
-        line_args_        = uax.parse_recursive(line_args, model_key)
-        
-        try:
-            plot_simulation_result(variables, simulation_result, AX_, **line_args_)
-        except Exception as e:
-            msg    = 'Error in plotting {}'.format(model_key)
-            args   = (msg,) + e.args
-            
-            e.args = ('\n'.join(args),)
-            
-            raise e
-    
-    
-    return figs, AX1
-
-def plot_simulation_result(variables, simulation_result, AX, **line_args):
-    '''
-    Plots simulation result for a single model.
-
-    Parameters
-    ----------
-    variables : list of str
-        A list of states where each state is a column in table or a key in obj_vals.
-    simulation_result : dict
-        A dict nested according to scenario -> estimate -> (table, obj_vals) where 
-        where table is a DataFrame of the time response and obj_vals is a dict 
-        containing the return values of the exv functions.
-    AX : dict
-        A dict in the form {<state>: <matplotlib  Axes>}. Tells the function where 
-        to plot the results.
-    **line_args : dict
-        Keyword arguments for controlling the appearance of the 2D-line objects 
-        to be generated. str and numerical values are applied to every line. If 
-        you want to create different appearances according to model and scenario, 
-        use a dictionary for the value in the form {<scenario>: value}
-    
-    Returns
-    -------
-    AX : dict
-        A dict in the form {<state>: <matplotlib  Axes>}.
-    '''
-    label_scheme             = line_args.get('label')
-
-    for scenario, scenario_result in simulation_result.items():
-        first = True
-        for estimate, estimate_result in scenario_result.items():
-            for variable in variables:
+                #Integrate
+                t, y = model.integrate(scenario, y0, p)
                 
-                r  = get_result(variable, estimate_result, (scenario, estimate))
-                ax = uax.parse_recursive(AX, variable, scenario, estimate, apply=False, name='Axes')
+                #Tabulate and evaluate exvs
+                sim_results.setdefault(scenario, {})[estimate] = SimResult(model, t, y, p, scenario,  _exv_names)
                 
-                if not ax:
-                    continue
-                
-                #Parse labeling
-                if not label_scheme:
-                    label = {'label': '{} {} {}'.format(variable, scenario, estimate)}
-                elif label_scheme == 'state':
-                    label = {'label':'{}'.format(variable)} if first else {'label': '_nolabel'}
-                elif label_scheme == 'state, scenario':
-                    label = {'label':'{} {}'.format(variable, scenario)} #if first else {'label': '_nolabel'}
-                elif label_scheme == 'state, estimate':
-                    label = {'label':'{} {}'.format(variable, estimate)}
-                elif label_scheme == 'scenario':
-                    label = {'label':'{}'.format(scenario)} if first else {'label': '_nolabel'}
-                elif label_scheme == 'scenario, estimate':
-                    label = {'label': '{} {}'.format(scenario, estimate)}
-                elif label_scheme == 'estimate':
-                    label = {'label':'{}'.format(estimate)}
+    else:
+        if len(states) != len(params):
+            raise ValueError('Attempted to use non-multiplicative simulation but states and params are of different size.')
+        
+        for scenario, y0, estimate, p in zip(states.index, states.values, params.index, params.values):
+            #Integrate
+            t, y = model.integrate(scenario, y0, p)
+            
+            #Tabulate and evaluate exvs
+            sim_results.setdefault(scenario, {})[estimate] = SimResult(model, t, y, p, scenario,  _exv_names)
+            
+    return sim_results
+
+###############################################################################
+#SimResult Class
+###############################################################################
+class IntResult():
+    @classmethod
+    def tabulate_params(cls, model, t, y, p, scenario):
+        '''
+        Make an array for p that can be concatenated with the states
+        :meta private:
+        '''
+        
+        y0          = y[:, 0]
+        y0, p_array = model._modify(y0, p, scenario) if model._modify else (y0, p)
+        record      = cls.get_event_record(model)
+        
+        if record:
+            p_matrix         = np.zeros( (y.shape[1], len(p_array)) )
+            n                = 0
+            t_event, p_event = record[n]
+            p_curr           = p_array
+            
+            for i, timepoint in enumerate(t):
+                if timepoint < t_event:
+                    p_matrix[i] = p_curr
                 else:
-                    label = {}
-                
-                try:
-                    if type(r) == dict:
-                        args = {**line_args, **label, **r}
-                        args = uax.parse_recursive(args, scenario, estimate, variable)
-                        plot_helper(ax, **args)
-                    else:
-                        args = {**line_args, **label}
-                        args = uax.parse_recursive(args, scenario, estimate, variable)
-                        plot_helper(ax, *r, **args)
+                    p_curr      = p_event
+                    p_matrix[i] = p_curr
                     
-                    #Activate legend if there are lines with labels
-                    handles, labels = ax.get_legend_handles_labels()
-                    if len(labels):
-                        ax.legend()
-
-                except Exception as e:
-                    msg    = ('Error in plotting scenario {}, variable {}'.format(scenario, variable), ) + e.args
-                    e.args = ('\n'.join(msg) ,) 
-                    raise e
+                    n += 1
+                    
+                    if n < len(record):
+                        t_event, p_event  = record[n]
+                    else:
+                        p_matrix[i:] = p_curr
+                        break
+        else:
+            p_matrix = np.tile(p_array, (y.shape[1], 1))
+        return p_matrix.T
+    
+    @staticmethod
+    def get_event_record(model):
+        record = [pair for event in model._events for pair in event.record]
+        record = sorted(record, key=lambda x: x[0])
+        return record
+    
+    @staticmethod
+    def evaluate_exv(exv, t, y, *args):
+        '''
+        :meta private:
+        '''
+        
+        try:
+            result = exv(t, y, *args)
+        except Exception as e:
+            msg    = 'Error in evaluating exv function "{}".'.format(exv.__name__)
+            args   = (msg,) + e.args
+            e.args = ('\n'.join(args),)
             
-            first = False
-                
-    return AX
+            raise e
+        
+        if hasattr(result, '__iter__'):
+            try:
+                x, y = result
+                return result
+            except:
+                try:
+                    x, y, z = result
+                    return result
+                except:
+                    raise ValueError('Invalid exv')
+        else:
+            return result
+    @classmethod
+    def evaluate_exvs(cls, model, t, y, p, scenario, _exv_names=None):
+        p_table = cls.tabulate_params(model, t, y, p, scenario)
+        
+        exv_results = {}
+        exv_names   = model._exvs if _exv_names is None else _exv_names
+        for exv_name in exv_names:
+            exv                   = model._exvs[exv_name]
+            exv_results[exv_name] = cls.evaluate_exv(exv, t, y, p_table)
+        
+        return exv_results, p_table
+        
+    def __init__(self, model, t, y, p, scenario, _exv_names=None):
+        self.model_key = model.model_key
+        self.t         = t
+        self.y         = dict(zip(model._states, y))
+        
+        #Evaluate exvs
+        exv_results, p_table = self.evaluate_exvs(model, t, y, p, scenario, _exv_names)
+        
+        p_table_         = dict(zip(model._params, p_table))
+        self.y           = {**self.y, **p_table_}
+        self.exv_results = exv_results
+        
+    def __getitem__(self, key):
+        if key == 't':
+            return self.t
+        
+        try:
+            return self.y[key]
+        except:
+            try:
+                return self.exv_results[key]
+            except:
+                raise KeyError(key)
+    
+    def get1d(self, key):
+        try:
+            return self.y[key]
+        except:
+            try:
+                _, y, *__ = self.exv_results[key]
+                return y
+            except KeyError:
+                raise KeyError(key)
+            
+    def get2d(self, key):
+        try:
+            return self.t, self.y[key]
+        except:
+            try:
+                x, y, *_ = self.exv_results[key]
+                assert len(x) == len(y)
+                return x, y
+            except KeyError:
+                raise KeyError(key)
+            except AssertionError:
+                raise ValueError('exv does not have the same length as timespan OR exv is missing an "x" axis component.')
+    
+    def get_scatter(self, key):
+        try:
+            return self.t, self.y[key]
+        except:
+            try:
+                x, y, *args = self.exv_results[key]
+                if len(args) >= 2:
+                    s, c = args
+                elif len(args) == 1:
+                    s, c = args[0], None
+                else:
+                    s, c = None, None
+                    
+                assert len(x) == len(y)
+                return x, y, s, c
+            except KeyError:
+                raise KeyError(key)
+            except AssertionError:
+                raise ValueError('exv does not have the same length as timespan OR exv is missing an "x" axis component.')
+    
+    def tabulate(self):
+        df       = pd.DataFrame.from_dict(self.y)
+        df.index = self.t 
+        return df
+    
+    def variables(self):
+        return [*self.y.keys(), *self.exv_results.keys()]
+
+class SimResult(IntResult):
+    def __init__(self, model, t, y, p, scenario, _exv_names=None):
+        super().__init__(model, t, y, p, scenario, _exv_names)
+        
+        self.line_args = getattr(model, 'sim_args', {}).get('line_args', {})
 
 ###############################################################################
 #Supporting Functions for Plotting
 ###############################################################################
-def plot_helper(ax, *args, plot_type='plot', **kwargs):
-    if plot_type == 'plot':
-        return ax.plot(*args, **kwargs)
-    elif plot_type == 'scatter':
-        if 'c' in kwargs:
-            kwargs_ = {k: v for k,v in kwargs.items() if k not in ['color', 'linestyle']}
+def plot_all_sim_results(all_sim_results, AX, **line_args):
+    AX1 = AX
+    for model_key, sim_results in all_sim_results.items():
+        AX_model = AX.get(model_key, None)
+        
+        if not AX_model:
+            continue
+        line_args_model = {k: v.get(model_key, {}) if type(v) == dict else v for k,v in line_args.items()}
+        AX1[model_key]  = plot_sim_results(sim_results, AX_model, **line_args_model)
+    return AX1
+
+def plot_sim_results(sim_results, AX, palette=None, **line_args):
+    AX1       = AX
+    for scenario in sim_results:
+        for estimate, sim_result in sim_results[scenario].items(): 
+            for var, ax_ in AX1.items():
+                
+                ax             = upp.recursive_get(ax_, scenario, estimate) 
+                line_args_     = {**sim_result.line_args, **line_args}
+                line_args_     = {k: upp.recursive_get(v, scenario, estimate) for k, v in line_args_.items()}
+                
+                #Process special keywords
+                color = line_args_.get('color')
+                if type(color) == str:
+                    line_args_['color'] = colors[color]
+                    
+                label_scheme   = line_args_.get('label', 'scenario, estimate')
+                if label_scheme == 'estimate':
+                    label = f'{estimate}'
+                if label_scheme == 'scenario':
+                    label = f'{scenario}'
+                elif label_scheme == 'model_key':
+                    label = f'{sim_result.model_key}'
+                elif label_scheme == 'state':
+                    label = f'{var}'
+                elif label_scheme == 'scenario, estimate':    
+                    label = f'{scenario}, {estimate}'
+                elif label_scheme == 'model_key, scenario':
+                    label = f'{sim_result.model_key}, {scenario}'
+                elif label_scheme == 'model_key, estimate':
+                    label = f'{sim_result.model_key}, {estimate}'
+                elif label_scheme == 'state, scenario':    
+                    label = f'{var}, {scenario}'
+                elif label_scheme == 'state, estimate':    
+                    label = f'{var}, {estimate}'
+                elif label_scheme == 'model_key, state':    
+                    label = f'{var}, {var}'
+                elif label_scheme == 'model_key, scenario, estimate':
+                    label = f'{sim_result.model_key}, {scenario}, {estimate}'
+                elif label_scheme == 'state, scenario, estimate':
+                    label = f'{var}, {scenario}, {estimate}'
+                elif label_scheme == 'model_key, state, scenario':
+                    label = f'{sim_result.model_key}, {var}, {scenario}'
+                elif label_scheme == 'model_key, state, estimate':
+                    label = f'{sim_result.model_key}, {var}, {estimate}'
+                elif label_scheme == 'model_key, state, scenario, estimate':
+                    label = f'{sim_result.model_key}, {var}, {scenario}, {estimate}'
+                else:
+                    label = f'{scenario}, {estimate}'
+                    
+                line_args_['label'] = label
+                plot_type           = line_args_.get('plot_type', 'line')
+                
+                #Plot
+                if plot_type == 'line':
+                    if line_args_.get('marker', None) and 'linestyle' not in line_args_:
+                        line_args_['linestyle'] = 'None'
+                    
+                    x_vals, y_vals = sim_result.get2d(var)
+                    ax.plot(x_vals, y_vals, **line_args_)
+                elif plot_type == 'scatter':
+                    x_vals, y_vals, s, c = sim_result.get_scatter(var)
+                    ax.scatter(x_vals, y_vals, s, c, **line_args_)
+                else:
+                    raise ValueError(f'Unrecognized plot_type {plot_type}')
+                
+    return AX1
+
+def make_palette_for_models(all_sim_results, palette_type, base_colors=None, **kwargs):
+    return {model_key: make_palette_for_model(sim_results, palette_type, base_colors, **kwargs) for model_key, sim_results in all_sim_results.items()}
+import seaborn as sns
+
+def make_palette_for_model(sim_results, palette_type, base_colors=None, **kwargs):
+    if base_colors is None:
+        base_colors = palette_types['color']('deep', len(sim_results)) 
+    elif type(base_colors) == dict:
+        base_colors = [colors[ base_colors[s] ] if base_colors[s] == str else base_colors[s] for s in sim_results]
+    else:
+        base_colors = [colors[c] if type(c) == str else c for c in base_colors]
+        
+    palette = {}
+    for scenario, base_color in zip(sim_results, base_colors):
+        
+        if palette_type in ['light', 'dark']:
+            helper   = palette_types[palette_type]
+            palette_ = helper(base_color, len(sim_results[scenario]), **kwargs)
+        elif palette_type in ['cubehelix']:
+            helper   = palette_types[palette_type]
+            palette_ = helper(len(sim_results[scenario]), base_color, **kwargs) 
         else:
-            kwargs_ = {k: v for k,v in kwargs.items() if k != 'linestyle'}
-        return ax.scatter(*args, **kwargs_)
-    else:
-        raise ValueError(f'No plotting function for input: {plot_type}')
-    
-def get_result(variable, estimate_result, error_key=''):
-    '''
-    :meta private:
-    '''
-    table, obj_vals = estimate_result
-    obj_vals_       = obj_vals if obj_vals else []
-
-    if variable in table:
-        return table['t'], table[variable]
-    elif variable in obj_vals_:
-        return obj_vals[variable]
-    else:
-        msg = 'Variable {} is not in {}.'
-        raise Exception(msg.format(variable, error_key))
-
-if __name__ == '__main__':
-    import matplotlib.pyplot as plt
-    plt.close('all')
-    
-    #Preprocessing
-    model_data = mh.read_ini('_test/TestModel_1.ini')
-    model      = model_data['model_1']['model']
-    
-    def obj1(t, y, p, u):
-        s = y[0]
-        
-        mu_max = p[0]
-        ks     = p[1]
-        
-        mu = mu_max*s/(s+ks)
-        
-        return t, mu
-    
-    def obj2(t, y, p, u):
-        x = y[0]
-        s = y[1]
-        
-        mu_max = p[0]
-        ks     = p[1]
-        ys     = p[2]
-        
-        mu = mu_max*s/(s+ks)
-    
-        dx = mu*x - 0.08*x
-        
-        return t, dx/ys
-    
-    def modify1(function, init, params, inputs, scenario, segment):
-        new_init   = init.copy()
-        new_params = params.copy()
-        new_inputs = inputs.copy()
-        
-        new_init[0] *= 4
-        
-        return new_init, new_params, new_inputs
-    
-    #Test integration
-    simulation_result = integrate_model(model)
-    scenario          = 0
-    estimate          = 0
-    table             = simulation_result[scenario][estimate][0]
-    assert table.shape == (62, 9)
-    
-    #Test simulation with exv function
-    model.exvs        = {1 : obj1, 2: obj2}
-    simulation_result = integrate_model(model)
-    scenario          = 0
-    estimate          = 0
-    table, obj_vals   = simulation_result[scenario][estimate]
-    model.exvs        = {}
-    
-    xo1, yo1 = obj_vals[1]
-    xo2, yo2 = obj_vals[2]
-    
-    #Plot
-    fig = plt.figure()
-    AX  = [fig.add_subplot(5, 1, i+1) for i in range(5)]
-    
-    AX[0].plot(table['t'], table['x'])
-    AX[1].plot(table['t'], table['s'])
-    AX[2].plot(table['t'], table['b'])
-    AX[3].plot(xo1, yo1)
-    AX[4].plot(xo2, yo2)
-    
-    #Test modifier
-    model.modify      = modify1
-    model.exvs        = {1 : obj1, 2: obj2}
-    simulation_result = integrate_model(model)
-    scenario          = 0
-    estimate          = 0 
-    table, obj_vals   = simulation_result[scenario][estimate]
-    model.exvs        = {}
-    
-    xo1, yo1 = obj_vals[1]
-    xo2, yo2 = obj_vals[2]
-    
-    assert xo1.shape == (62,)
-    assert yo1.shape == (62,)
-    assert xo2.shape == (62,)
-    assert yo2.shape == (62,)
-    model.modify = None
-    
-    #Plot
-    fig = plt.figure()
-    AX  = [fig.add_subplot(5, 1, i+1) for i in range(5)]
-    
-    AX[0].plot(table['t'], table['x'])
-    AX[1].plot(table['t'], table['s'])
-    AX[2].plot(table['t'], table['b'])
-    AX[3].plot(xo1, yo1)
-    AX[4].plot(xo2, yo2)
-    
-    #Test multi-model
-    model.exvs = {1 : obj1, 2: obj2}
-    sim_args  = {'model_1'    : {'model': model},
-                 'model_2'    : {'model': model}
-                 }
-    
-    simulation_results = integrate_models(sim_args)
-    model_key          = 'model_1'
-    scenario           = 0
-    estimate           = 0 
-    table, obj_vals    = simulation_results[model_key][scenario][estimate]
-    
-    xo1, yo1 = obj_vals[1]
-    xo2, yo2 = obj_vals[2]
-    
-    assert xo1.shape == (62,)
-    assert yo1.shape == (62,)
-    assert xo2.shape == (62,)
-    assert yo2.shape == (62,)
-    
-    #Test plotting
-    model.exvs = {1 : obj1, 2: obj2}
-    sim_args   = {'model_1' : {'model' : model},
-                  'model_2' : {'model' : model}
-                  }
-    
-    simulation_results = integrate_models(sim_args)
-    
-    #Test basic plot
-    plot_index = {'model_1': ['x', 's', 'b', 1, 2]}
-    figs, AX   = plot_simulation_results(plot_index, simulation_results)
-
-    assert len(AX['model_1']['x'].lines) == 4
-    assert len(AX['model_1']['b'].lines) == 4
-    assert len(AX['model_1'][  2].lines) == 4
-    
-    #Test line args
-    plot_index = {'model_1': ['x', 'b', 1, 2],
-                  'model_2': ['x', 'b', 1, 2]
-                  }
-    color      = {'model_1': {0: colors['cobalt'],
-                              1: colors['marigold']
-                              },
-                  'model_2': colors['teal']
-                  }
-    figs, AX   = plot_simulation_results(plot_index, simulation_results, color=color, label='scenario')
-    
-    assert AX['model_1']['x'].lines[-1].get_label() == '_nolabel'
-    
-    #Test high-level
-    model_data, sim_args = read_ini('_test/TestModel_2.ini')
-    plot_index           = {'model_1': ['x', 's', 'b', 'growth']}
-    simulation_results   = integrate_models(sim_args)
-    figs, AX             = plot_simulation_results(plot_index, simulation_results, color={'model_1': colors['cobalt']})
-    
-    
+            raise ValueError('Invalid palette.')
+            
+        sns.palplot(palette_)
+        palette_ = dict(zip( sim_results[scenario].keys(), palette_) )
+        palette[scenario] = palette_
+    return palette

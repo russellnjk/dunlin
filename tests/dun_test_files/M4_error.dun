@@ -1,0 +1,27 @@
+import M1.dun
+
+`M1
+``states
+xx0 : [0]
+xx1 : [0]
+
+``params
+pp0 : [0.01, 0.01]
+pp1 : [0.01, 0.01]
+kk1 : [0.5, 0.5]
+
+``rxns
+r0 : [xx0 > xx1, pp0, pp1*xx2/(xx2 + kk1)]
+
+`M3
+``states
+xx0 : [0]
+xx1 : [0]
+
+``params
+pp0 : [0.01, 0.01]
+pp1 : [0.01, 0.01]
+kk1 : [0.5, 0.5]
+
+``rxns
+r0 : [xx0 > xx1, pp0, pp1*xx2/(xx2 + kk1)]

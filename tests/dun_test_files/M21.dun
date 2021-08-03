@@ -1,0 +1,54 @@
+`M2
+``states
+xx0 : [0]
+xx1 : [0]
+
+``params
+pp0 : [0.01, 0.01]
+pp1 : [0.01, 0.01]
+kk1 : [0.5, 0.5]
+
+``rxns
+r0 : [xx0 > xx1, pp0, pp1*xx2/(xx2 + kk1)]
+
+`M3
+``states
+x0 : [1, 1]
+x1 : [0, 0]
+x2 : [0, 0]
+x3 : [0, 0]
+
+``params
+p0 : [0.01, 0.01]
+p1 : [0.01, 0.01]
+p2 : [0.01, 0.01]
+p3 : [0.01, 0.01]
+k2 : [0.5, 0.5]
+
+``rxns
+r0 : [x0 > x1, p0*x0]
+r1 : [submodel M2, [x1, x2], [p1, p2, k2]]
+; r1 : [submodel : M2, 
+	; substates: [xx0 : x1, xx1: x2],
+	; subparams: [pp0 : p0, pp1 : p1, kk1: k2]
+	; ]
+
+``vrbs
+sat : x2/(x2+k2)
+
+``rates
+x3 : x0*p3
+
+``functions
+MM(v, x, k): v*x/(x+k)
+
+
+``events
+e0: [trigger: x0 < 0.2, assignment: x0 = 1]
+
+``exvs
+sat =
+	return {'x': t, 'y': sat}
+
+``int_args
+method : LSODA

@@ -1,0 +1,77 @@
+`coarse_1
+
+``params
+Mcell      : [4.16e8]
+v_uptake   : [200]
+k_uptake   : [5e3]
+n_uptake   : [1]
+ntf        : [1]
+yield_S    : [0.083]
+v_synprot  : [1080]
+k_synprot  : [5e-3]
+k_fr       : [0.05]
+n_fr       : [2]
+fq         : [0.45]
+fr         : [1]
+fm         : [0.65]
+fh         : [0.5]
+k_ind      : [0.5]
+k_cm       : [3]
+dil        : [8e-3]
+Sin        : [5e4]
+ind        : [0]
+Cm         : [0]
+
+``events
+e0: [trigger: R > 0.8e8] 
+
+``tspan
+s0 : [linspace, 0, 1000, 101]
+s1 : [linspace, 0, 1000, 101]
+
+``states
+x: [0.1]
+S: [1e5]
+P: [0]
+Q: [0.45*4.16e8]
+R: [0.05*4.16e8]
+M: [0.5*4.16e8]
+H: [0] 
+
+``variables
+n_H          : H/300
+n_Q          : Q/300
+n_M          : M/300
+n_R          : R/7459
+cells_per_OD : 2.4e9
+uM_cells     : x*cells_per_OD/6e23*1e3*1e6
+uptake       : v_uptake*n_M*S**n_uptake/(S**n_uptake + k_uptake**n_uptake)
+total_uptake : uptake*uM_cells
+all_prot     : Q +R +M +H
+P_conc       : P/all_prot
+r_sat        : P_conc/(P_conc + k_synprot)
+r_inh        : k_cm/(Cm + k_cm)
+synprot      : v_synprot*n_R*r_sat*r_inh
+PR           : P/R
+reg          : PR**n_fr/(k_fr**n_fr + PR**n_fr) *(1-0.046) + 0.046
+fr_          : fr*reg
+fh_          : fh*ind/(k_ind + ind)
+mu           : synprot/Mcell
+;mu           : (synQ +synM +synR)/Mcell
+
+``reactions
+dil_{i} : [{i} >, dil*{i}]
+	~i, [S, M]
+mu_{i} : [{i} >, mu*{i}]
+	~i, [x, P, Q, R, M, H]
+syn{i} : [> {i}, synprot*(1-fq)*{ii}/(fm + fr_ + fh_)]
+	~i,  [R, M, H]
+	~ii, [fr_, fm, fh_]
+in_S  : [> S, dil*Sin]
+up_S  : [S >, total_uptake]
+synP  : [> P, uptake*yield_S]
+synQ  : [> Q, synprot*fq]
+con_P : [P >, synprot]
+
+``compartments
+c0 : [size: 1, contains: [x, S, P, Q, R, M, H]]

@@ -1,0 +1,30 @@
+`M1
+``comps
+c0: [contains: [x0, x1, x2], dimensions: 3]
+
+``states
+x0: [s0: 1]
+x1: [s0: 0]
+x2: [s0: 0]
+
+``params
+p0: [0.01]
+p1: [0.01]
+
+``rxns
+r0: [x0 > x1, p0*x0]
+r1: [x1 > x2, p1*x1]
+
+``events
+e0: [t == 200, [x0 = 1, p0 = 0.03]]
+e1: [t == 600, [x0 = 1, p0 = 0.001]]
+
+``tspan
+s0: [linspace(0, 1000, 101)]
+
+``exvs
+t_vs_p0:
+	return t, p0
+
+t_vs_d_x1:
+	return t, d_x1

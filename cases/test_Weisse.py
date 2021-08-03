@@ -12,22 +12,32 @@ import dunlin.simulation as sim
 plt.style.use(dn.styles['dark_style_multi'])
 plt.close('all')
 
-filename = 'TestWeisse_1.ini'
+filename = 'Weisse1.dun'
+dun_data, models = dn.read_file(filename)
+model            = models['Weisse'] 
 
-model_data, sim_args = sim.read_ini(filename)
+#Integrate
+sim_results = sim.integrate_model(model, 
+                                  multiply=True, 
+                                  overlap=True, 
+                                  include_events=True
+                                  )
 
-r1  = model_data['weisse']['model'] 
+#Plot
+#This will override line_args in the .dun file (if applicable)
+line_args   = {'label': 'estimate', 
+               }
 
-r1s = list(r1.states)
+#Make figure and axes
+fig0, AX0 = dn.figure(3, 4)
+fig1, AX1 = dn.figure(3, 4, 11)
+AX        = AX0 + AX1
 
-plot_index = {'weisse': r1s}
-color      = {'weisse': {0: sim.colors['cobalt']
-                         }
-              }
+states      = model.get_state_names() 
+AX_         = dict(zip(states, AX))
 
-simulation_results = sim.integrate_models(sim_args)
-figs, AX           = sim.plot_simulation_results(plot_index, 
-                                                 simulation_results,
-                                                 color       = color,
-                                                 label       = 'scenario'
-                                                 )
+sim.plot_sim_results(sim_results, AX_, **line_args)
+for x, ax in zip(states, AX):
+    ax.set_title(x)
+    dn.scilimit(ax)
+ 

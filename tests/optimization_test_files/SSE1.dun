@@ -1,0 +1,15 @@
+`M1
+``states
+x0 : [1, 1]
+x1 : [0, 0]
+
+``params
+p0 : [0.1]
+p1 : [0.1]
+
+``rxns
+r0 : [x0 >    , p0]
+r1 : [   > x1 , p1]
+
+``int_args
+method: LSODA

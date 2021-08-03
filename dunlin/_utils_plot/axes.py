@@ -16,9 +16,13 @@ palette_types = {'color':     lambda n_colors, **kwargs : sns.color_palette(n_co
                  'cubehelix': lambda n_colors, **kwargs : sns.cubehelix_palette(n_colors=n_colors, **kwargs),
                  }    
 
+
+light_palette = sns.light_palette
+dark_palette  = sns.dark_palette
+
 #Refer for details: https://xkcd.com/color/rgb/
 colors = sns.colors.xkcd_rgb
-    
+
 ###############################################################################
 #Nested Args
 ###############################################################################
