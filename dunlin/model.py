@@ -1,6 +1,5 @@
-import numpy        as np
-import pandas       as pd
-from   pathlib      import Path
+import numpy  as np
+import pandas as pd
 
 ###############################################################################
 #Non-Standard Imports
@@ -9,7 +8,6 @@ import dunlin._utils_model.ode_coder       as odc
 import dunlin._utils_model.events          as uev
 import dunlin._utils_model.base_error      as dbe
 import dunlin._utils_model.dun_file_reader as dfr
-import dunlin._utils_model.attr_reader     as uar
 import dunlin._utils_model.ivp             as ivp
 
 ###############################################################################
