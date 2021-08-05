@@ -187,11 +187,7 @@ class Model():
                     result = pd.DataFrame.from_dict({0: data}, orient='index')
                 except:
                     raise DunlinModelError.value('states')
-            super().__setattr__(attr, result)
-        
-        # elif hasattr(type(self), attr):
-        #     raise DunlinModelError.locked(attr)
-        
+            super().__setattr__(attr, result)        
         else:
             super().__setattr__(attr, value)
     
@@ -270,5 +266,5 @@ class Model():
         
         return t, y
     
-    # def iter_scenarios():
+   
         

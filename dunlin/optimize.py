@@ -82,6 +82,7 @@ def fit_model(model, dataset, algo='differential_evolution'):
     get_SSE     = ws.SSECalculator(model, dataset)
     opt_results = optimize_model(model, get_SSE, algo)
     return opt_results
+
         
 def optimize_model(model, to_minimize=None, algo='differential_evolution'):
     opt_results = OptResult.from_model(model, to_minimize)
@@ -101,7 +102,36 @@ def integrate_opt_result(model, opt_result, n=10, k=2):
     sim_results = sim.integrate_model(model, _params=params, _tspan=tspan)
     
     return sim_results
+
+def integrate_and_plot_all_opt_results(models, all_opt_results, AX, all_datasets=None, guess=True, n=10, k=2, **line_args):
+    for model_key, model in models.items():
+        opt_results     = all_opt_results[model_key]
+        dataset         = all_datasets[model_key]
+        AX_             = AX[model_key]
+        line_args_model = {k: v.get(model_key, {}) if type(v) == dict else v for k,v in line_args.items()}
+        integrate_and_plot_opt_results(model, opt_results, AX_, dataset, guess, n, k, **line_args_model)
     
+def integrate_and_plot_opt_results(model, opt_results, AX, dataset=None, guess=True, n=10, k=2, **line_args):
+    line_args_      = {**line_args, **{'label': 'scenario'}}
+    guess_line_args = {**model.sim_args['line_args'], **line_args_, **{'linestyle': ':'}}
+    data_line_args  = {**model.sim_args['line_args'], **line_args_, **{'marker': 'o', 'linestyle': 'None'}}
+        
+    for run, opt_result in opt_results.items():
+        #Integrate and plot
+        sim_results = integrate_opt_result(model, opt_result, n, k)
+        sim.plot_sim_results(sim_results, AX, **line_args_)
+        
+    #Integrate guess values
+    #Infer tspan if not provided
+    if guess:
+        tspan       = model.tspan if model.tspan else opt_result.neg_log_likelihood.tspan 
+        sim_results = sim.integrate_model(model, _tspan=tspan)
+        sim.plot_sim_results(sim_results, AX, **guess_line_args)
+        
+    #Overlay the data
+    if dataset:
+        plot_dataset(dataset, AX, **data_line_args)        
+
 ###############################################################################
 #Dunlin Classes
 ###############################################################################    
@@ -406,14 +436,12 @@ def plot_opt_results(opt_results, AX, palette=None, **line_args):
             else:
                 raise ValueError(f'Unrecognized plot_type {plot_type}')
     
-    return AX1
-
-def plot_dataset(dataset, AX, yerr=None, xerr=None, **line_args):
+    return AX1    
+    
+def plot_dataset(dataset, AX, **line_args):
     global colors
     
     AX1 = AX
-    ye  = {} if yerr is None else yerr
-    xe  = {} if xerr is None else xerr 
     
     for (dtype, scenario, var), data in dataset.items():
         if dtype != 'Data':
@@ -443,8 +471,8 @@ def plot_dataset(dataset, AX, yerr=None, xerr=None, **line_args):
             
             x_vals = dataset[('Time', scenario, var)]
             y_vals = data
-            y_err_ = ye.get((dtype, scenario, var))
-            x_err_ = xe.get((dtype, scenario, var))
+            y_err_ = dataset.get(('Yerr', scenario, var))
+            x_err_ = dataset.get(('Xerr', scenario, var))
             
             for ax in ax_:
                 ax.errorbar(x_vals, y_vals, y_err_, x_err_, **line_args_)

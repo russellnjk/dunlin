@@ -263,7 +263,7 @@ def plot_all_sim_results(all_sim_results, AX, **line_args):
         if not AX_model:
             continue
         line_args_model = {k: v.get(model_key, {}) if type(v) == dict else v for k,v in line_args.items()}
-        AX1[model_key]  = plot_sim_results(sim_results, AX_model, **line_args_model)
+        plot_sim_results(sim_results, AX_model, **line_args_model)
     return AX1
 
 def plot_sim_results(sim_results, AX, palette=None, repeat_labels=False, **line_args):

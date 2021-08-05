@@ -10,35 +10,9 @@ import addpath
 import dunlin               as dn
 import dunlin.simulation    as sim
 import dunlin.optimize      as opt
+import dunlin.dataparser    as dtp
 
 #Preprocess data
-def from_df(raw_data, state, new_state=None):
-    def str2num(x):
-        try:
-            return int(x)
-        except:
-            try:
-                return float(x)
-            except:
-                return x
-            
-    #Get time and mean of replicates
-    time      = np.array(raw_data.index)
-    mean      = raw_data.groupby(axis=1, level=0).mean()
-    dataset   = {}
-    new_state = state if new_state is None else new_state
-    for scenario, y_data in mean.items():
-        #Create key and values
-        scenario = str2num(scenario)
-        y_data   = y_data.values
-        data_key = ('Data', scenario, new_state)
-        time_key = ('Time', scenario, new_state)
-        
-        #Assign
-        dataset[data_key] = y_data
-        dataset[time_key] = time
-    return dataset
-
 plt.style.use(dn.styles['dark_style_multi'])
 plt.close('all')
 
@@ -50,7 +24,8 @@ model            = models['Monod']
 raw_data         = pd.read_csv('TestMonod1.csv', header=[0, 1], index_col=[0])
 
 #Format the data
-dataset = from_df(raw_data, 'OD600', 'x')
+#If you have data for more than one state, merge the dictionaries: {**d1, **d2}
+dataset = dtp.state2dataset(raw_data, 'x')
 
 #Run curve fitting
 opt_results = opt.fit_model(model, dataset, algo='differential_evolution')
@@ -72,13 +47,7 @@ best_params, best_posterior = opt_results[0].get_best(10)
 fig, AX = dn.figure(1, 3)
 AX_     = dict(zip(model.get_state_names(), AX))
 
-#Integrate and plot
-sim_results = opt.integrate_opt_result(model, opt_results[0])
-sim.plot_sim_results(sim_results, AX_, label='scenario')
-
-#Overlay the data
-data_line_args = {**model.sim_args['line_args'], **{'marker': 'o', 'linestyle': 'None'}}
-opt.plot_dataset(dataset, AX_, **data_line_args)
+opt.integrate_and_plot_opt_results(model, opt_results, AX_, dataset)
 
 for state, ax in zip(model.get_state_names(), AX):
     ax.set_title(state)

@@ -17,37 +17,6 @@ def get_error(ym, yd, sd, idx):
 def wrap_get_SSE(model, dataset):
     sse_calc = SSECalculator(model, dataset)
     return sse_calc.get_SSE
-    # tspan, t_data, y_data, s_data, exv_names = split_dataset(model, dataset)
-    # init                                     = get_init(model)
-    # state_index                              = dict(zip(model._states, range(len(model._states))))
-    
-    # def get_SSE(params_array):
-    #     SSE = 0
-    #     for scenario, y0 in init.items():
-    #         if scenario not in tspan:
-    #             continue
-            
-    #         t, y = model.integrate(scenario, 
-    #                                y0, 
-    #                                params_array, 
-    #                                overlap        = False, 
-    #                                include_events = False, 
-    #                                tspan          = tspan[scenario]
-    #                                )
-            
-    #         if exv_names:
-    #             y = sim.IntResult(model, t, y, params_array, scenario, exv_names)
-
-    #         for var, yd in t_data[scenario].items():
-    #             ym   = y.get1d(var) if exv_names else y[state_index[var]]
-    #             idx  = t_data[scenario][var]
-    #             yd   = y_data[scenario][var] 
-    #             sd   = s_data[var]
-
-    #             SSE += get_error(ym, yd, sd, idx) if hasattr(ym, '__iter__') else get_error(ym, yd, sd, None)
-
-    #     return SSE
-    # return get_SSE
 
 class SSECalculator():
     def __init__(self, model, dataset):
