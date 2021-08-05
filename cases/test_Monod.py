@@ -9,68 +9,84 @@ import pandas            as pd
 import addpath
 import dunlin               as dn
 import dunlin.simulation    as sim
-import dunlin.curvefit      as cf
-import dunlin.dataparser    as dp
-import dunlin.traceanalysis as ta
+import dunlin.optimize      as opt
 
-#Post procesing
-def format_axes(figs):
-    for fig in figs:
-        for ax in fig.axes:
-            ax.ticklabel_format(style='sci', scilimits=(-2, 3))
-            ax.xaxis.set_major_locator(mtick.MaxNLocator(nbins=4))
+#Preprocess data
+def from_df(raw_data, state, new_state=None):
+    def str2num(x):
+        try:
+            return int(x)
+        except:
+            try:
+                return float(x)
+            except:
+                return x
+            
+    #Get time and mean of replicates
+    time      = np.array(raw_data.index)
+    mean      = raw_data.groupby(axis=1, level=0).mean()
+    dataset   = {}
+    new_state = state if new_state is None else new_state
+    for scenario, y_data in mean.items():
+        #Create key and values
+        scenario = str2num(scenario)
+        y_data   = y_data.values
+        data_key = ('Data', scenario, new_state)
+        time_key = ('Time', scenario, new_state)
         
+        #Assign
+        dataset[data_key] = y_data
+        dataset[time_key] = time
+    return dataset
+
 plt.style.use(dn.styles['dark_style_multi'])
 plt.close('all')
 
-#Read data
-data_filename      = 'M9OD600.csv'
-dataset, scenarios = dp.read_timeseries(data_filename, 'x', header=[1, 2])
-exp_data           = {'Monod': dataset}
+#Read files
+data_filename    = 'TestMonod1.csv'
+model_filename   = 'TestMonod1.dun'
+dun_data, models = dn.read_file(model_filename)
+model            = models['Monod'] 
+raw_data         = pd.read_csv('TestMonod1.csv', header=[0, 1], index_col=[0])
 
-#Read models
-model_filename = 'TestMonod_1.ini'
-model_data     = dn.read_ini(model_filename)
+#Format the data
+dataset = from_df(raw_data, 'OD600', 'x')
 
-for model_key, value in model_data.items():
-    model = value['model']
-    model.init_vals.index  = scenarios
-    model.input_vals.index.set_levels(scenarios, level=0, inplace=True)
+#Run curve fitting
+opt_results = opt.fit_model(model, dataset, algo='differential_evolution')
 
-guesses, cf_args = cf.get_sa_args(model_data, exp_data)
-sim_args         = sim.get_sim_args(model_data)
+#Plot trace
+t_fig, t_AX = dn.figure(3, 1)
+t_AX_       = dict(zip(['mu_max', 'k_S', 'yield_S'], t_AX))
+opt.plot_opt_results(opt_results, t_AX_)
 
-#Simulation settings
-Monod   = model_data['Monod']['model']
-Monod_s = list(Monod.states)
-Monod_a = Monod_s[:-1]
+for ax in t_AX:
+    dn.scilimit(ax)
 
-plot_index = {'Monod': Monod_a}
-color      = {'Monod': dict(zip(scenarios, ['blue', 'orange', 'green']))}
+#Number of runs = number of estimates in model.params
+#In this case we only have one run
+best_params, best_posterior = opt_results[0].get_best(10)
 
-# #Test model
-# figs, AX, psim, gsim = cf.integrate_and_plot(plot_index = plot_index, 
-#                                               sim_args   = sim_args,
-#                                               guesses    = guesses, 
-#                                               exp_data   = exp_data,
-#                                               color      = color,
-#                                               label      = 'scenario'  
-#                                               )
+#Check the fit
+#Make the axes
+fig, AX = dn.figure(1, 3)
+AX_     = dict(zip(model.get_state_names(), AX))
 
-#Run curve-fitting
-traces, posteriors, opt_results, best = cf.apply_simulated_annealing(guesses, cf_args)
+#Integrate and plot
+sim_results = opt.integrate_opt_result(model, opt_results[0])
+sim.plot_sim_results(sim_results, AX_, label='scenario')
 
-#Trace analysis
-t_figs, t_AX = ta.plot_steps(traces, variables=list(cf_args['step_size']))
+#Overlay the data
+data_line_args = {**model.sim_args['line_args'], **{'marker': 'o', 'linestyle': 'None'}}
+opt.plot_dataset(dataset, AX_, **data_line_args)
 
-figs, AX, psim, gsim = cf.integrate_and_plot(plot_index = plot_index, 
-                                             sim_args   = sim_args, 
-                                             posterior  = best, 
-                                             guesses    = guesses, 
-                                             exp_data   = exp_data,
-                                             color      = color,
-                                             label      = 'scenario'
-                                             )
+for state, ax in zip(model.get_state_names(), AX):
+    ax.set_title(state)
+    ax.legend()
 
-format_axes(t_figs)
-format_axes(figs)
+'''
+Future work:
+    1. Find a way to store or infer data_line_args.
+    2. Wrap integration, plotting and data visualization into one function.
+'''
+

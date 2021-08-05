@@ -58,17 +58,18 @@ def integrate_models(models, multiply=True, overlap=True, include_events=True, _
                                                      )
     return all_sim_results
 
-def integrate_model(model, multiply=True, overlap=True, include_events=True, _params=None, _exv_names=None):
+def integrate_model(model, multiply=True, overlap=True, include_events=True, _params=None, _exv_names=None, _tspan=None):
     states      = model.states
     params      = model.params if _params is None else _params
+    tspan       = {} if _tspan is None else _tspan
     sim_results = {}
     
     if multiply:
         for scenario, y0 in zip(states.index, states.values):
             for estimate, p in zip(params.index, params.values):
-    
+                
                 #Integrate
-                t, y = model.integrate(scenario, y0, p)
+                t, y = model.integrate(scenario, y0, p, tspan=tspan.get(scenario))
                 
                 #Tabulate and evaluate exvs
                 sim_results.setdefault(scenario, {})[estimate] = SimResult(model, t, y, p, scenario,  _exv_names)
@@ -79,7 +80,7 @@ def integrate_model(model, multiply=True, overlap=True, include_events=True, _pa
         
         for scenario, y0, estimate, p in zip(states.index, states.values, params.index, params.values):
             #Integrate
-            t, y = model.integrate(scenario, y0, p)
+            t, y = model.integrate(scenario, y0, p, tspan=tspan.get(scenario))
             
             #Tabulate and evaluate exvs
             sim_results.setdefault(scenario, {})[estimate] = SimResult(model, t, y, p, scenario,  _exv_names)
@@ -265,8 +266,9 @@ def plot_all_sim_results(all_sim_results, AX, **line_args):
         AX1[model_key]  = plot_sim_results(sim_results, AX_model, **line_args_model)
     return AX1
 
-def plot_sim_results(sim_results, AX, palette=None, **line_args):
-    AX1       = AX
+def plot_sim_results(sim_results, AX, palette=None, repeat_labels=False, **line_args):
+    AX1         = AX
+    seen_labels = set()
     for scenario in sim_results:
         for estimate, sim_result in sim_results[scenario].items(): 
             for var, ax_ in AX1.items():
@@ -313,6 +315,12 @@ def plot_sim_results(sim_results, AX, palette=None, **line_args):
                     label = f'{sim_result.model_key}, {var}, {scenario}, {estimate}'
                 else:
                     label = f'{scenario}, {estimate}'
+                
+                l_key = (ax, label)
+                if l_key in seen_labels and not repeat_labels:
+                    label = '_nolabel'
+                else:
+                    seen_labels.add(l_key)
                     
                 line_args_['label'] = label
                 plot_type           = line_args_.get('plot_type', 'line')

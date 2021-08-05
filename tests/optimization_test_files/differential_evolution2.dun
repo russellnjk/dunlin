@@ -46,17 +46,18 @@ free_params : [
 	u0: [bounds: [0, 10], prior : [uniform, 0, 10]],
 	u1: [bounds: [0, 10], prior : [uniform, 0, 10]] 
 	]
-settings : [maxiter    : 100,
-	strategy      : best1bin,
-	popsize       : 5,
-	tol           : 0.01,
-	mutation      : (0.5, 1),
-	recombination : 0.7,
-	disp          : False,
-	polish        : True,
-	init          : latinhypercube,
-	atol          : 0,
-	updating      : immediate,
+settings : [
+	maxiter       : 100
+	strategy      : best1bin
+	popsize       : 5
+	tol           : 0.01
+	mutation      : [0.5, 1]
+	recombination : 0.7
+	disp          : False
+	polish        : True
+	init          : latinhypercube
+	atol          : 0
+	updating      : immediate
 	workers       : 1
 	]
 line_args : [marker: [0: [u0: +,  u1: o, (u0, u1): o]], color: [ 0: [u0: steel,  u1: coral, (u0, u1): cyan]]]

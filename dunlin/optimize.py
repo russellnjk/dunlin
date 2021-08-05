@@ -92,6 +92,15 @@ def optimize_model(model, to_minimize=None, algo='differential_evolution'):
             raise DunlinOptimizationError.no_algo(algo)
         func()
     return opt_results
+
+def integrate_opt_result(model, opt_result, n=10, k=2):
+    best_params, best_posterior = opt_result.get_best(n)
+    
+    params      = best_params.iloc[::k]
+    tspan       = opt_result.neg_log_likelihood.tspan
+    sim_results = sim.integrate_model(model, _params=params, _tspan=tspan)
+    
+    return sim_results
     
 ###############################################################################
 #Dunlin Classes
@@ -124,6 +133,9 @@ class SampledParam():
     _priors['lap']     = _priors['laplace']
     _priors['lognorm'] = _priors['logNormal']
     _priors['loglap']  = _priors['logLaplace']
+    _priors['psuni']     = _priors['uniform']
+    _priors['psnorm']    = _priors['normal']
+    _priors['pslap']     = _priors['laplace']
     
     _priors['u']  = _priors['uniform']
     _priors['n']  = _priors['normal']
@@ -183,13 +195,10 @@ class SampledParam():
         return prior_value
     
     def get_opt_bounds(self):
-        if 'parameterScale' in self.prior_type:
-            lb, ub = self.bounds
-            return self.scale(lb), self.scale(ub)
-        else:
-            return self.bounds
+        #This depends solely on the scale
+        lb, ub = self.bounds
+        return self.scale(lb), self.scale(ub)
             
-        
     def __call__(self, x):
         return self.get_prior(x)
     
@@ -200,7 +209,13 @@ class SampledParam():
                 'sample' : [self.sample_type, *self.sample.args],
                 'scale'  : self.scale_type
                 }
-
+    
+    def __repr__(self):
+        return f'{type(self).__name__} {self.name}<bounds: {self.get_opt_bounds()}, scale: {self.scale_type}, prior: {self.prior_type}, sample: {self.sample_type}>'
+    
+    def __str__(self):
+        return self.__repr__()
+    
 class OptResult():
     '''
     Note: Many optimization algorithms seek to MINIMIZE an objective function, 
@@ -305,6 +320,21 @@ class OptResult():
         else:
             raise AttributeError(f'"{type(self).__name__}" does not have attribute "{attr}"')
     
+    def __repr__(self):
+        lst = ', '.join([sp.name for sp in self.sampled_params])
+        return f'{type(self).__name__}<sampled_params: [{lst}]>'
+    
+    def __str__(self):
+        return self.__repr__()
+    
+    def get_best(self, n=10):
+        posterior = self.posterior.sort_values('_posterior').iloc[:n]
+        
+        best_params    = posterior.drop(columns=['_posterior']) 
+        best_posterior = posterior['_posterior']
+        
+        return best_params, best_posterior
+    
 @njit
 def logsum(arr):
     return np.sum(np.log(arr))
@@ -331,6 +361,8 @@ def plot_all_opt_results(all_opt_results, AX, **line_args):
     return AX1
     
 def plot_opt_results(opt_results, AX, palette=None, **line_args):
+    global colors
+    
     AX1       = AX
     for estimate, opt_result in opt_results.items(): 
         for var, ax_ in AX1.items():
@@ -375,3 +407,50 @@ def plot_opt_results(opt_results, AX, palette=None, **line_args):
                 raise ValueError(f'Unrecognized plot_type {plot_type}')
     
     return AX1
+
+def plot_dataset(dataset, AX, yerr=None, xerr=None, **line_args):
+    global colors
+    
+    AX1 = AX
+    ye  = {} if yerr is None else yerr
+    xe  = {} if xerr is None else xerr 
+    
+    for (dtype, scenario, var), data in dataset.items():
+        if dtype != 'Data':
+            continue
+        
+        ax_ = upp.recursive_get(AX1, var, scenario) 
+        if type(ax_) == dict:
+            ax_ = ax_.values()
+        else:
+            ax_ = [ax_]
+                      
+        line_args_  = {**getattr(dataset, 'line_args', {}), **line_args}
+        line_args_  = {k: upp.recursive_get(v, scenario, var) for k, v in line_args_.items()}
+        
+        #Process special keywords
+        color = line_args_.get('color')
+        if type(color) == str:
+            line_args_['color'] = colors[color]
+        
+        
+        plot_type   = line_args_.get('plot_type', 'errorbar')
+            
+        #Plot
+        if plot_type == 'errorbar':
+            if line_args_.get('marker', None) and 'linestyle' not in line_args_:
+                line_args_['linestyle'] = 'None'
+            
+            x_vals = dataset[('Time', scenario, var)]
+            y_vals = data
+            y_err_ = ye.get((dtype, scenario, var))
+            x_err_ = xe.get((dtype, scenario, var))
+            
+            for ax in ax_:
+                ax.errorbar(x_vals, y_vals, y_err_, x_err_, **line_args_)
+                ax.set_ylabel(var)
+        else:
+            raise ValueError(f'Unrecognized plot_type {plot_type}')
+        
+    return AX1
+    

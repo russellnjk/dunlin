@@ -12,6 +12,7 @@ import dunlin.simulation as sim
 plt.style.use(dn.styles['dark_style_multi'])
 plt.close('all')
 
+#Read files
 filename = 'Weisse1.dun'
 dun_data, models = dn.read_file(filename)
 model            = models['Weisse'] 
@@ -40,4 +41,7 @@ sim.plot_sim_results(sim_results, AX_, **line_args)
 for x, ax in zip(states, AX):
     ax.set_title(x)
     dn.scilimit(ax)
+    ymax = ax.yaxis.get_data_interval()[1]
+    ymax = max(1e-3, ymax)
+    ax.set_ylim(0, ymax)
  

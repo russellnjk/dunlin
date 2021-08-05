@@ -25,7 +25,7 @@ sim_results = sim.integrate_model(model,
                                   )
 
 #Plot
-#This will override line_args in the .dun file (if applicable)
+#This will override the line_args in the .dun file (if any)
 line_args   = {'label': 'state, scenario', 
                }
 

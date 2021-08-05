@@ -102,23 +102,30 @@ class SSECalculator():
     
     def __call__(self, params_array):
         return self.get_SSE(params_array)
+    
+    def __repr__(self):
+        return f'{type(self).__name__}<model: {self.model.model_key}>'
+    
+    def __str__(self):
+        return self.__repr__()
         
 ###############################################################################
 #Preprocessing
 ###############################################################################
 def split_dataset(model, dataset):    
-    states    = model.states.columns
-    y_data    = {}
-    t_data    = {}
-    s_data    = {} 
-    y_set     = set()
-    x_set     = set()
-    t_set     = set()
-    s_set     = set()
-    t_len     = {}
-    tpoints   = {}
-    max_vals  = {}
-    exv_names = []
+    states     = model.get_state_names()
+    model_exvs = model.exvs if model.exvs else []
+    y_data     = {}
+    t_data     = {}
+    s_data     = {} 
+    y_set      = set()
+    x_set      = set()
+    t_set      = set()
+    s_set      = set()
+    t_len      = {}
+    tpoints    = {}
+    max_vals   = {}
+    exv_names  = []
     
     for key, value in dataset.items():
         if key[0] == 'Data':
@@ -128,14 +135,12 @@ def split_dataset(model, dataset):
             y_data.setdefault(scenario, {})[var] = np.array(value)
             
             #Check if variable is a state or exv
-            if var in states or var in model.exvs:
+            if var in states:
                 y_set.add((scenario, var))
-            else:
-                raise ValueError('exp_data contains an exv which is not in the model.')
-            if var in model.exvs:
+            elif var in model_exvs:
                 exv_names.append(var)
             else:
-                raise ValueError('exp_data contains an exv which is not in the model.')
+                raise ValueError(f'exp_data contains an exv {var} which is not in the model.')
             
             #Track variable to determine if sd is provided
             x_set.add(var)

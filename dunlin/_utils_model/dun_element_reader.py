@@ -1,22 +1,14 @@
 import numpy  as np
 import pandas as pd
 import re
-from   pathlib import Path
 
 ###############################################################################
 #Non-Standard Imports
 ###############################################################################
-try:
-    import dunlin._utils_model.dun_string_reader as dsr
-    from  .base_error  import DunlinBaseError
-    from  .custom_eval import safe_eval as eval
-except Exception as e:
-    if Path.cwd() == Path(__file__).parent:
-        import dun_string_reader as dsr
-        from  base_error  import DunlinBaseError
-        from  custom_eval  import safe_eval  as eval
-    else:
-        raise e
+
+import dunlin._utils_model.dun_string_reader as dsr
+from  .base_error  import DunlinBaseError
+from  .custom_eval import safe_eval as eval
 
 ###############################################################################
 #Dunlin Exceptions
