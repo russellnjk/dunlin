@@ -26,12 +26,12 @@ def make_events(func_data, model_data):
     return events
     
 def make_event(event_name, func_data, model_data):
-    model_key                        = model_data['model_key']
-    codes, funcs                     = func_data['events']
-    codes, funcs                     = codes[event_name], funcs[event_name]
-    trigger_code, trigger_func       = codes['trigger'], funcs['trigger']
-    assignment_code, assignment_func = codes['assignment'], funcs['assignment']
-    event_data                       = model_data['events'][event_name]
+    model_key       = model_data['model_key']
+    funcs           = func_data['events']
+    funcs           = funcs[event_name]
+    trigger_func    = funcs['trigger']
+    assignment_func = funcs['assignment']
+    event_data      = model_data['events'][event_name]
     
     if hasattr(event_data, 'items'):
         obj = Event(name         = event_name, 
@@ -50,8 +50,6 @@ def make_event(event_name, func_data, model_data):
                     model_key    = model_key
                     )
 
-    obj.trigger_code    = trigger_code
-    obj.assignment_code = assignment_code
     obj._dun            = event_data
     return obj
     

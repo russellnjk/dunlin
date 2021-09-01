@@ -30,6 +30,10 @@ def integrate(func, tspan, y0, p,
               overlap=True, include_events=True,
               _sort=True, **kwargs
               ):
+    #Check tspan
+    if tspan[0] > 0:
+        raise ValueError('tspan starts from more than 0.')
+    
     #Preprocessing for time and state variables
     t_eval   = tspan
     t_last   = tspan[0]

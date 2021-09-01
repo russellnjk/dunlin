@@ -47,7 +47,7 @@ MM(v, x, k): v*x/(x+k)
 e0: [trigger: x0 < 0.2, assignment: x0 = 1]
 
 ``exvs
-sat =
+sat :
 	return {'x': t, 'y': sat}
 
 ``int_args

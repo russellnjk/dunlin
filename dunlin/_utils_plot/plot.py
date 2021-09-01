@@ -8,8 +8,6 @@ from matplotlib          import get_backend
 ###############################################################################
 #Globals
 ###############################################################################
-
-
 #Refer for details: https://xkcd.com/color/rgb/
 colors = sns.colors.xkcd_rgb
 
@@ -55,22 +53,30 @@ def recursive_get(dct, *keys):
     else:
         return result
 
-def gridspec(rows, cols, *subplot_args):
+def gridspec(rows, cols, *subplot_args, lb=-2, ub=4, nbins=4, title='', **title_args):
     fig = plt.figure()
     gs  = fig.add_gridspec(rows, cols)
     for arg in subplot_args:
         
-        s = (slice(*arg[:2]), slice(*arg[2:]) )
-        fig.add_subplot(gs[s])
+        s  = (slice(*arg[:2]), slice(*arg[2:]) )
+        ax = fig.add_subplot(gs[s])
+        scilimit(ax, lb, ub, nbins)
+        
     fs(fig)
+    fig.suptitle(title, **title_args)
     return fig, fig.axes
 
-def figure(rows, cols, n=None):
+def figure(rows, cols, n=None, lb=-2, ub=4, nbins=4, title='', **title_args):
     fig = plt.figure()
     n   = rows*cols if n is None else n
-    AX  = [fig.add_subplot(rows, cols, i+1) for i in range(n)]
+    
+    for i in range(n):
+        ax = fig.add_subplot(rows, cols, i+1)
+        scilimit(ax, lb, ub, nbins)
+        
     fs(fig)
-    return fig, AX
+    fig.suptitle(title, **title_args)
+    return fig, fig.axes
 
 def fs(figure):
     '''
@@ -177,8 +183,8 @@ def wrap_axfig(func):
     return helper
         
 @wrap_axfig    
-def scilimit(ax, lb=-2, ub=3, nbins=4):
-    ax.ticklabel_format(style='sci', scilimits=(-2, 3))
+def scilimit(ax, lb=-2, ub=4, nbins=4):
+    ax.ticklabel_format(style='sci', scilimits=(lb, ub))
     ax.xaxis.set_major_locator(mtick.MaxNLocator(nbins=4))
     
 @wrap_axfig   
@@ -198,5 +204,5 @@ def save_figs(figs, template, *args):
         if args:
             filename = template.format(*args, i)
         else:
-            filename = template
+            filename = template.format(i)
         fig.savefig(filename)

@@ -1,52 +1,25 @@
+import textwrap as tw
 import re
-from pathlib import Path
 
 ###############################################################################
 #Supporting Imports
 ###############################################################################
 import numpy          as np
 import pandas         as pd
-import scipy.optimize as opt
-from   numba  import njit 
-#Do NOT remove these imports. They are needed to run dynamically compiled functions.
 
 ###############################################################################
 #Non-Standard Imports
 ###############################################################################
-try:
-    from  .base_error import DunlinBaseError
-    from  .funcs      import code2func
-    from  .           import funcs as c2f
-except Exception as e:
-    if Path.cwd() == Path(__file__).parent:
-        from  base_error import DunlinBaseError
-        from  funcs      import code2func
-        import funcs     as c2f
-    else:
-        raise e
-
+from  .base_error import DunlinBaseError
+from  .funcs      import code2func
 '''
-1. Top Level
+Top Level function is make_ode_data
 func_data = make_ode_data(dun_data)
-
-2. High level (but slightly lower)
-templates = make_templates(dun_data)
-func_data = {}
-
-for model_key, model_data in dun_data.items():
-    func_data.setdefault(model_key, {})
-
-    func_data[model_key]['rhs']    = rhs2func(model_key, templates, dun_data)
-    func_data[model_key]['exvs']   = exvs2func(model_key, templates, dun_data)
-    func_data[model_key]['events'] = events2func(model_key, templates, dun_data) if model_data.get('events') else None
-    func_data[model_key]['modify'] = modify2func(model_key, templates, dun_data) if model_data.get('modify') else None
-    
 '''
 
 ###############################################################################
 #Globals
 ###############################################################################
-_args = 't', 'y', 'p'
 _args = 't', 'states', 'params'
 
 ###############################################################################
@@ -56,11 +29,12 @@ def make_ode_data(model_data):
     template  = make_template(model_data)
     func_data = {}
     
-    func_data['rhs']    = rhs2func(template, model_data)
-    func_data['exvs']   = exvs2func(template, model_data)
-    func_data['events'] = events2func(template, model_data) if model_data.get('events') else None
+    func_data['rhs'   ] = rhs2func(template, model_data)
+    func_data['sim'   ] = sim2func(template, model_data)
+    func_data['exvs'  ] = exvs2func(template, model_data)   if model_data.get('exvs'  ) else {} 
+    func_data['events'] = events2func(template, model_data) if model_data.get('events') else []
     func_data['modify'] = modify2func(template, model_data) if model_data.get('modify') else None
-    
+    func_data['eqns']   = template
     return func_data
     
 ###############################################################################
@@ -68,29 +42,33 @@ def make_ode_data(model_data):
 ###############################################################################
 def rhs2func(*args, **kwargs):
     temp = rhs2code(*args, **kwargs)
-    return temp, code2func(temp)
+    return code2func(temp)
+
+def sim2func(*args, **kwargs):
+    temp = sim2code(*args, **kwargs)
+    return code2func(temp)
 
 def exvs2func(*args, **kwargs):
     temp  = exvs2code(*args, **kwargs)
-    return temp, code2func(temp)
+    return code2func(temp)
 
 def events2func(*args, **kwargs):
     temp = events2code(*args, **kwargs)
-    return temp, {k: code2func(v) for k, v in temp.items()}
+    return {k: code2func(v) for k, v in temp.items()}
     
 def event2func(*args, **kwargs):
     temp = event2code(*args, **kwargs)
-    return temp, code2func(temp)
+    return code2func(temp)
 
 def modify2func(*args, **kwargs):
     temp = modify2code(*args, **kwargs)
-    return temp, code2func(temp)
+    return code2func(temp)
 
 ###############################################################################
 #High Level Code Generators
 ###############################################################################
-#The functions here produce complete, executable code, not just snippets
-
+#The functions here produce complete, executable code.
+#They do NOT check if model_data has the relevant key/value
 def rhs2code(template, model_data, numba=True):
     global _args
     
@@ -107,17 +85,46 @@ def rhs2code(template, model_data, numba=True):
     
     return func_name, code
 
+def sim2code(template, model_data, numba=True):
+    global _args
+    
+    #Create inner function that is numba compatible
+    model_key  = model_data['model_key']
+    states     = model_data['states']
+    vrbs       = model_data.get('vrbs', [])
+    vrbs       = [] if vrbs is None else vrbs
+    diffs      = [f'd_{x}' for x in states]
+    all_vars   = list(states) + list(vrbs) + diffs + [_args[0]]
+    return_val = ', '.join(all_vars) 
+    return_val = f'\treturn {return_val}'
+    func_name  = 'helper' 
+    sections   = [make_def(func_name, *_args, numba=numba), 
+                  template,
+                  return_val
+                  ]
+    inner_code = '\n'.join(sections)
+    
+    #Indent the code
+    func_name  = 'sim_' + model_key
+    inner_code = tw.indent(inner_code, '\t')
+    keys       = f'\tkeys = {all_vars}'
+    return_val = f'\treturn dict(zip(keys, helper({", ".join(_args)})))'
+    sections   = [make_def(func_name, *_args, numba=False), 
+                  keys,
+                  inner_code,
+                  return_val
+                  ]
+    code       = '\n'.join(sections)
+    
+    return func_name, code
+
 def exvs2code(template, model_data):
     global _args
     
     model_key = model_data['model_key']
-    exvs      = model_data.get('exvs')
-    
-    if not exvs:
-        return {}
-    
-    sections      = [None, template, '\t#EXV', None]
-    codes         = {}
+    exvs      = model_data['exvs'     ]
+    sections  = [None, template, '\t#EXV', None]
+    codes     = {}
     
     for exv_name, exv_code in exvs.items():
         if '@numba' in exv_code:
@@ -139,13 +146,7 @@ def exvs2code(template, model_data):
 
 def events2code(template, model_data):
     global _args
-    
-    event_data = model_data.get('events')
-    
-    if event_data is None:
-        return {}
-    
-    codes = {event_name: event2code(event_name, template, model_data) for event_name in event_data}
+    codes = {event_name: event2code(event_name, template, model_data) for event_name in model_data['events']}
             
     return codes
 
@@ -211,9 +212,6 @@ def modify2code(template, model_data):
     params    = model_data['params']
     modify    = model_data.get('modify')
     
-    if not modify:
-        return None, None
-    
     if len(modify) > 1:
         raise DunlinCodeGenerationError('modify', 'Only one modify function is allowed.')
     
@@ -254,9 +252,6 @@ def make_templates(dun_data):
     return templates
 
 def make_template(model_data):
-    model_key = model_data['model_key']
-    templates = {}
-    
     states = model_data['states']
     params = model_data['params']
     funcs  = model_data.get('funcs')
@@ -346,7 +341,7 @@ def rxns2code(model_data, indent=1):
 
     if rts:
         for state, expr in rts.items():
-            if type(expr) != str:
+            if type(expr) != str and not isnum(expr):
                 raise TypeError('Rate must be a string.')
             
             #In the future, a dedicated function will be required 
@@ -534,358 +529,4 @@ class DunlinCodeGenerationError(DunlinBaseError):
     @classmethod
     def no_numba(cls, msg=''):
         return cls.raise_template('Invalid use of numba.', 2)
-    
-if __name__ == '__main__':
-    import dun_file_reader as dfr
-
-    dun_data0 = dfr.read_file('dun_test_files/M20.dun')
-    dun_data1 = dfr.read_file('dun_test_files/M21.dun')
-    model_data0 = dun_data0['M1']
-    model_data1 = dun_data1['M2']
-    model_data2 = dun_data1['M3']
-    
-    ###############################################################################
-    #Part 1: Low Level Code Generation
-    ###############################################################################
-    funcs  = model_data0['funcs']
-    vrbs   = model_data0['vrbs']
-    rxns   = model_data0['rxns']
-    states = model_data0['states']
-    
-    #Test func def
-    name, args = 'test_func', ['a', 'b']
-    
-    code      = make_def(name, *args)
-    test_func = f'{code}\n\treturn [a, b]'
-    exec(test_func)
-    a, b = 1, 2
-    assert test_func(a, b) == [1, 2]
-    
-    #Test code generation for local functions
-    code      = funcs2code(funcs)
-    test_func = f'def test_func(v, x, k):\n{code}\n\treturn MM(v, x, k)'
-    exec(test_func)
-    assert test_func(2, 4, 6) == 0.8
-    
-    #Test local variable
-    code      = vrbs2code(vrbs)
-    test_func = f'def test_func(x2, k1):\n{code}\n\treturn sat2'
-    exec(test_func)
-    assert test_func(1, 1) == 0.5
-    
-    #Parse single reaction
-    stripper = lambda *s: ''.join(s).replace(' ', '').strip()
-    r = _parse_rxn(*rxns['r0'])
-    
-    assert {'x0': '-1', 'x1': '-2', 'x2': '+1'} == r[0]
-    assert stripper(rxns['r0'][1], '-', rxns['r0'][2]) == stripper(r[1])
-    
-    r = _parse_rxn(*rxns['r1'])
-    
-    assert {'x2': '-1', 'x3': '+1'} == r[0]
-    assert stripper(rxns['r1'][1]) == stripper(r[1])
-    
-    r = _parse_rxn(*rxns['r2'])
-    
-    assert {'x3': '-1'} == r[0]
-    assert stripper(rxns['r2'][1]) == stripper(r[1])
-    
-    #Test code generation for multiple reactions
-    code = rxns2code(model_data0)
-    
-    MM        = lambda v, x, k: 0
-    sat2      = 0.5
-    test_func = f'def test_func(x0, x1, x2, x3, x4, p0, p1, p2, p3, p4):\n{code}\treturn [d_x0, d_x1, d_x2, d_x3, d_x4]'
-    exec(test_func)
-    r = test_func(1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
-    assert r == [-1.0, -2.0, 0.5, -0.5, 1]
-    
-    #Test code generation for hierarchical models
-    #We need to create the "submodel"
-    MM         = lambda v, x, k: 0
-    code       = rxns2code(model_data1)
-    test_func0 = 'def model_M2(*args): return np.array([1, 1])'
-    exec(test_func0)
-    
-    code = rxns2code(model_data2)
-    test_func = f'def test_func(t, x0, x1, x2, x3, p0, p1, p2, p3, k2):\n{code}\treturn [d_x0, d_x1, d_x2, d_x3]'
-    exec(test_func)
-    r = test_func(0, 1, 1, 1, 1, 1, 1, 1, 1, 1)
-    assert r == [-1, 2, 1, 1]
-    
-    temp                          = dun_data1['M3']['rxns']['r1']
-    dun_data1['M3']['rxns']['r1'] = {'submodel': 'M2', 
-                                     'substates': {'xx0': 'x1', 'xx1': 'x2'}, 
-                                     'subparams': {'pp0' : 'p0', 'pp1' : 'p1', 'kk1': 'k2'}
-                                     }
-    
-    try:
-        code = rxns2code(model_data2)
-    except NotImplementedError as e:
-        assert True
-    else:
-        assert False
-    dun_data1['M3']['rxns']['r1'] = temp
-    
-    ###############################################################################
-    #Part 2: High Level Code Generation
-    ###############################################################################
-    template0 = make_template(model_data0)
-    template1 = make_template(model_data1)
-    template2 = make_template(model_data2)
-    
-    params  = model_data0['params']
-    exvs    = model_data0['exvs']
-    events  = model_data0['events'] 
-    modify  = model_data0['modify'] 
-    
-    #Generate code for ode rhs
-    code      = rhs2code(template0, model_data0)[1]
-    test_func = code.replace('model_M1', 'test_func')
-
-    exec(test_func)
-    t  = 0 
-    y  = np.ones(5)
-    p  = pd.DataFrame(params).values[0]
-    dy = test_func(t, y, p)
-    assert all( dy == np.array([-0.5, -1,  0,  -1.5 , 2]) )
-    
-    #Generate code for exv    
-    codes     = exvs2code(template0, model_data0)
-    test_func = codes['r0'][1].replace('exv_M1_r0', 'test_func')
-
-    exec(test_func)
-    t  = np.array([0, 1])
-    y  = np.ones((5, 2))
-    p  = pd.DataFrame(params).values[0]
-    r  = test_func(t, y, p)
-    assert all(r == 0.5)
-    
-    #Generate code for single event trigger
-    trigger = events['e0'][0] 
-    
-    code      = trigger2code('e0', trigger, template0, model_data0)[1]
-    test_func = code.replace('trigger_M1_e0', 'test_func')
-    exec(test_func)
-    t  = 10
-    y  = np.array([0, 1, 1, 1, 1])
-    p  = pd.DataFrame(params).values[0]
-    r  = test_func(t, y, p)
-    assert r == 0.5
-    
-    #Generate code for single event assignment
-    assignment = events['e0'][1] 
-    
-    code      = assignment2code('e0', assignment, template0, model_data0)[1]
-    test_func = code.replace('assignment_M1_e0', 'test_func')
-    exec(test_func)
-    t  = 10
-    y  = np.array([0, 1, 1, 1, 1])
-    p  = pd.DataFrame(params).values[0]
-    r  = test_func(t, y, p)
-    assert r[0][0]              == 5
-    assert r[1][0]              == 0.5
-    
-    #Generate code for single event
-    codes = event2code('e0', template0, model_data0)
-    
-    test_func = codes['trigger'][1].replace('trigger_M1_e0', 'test_func')
-    exec(test_func)
-    t  = 10
-    y  = np.array([0, 1, 1, 1, 1])
-    p  = pd.DataFrame(params).values[0]
-    r  = test_func(t, y, p)
-    assert r == 0.5
-    
-    test_func = codes['assignment'][1].replace('assignment_M1_e0', 'test_func')
-    exec(test_func)
-    t  = 10
-    y  = np.array([0, 1, 1, 1, 1])
-    p  = pd.DataFrame(params).values[0]
-    r  = test_func(t, y, p)
-    assert r[0][0]              == 5
-    assert r[1][0]              == 0.5
-    
-    #Generate code for all events
-    codes = events2code(template0, model_data0)
-    
-    test_func = codes['e0']['trigger'][1].replace('trigger_M1_e0', 'test_func')
-    exec(test_func)
-    t  = 10
-    y  = np.array([0, 1, 1, 1, 1])
-    p  = pd.DataFrame(params).values[0]
-    r  = test_func(t, y, p)
-    assert r == 0.5
-    
-    test_func = codes['e0']['assignment'][1].replace('assignment_M1_e0', 'test_func')
-    exec(test_func)
-    t  = 10
-    y  = np.array([0, 1, 1, 1, 1])
-    p  = pd.DataFrame(params).values[0]
-    r  = test_func(t, y, p)
-    assert r[0][0]              == 5
-    assert r[1][0]              == 0.5
-    
-    #Generate modify 
-    code      = modify2code(template0, model_data0)[1]
-    test_func = code.replace('modify_M1', 'test_func')
-    exec(test_func)
-    t  = 10
-    y  = np.array([0, 1, 1, 1, 1])
-    p  = pd.DataFrame(params).values[0]
-    r  = test_func(y, p, scenario=1)
-    assert all( r[0] == np.array([10, 1, 1, 1, 1]) )
-    assert all( r[1] == p)
-    
-    ###############################################################################
-    #Part 3A: Function Generation
-    ###############################################################################
-    #Generate single function from code
-    code      = 'x = lambda t: t+1'
-    scope     = {}
-    test_func = code2func(['x', code])
-    assert test_func(5) == 6
-    
-    #Generate multiple functions from codes
-    #The second function requires access to the first one
-    codes     = {'fx': ['x', 'def x(t):\n\treturn t+1'], 
-                  'fy': ['y', 'def y(t):\n\treturn x(t)+2']
-                  }
-    r         = code2func(codes)
-    test_func = r['fx']
-    assert test_func(5) == 6
-    test_func = r['fy']
-    assert test_func(5) == 8
-    
-    ###############################################################################
-    #Part 3B: Function Generation
-    ###############################################################################
-    template0 = make_template(model_data0)
-    template1 = make_template(model_data1)
-    template2 = make_template(model_data2)
-    
-    params  = model_data0['params']
-    exvs    = model_data0['exvs']
-    events  = model_data0['events'] 
-    modify  = model_data0['modify'] 
-    
-    #Generate rhs function
-    code, func = rhs2func(template0, model_data0)
-    t  = 0 
-    y  = np.ones(5)
-    p  = pd.DataFrame(params).values[0]
-    dy = func(t, y, p)
-    assert all( dy == np.array([-0.5, -1,  0,  -1.5 , 2]) )
-    
-    #Generate exv functions
-    codes, funcs = exvs2func(template0, model_data0)
-    code, func   = codes['r0'], funcs['r0']
-    
-    t  = np.array([0, 1])
-    y  = np.ones((5, 2))
-    p  = pd.DataFrame(params).values[0]
-    r  = func(t, y, p)
-    assert all(r == 0.5)
-    
-    #Generate event functions for one event
-    codes, funcs = event2func('e0', template0, model_data0)
-    
-    func = funcs['trigger']
-
-    t  = 10
-    y  = np.array([0, 1, 1, 1, 1])
-    p  = pd.DataFrame(params).values[0]
-    r  = func(t, y, p)
-    assert r == 0.5
-    
-    func = funcs['assignment']
-
-    t  = 10
-    y  = np.array([0, 1, 1, 1, 1])
-    p  = pd.DataFrame(params).values[0]
-    r  = func(t, y, p)
-    assert r[0][0]              == 5
-    assert r[1][0]              == 0.5
-    
-    #Generate event functions for all events
-    codes, funcs = events2func(template0, model_data0)
-    
-    func = funcs['e0']['trigger']
-
-    t  = 10
-    y  = np.array([0, 1, 1, 1, 1])
-    p  = pd.DataFrame(params).values[0]
-    r  = func(t, y, p)
-    assert r == 0.5
-    
-    func = funcs['e0']['assignment']
-
-    t  = 10
-    y  = np.array([0, 1, 1, 1, 1])
-    p  = pd.DataFrame(params).values[0]
-    r  = func(t, y, p)
-    assert r[0][0]              == 5
-    assert r[1][0]              == 0.5
-    
-    #Generate modify 
-    code, func = modify2func(template0, model_data0)
-    t  = 10
-    y  = np.array([0, 1, 1, 1, 1])
-    p  = pd.DataFrame(params).values[0]
-    r  = func(y, p, 1)
-    assert all( r[0] == np.array([10, 1, 1, 1, 1]) )
-    assert all( r[1] == p)
-    
-    ###############################################################################
-    #Part 4: Top Level Functions
-    ###############################################################################
-    #Create functions from dun_data
-    func_data = make_ode_data(model_data0)
-    
-    #Generate rhs function
-    code, func = func_data['rhs']
-    t  = 0 
-    y  = np.ones(5)
-    p  = pd.DataFrame(params).values[0]
-    dy = func(t, y, p)
-    assert all( dy == np.array([-0.5, -1,  0,  -1.5 , 2]) )
-    
-    #Generate exv functions
-    codes, funcs = func_data['exvs']
-    code, func   = codes['r0'], funcs['r0']
-    
-    t  = np.array([0, 1])
-    y  = np.ones((5, 2))
-    p  = pd.DataFrame(params).values[0]
-    r  = func(t, y, p)
-    assert all(r == 0.5)
-    
-    #Generate event functions for all events
-    codes, funcs = func_data['events']
-    
-    func = funcs['e0']['trigger']
-
-    t  = 10
-    y  = np.array([0, 1, 1, 1, 1])
-    p  = pd.DataFrame(params).values[0]
-    r  = func(t, y, p)
-    assert r == 0.5
-    
-    func = funcs['e0']['assignment']
-
-    t  = 10
-    y  = np.array([0, 1, 1, 1, 1])
-    p  = pd.DataFrame(params).values[0]
-    r  = func(t, y, p)
-    assert r[0][0]              == 5
-    assert r[1][0]              == 0.5
-    
-    #Generate modify 
-    code, func = func_data['modify']
-    t  = 10
-    y  = np.array([0, 1, 1, 1, 1])
-    p  = pd.DataFrame(params).values[0]
-    r  = func(y, p, 1)
-    assert all( r[0] == np.array([10, 1, 1, 1, 1]) )
-    assert all( r[1] == p)
     

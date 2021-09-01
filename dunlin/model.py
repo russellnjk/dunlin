@@ -45,10 +45,11 @@ class DunlinModelError(dbe.DunlinBaseError):
     @classmethod
     def mismatch(cls, attr, expected, received):
         msg = f'Expected keys/columns in {attr}: {expected}\nReceived: {received}'
+        return cls.raise_template(msg, 1)
     
     @classmethod
     def invalid_attr(cls, msg):
-        return cls.raise_template(msg, 1)
+        return cls.raise_template(msg, 2)
     
     @classmethod
     def submodel_missing(cls, model_key, submodel_key):
@@ -62,7 +63,12 @@ class DunlinModelError(dbe.DunlinBaseError):
     def submodel_recursion(cls, *chain):
         chain_ = ' -> '.join([str(c) for c in chain])
         return cls.raise_template('Recursive model hierarchy: ' + chain_, 12)
-
+    
+    @classmethod
+    def state_param_mismatch(cls, param_index, state_index):
+        msg = f'Param and state indices do not match.\nParam indices: {param_index}\nState indices: {state_index}'
+        return cls.raise_template(msg)
+        
 ###############################################################################
 #Dunlin Models
 ###############################################################################        
@@ -78,7 +84,9 @@ class Model():
                 }
     _tspan   = np.linspace(0, 100, 11)
     
-    
+    ###############################################################################
+    #Hierarchy Tracking
+    ###############################################################################
     @staticmethod
     def _find_submodels(model_data):
         rxns = model_data['rxns']
@@ -119,7 +127,10 @@ class Model():
                 raise DunlinModelError.submodel_len(model_key, sub, 'params(p)')
             
             cls._check_sub(sub, _super=_super+(model_key,))
-            
+    
+    ###############################################################################
+    #Instantiation
+    ###############################################################################  
     def __init__(self, model_key, states, params, rxns=None, vrbs=None, funcs=None, rts=None, exvs=None, modify=None, events=None, tspan=dict(), _check_sub=True, **kwargs):
         #Set the locked and constrained attributes
         self._states     = tuple(states.keys()) 
@@ -129,8 +140,6 @@ class Model():
         
         self.states = states
         self.params = params
-        
-        self._record = []
         
         #Set the remaining attributes
         super().__setattr__('model_key', model_key)
@@ -152,10 +161,12 @@ class Model():
         func_data  = odc.make_ode_data(model_data)
         event_objs = uev.make_events(func_data, model_data)
         
-        self._rhs_code, self._rhs = func_data['rhs']
-        self._events              = event_objs
-        self._modify              = func_data['modify'][1] if func_data['modify'] else None
-        self._exvs                = func_data['exvs'][1]
+        self._rhs    = func_data['rhs']
+        self._sim    = func_data['sim']
+        self._exvs   = func_data['exvs']
+        self._events = event_objs
+        self._modify = func_data['modify']
+        self._eqns   = func_data['eqns']
         
         #Track model and submodels 
         self._sub[model_key]   = self._find_submodels(model_data)
@@ -163,7 +174,14 @@ class Model():
         
         if _check_sub:
             self._check_sub(model_key)
-        
+    
+    def copy(self):
+        args = self.to_dict()
+        return type(self)(**args)
+    
+    ###############################################################################
+    #Attribute Management
+    ###############################################################################
     def __setattr__(self, attr, value):
         if attr in self._locked:
             raise DunlinModelError.locked(attr)
@@ -191,37 +209,18 @@ class Model():
         else:
             super().__setattr__(attr, value)
     
+    ###############################################################################
+    #Dict Duck Typing
+    ###############################################################################
+    def to_dict(self):
+        result = {k: v for k, v in self.__dict__.items() if k[0] != '_' }
+        return result
+    
     def __getitem__(self, key):
         return self.__dict__[key]
     
     def __setitem__(self, key, value):
         return self.__setattr__(key, value)
-    
-    def __len__(self):
-        return len(self._states), len(self._params)
-    
-    def __repr__(self):
-        return f'{type(self).__name__} {self.model_key}<states: {self._states}, params: {self._params}>'
-    
-    def __str__(self):
-        return self.__repr__()
-    
-    #MIGHT CHANGE THIS IN THE FUTURE
-    def __call__(self, *args, **kwargs):
-        return self._rhs(*args, **kwargs)
-    
-    def get_exv(self, exv_name):
-        return self._exvs[exv_name]
-    
-    def get_param_names(self):
-        return self._params
-    
-    def get_state_names(self):
-        return self._states
-    
-    def to_dict(self):
-        result = {k: v for k, v in self.__dict__.items() if k[0] != '_' }
-        return result
     
     def keys(self):
         return self.to_dict().keys()
@@ -242,18 +241,52 @@ class Model():
     def items(self):
         return self.to_dict().items()
     
-    def copy(self):
-        args = self.to_dict()
-        return type(self)(**args)
+    ###############################################################################
+    #Representation
+    ###############################################################################
+    def __repr__(self):
+        return f'{type(self).__name__} {self.model_key}<states: {self._states}, params: {self._params}>'
+    
+    def __str__(self):
+        return self.__repr__()
+    
+    ###############################################################################
+    #Safe Accessors
+    ###############################################################################
+    def get_exv(self, exv_name):
+        return self._exvs[exv_name]
+    
+    def get_param_names(self):
+        return self._params
+    
+    def get_state_names(self):
+        return self._states
+    
+    def get_sorted_params(self):
+        if len(self.params) != len(self.states):
+            raise DunlinModelError.state_param_mismatch(self.params.index, self.states.index)
+        try:
+            return self.params.loc[self.states.index]
+        except:
+            raise DunlinModelError.state_param_mismatch(self.params.index, self.states.index)
+    
+    def get_tspan(self, scenario):
+        return self.tspan.get(scenario, self._tspan)
+    
+    ###############################################################################
+    #Integration
+    ###############################################################################
+    def __call__(self, *args, **kwargs):
+        return self._rhs(*args, **kwargs)
     
     def integrate(self,         scenario, 
                   states_array, params_array, 
                   overlap=True, include_events=True, 
                   tspan=None,   modify=None,    
                   events=None,  **int_args):
-    
+        
         t, y = ivp.integrate(self._rhs, 
-                             tspan          = self.tspan.get(scenario, self._tspan) if tspan is None else tspan, 
+                             tspan          = self.get_tspan(scenario) if tspan is None else tspan, 
                              y0             = states_array, 
                              p              = params_array, 
                              events         = self._events if events is None else modify, 
@@ -265,6 +298,12 @@ class Model():
                              )
         
         return t, y
+    
+    ###############################################################################
+    #Others
+    ###############################################################################
+    def __len__(self):
+        return len(self._states), len(self._params)
     
    
         

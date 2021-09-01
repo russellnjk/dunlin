@@ -1,0 +1,57 @@
+`M1
+
+``states
+x0 : [1]
+x1 : [0]
+x2 : [0]
+
+``params
+p0 : [1]
+p1 : [1]
+p2 : [1]
+
+``rxns
+r0 : [x0 > x1, p0*x0]
+r1 : [x1 > x2, p1*x1]
+r2 : [x2 > x3, p2*x2]
+
+`M2
+
+``states
+x : [1]
+S : [1]
+
+``params
+mu_max  : [0.02]
+k_S     : [0.5]
+yield_S : [2]
+
+``vrbs
+mu : mu_max*S/(k_S + S)
+
+``rxns
+r0 : [  > x, mu*x     ]
+r1 : [S > x, S*yield_S]
+
+`Monod
+
+``states
+x : [0.1: 0.25,  0.15: 0.25,  0.2: 0.25 ]
+S : [0.1: 5.5e3, 0.15: 8.3e3, 0.2: 1.1e4]
+H : [0.1: 0,     0.15: 0,     0.2: 0    ]
+
+``params
+mu_max  : [0.1: 0.012, 0.15: 0.012, 0.2: 0.012]
+k_S     : [0.1: 8.5e4, 0.15: 8.5e4, 0.2: 8.5e4]
+yield_S : [0.1: 1e4,   0.15: 1e4,   0.2: 1e4  ]
+k_ind   : [0.1: 0.5,   0.15: 0.5,   0.2: 0.5  ]
+v_H_max : [0.1: 200,   0.15: 200,   0.2: 200  ]
+ind     : [0.1: 0,     0.15: 0,     0.2: 0    ]
+
+``vrbs
+mu : mu_max*S/(S + k_S)
+
+``rxns
+growth : [  > x, mu*x             ]
+S_up   : [S >  , mu*x*yield_S     ]
+syn_H  : [  > H, v_H_max*ind/(ind + k_ind)]

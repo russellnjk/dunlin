@@ -3,90 +3,8 @@ import re
 ###############################################################################
 #Non-Standard Imports
 ###############################################################################
-from  .base_error  import DunlinBaseError
-
-###############################################################################
-#Key-Value readr for Substituted dun Strings
-###############################################################################
-def read_dun(string, expect=dict, **kwargs):
-    try:
-        result = _read_dun(string, read_flat, **kwargs)
-        
-        if type(result) != expect:
-            raise DunlinStringError.top(expect)
-            
-    except DunlinStringError as e:
-        raise DunlinStringError.merge(e, f'Error in string: {string}')
-    except Exception as e:
-        raise e
-    
-    return result
-    
-def _read_dun(string, flat_reader=lambda x: x, min_depth=0, max_depth=3):
-    string = preprocess_string(string)
-    
-    i0     = 0
-    ignore = False
-    nested = []
-    curr   = []
-    max_d  = 0
-    min_d  = min_depth <= 0
-    
-    for i, char in enumerate(string):
-        if char == '(':
-            ignore = True
-            
-        elif char == ')':
-            ignore = False
-            
-        elif char == ',' and not ignore:
-            append_chunk(string, i0, i, char, curr)
-            
-            #Update position
-            i0 = i + 1
-        
-        elif char == '[' and not ignore:
-            append_chunk(string, i0, i, char, curr)
-            
-            #Increase depth
-            nested.append(curr)
-            curr = []
-            
-            #Update position
-            i0 = i + 1
-            
-            #Track/check depth
-            max_d += 1
-            if max_d > max_depth:
-                raise DunlinStringError.depth('max')
-            if max_d >= min_depth:
-                min_d = True
-                
-        elif char == ']' and not ignore:
-            if not nested:
-                raise DunlinStringError.bracket('open')
-            append_chunk(string, i0, i, char, curr)
-            
-            #Decrease depth
-            parsed = flat_reader(curr)
-            curr   = nested.pop()
-            curr.append(parsed)
-            i0 = i + 1
-            
-            #Track/check depth
-            max_d -= 1
-        else:
-            continue
-    
-    append_chunk(string, i0, len(string), None, curr)
-    
-    result = flat_reader(curr)
-    
-    if len(nested):
-        raise DunlinStringError.bracket('close')
-    elif not min_d:
-        raise DunlinStringError.depth('min')
-    return result
+from  .base_error import DunlinBaseError
+from .custom_eval import safe_eval as eval
 
 ###############################################################################
 #Supporting Functions
@@ -98,7 +16,6 @@ def append_chunk(string, i0, i, token, curr):
     if not chunk:
         if token == ',':
             if last_token in [',', '['] or i == 0:
-                print(chunk, token, last_token)
                 raise DunlinStringError.delimiter()
         
         return 
@@ -221,14 +138,24 @@ def read_value(x, allow_blank=False):
             pass
         
     x_ = x.strip()
-    if not x_ and not allow_blank:
-        raise DunlinStringError.blank_key()
-        
+    if not x_:
+        if not allow_blank:
+            raise DunlinStringError.blank_key()
+        else:
+            return ''
+    
+    #Try tuple
+    if x_[0] == '(' and x_[-1] == ')':
+        try:
+            return tuple([read_value(i) for i in x_[1:len(x_)-1].split(',')])
+        except:
+            raise DunlinStringError.value(x_)
+            
     #Try boolean
     if x_ == 'True' or x_ == 'False':
         return eval(x_)
     
-    #Expect a string
+    #Expect a string or math expression
     #Check for illegal characters including double underscore
     illegals = [':', ';', '?', '%', '$', 
                 '#', '@', '!', '`', '~', '&', 
@@ -239,36 +166,10 @@ def read_value(x, allow_blank=False):
         if s in x_:
             raise DunlinStringError.value(x_)
     
-    return x_
-
-###############################################################################
-#Key-Value Parser for CLEANED PY Strings
-###############################################################################
-def format_indent(string):
     try:
-        name, code = string.split(':', 1)
+        return eval(x_)
     except:
-        raise DunlinStringError.py(string)
-        
-    name = name.strip()
-    
-    lines = code.split('\n')
-
-    if len(lines) == 1:
-        return name, '\t' + lines[0].strip()
-    
-    elif not lines[0].strip():
-        return name, '\n'.join(lines[1:])
-
-    for i, line in enumerate(lines[1:], 1):
-        if line.strip():
-            break
-    
-    first_indent = re.search('\s*', line)[0]
-    line0        = first_indent + lines[0].strip()
-    formatted    = '\n'.join([line0, *lines[1:]])
-
-    return name, formatted
+        return x_
 
 ###############################################################################
 #Supporting Functions
@@ -338,4 +239,114 @@ class DunlinStringError(SyntaxError, DunlinBaseError):
     def top(cls, type):
         return cls.raise_template(f'Top level must be {type.__name__}.', 10)
     
+###############################################################################
+#Key-Value readr for Substituted dun Strings
+###############################################################################
+def read_dun(string, expect=dict, flat_reader=read_flat, **kwargs):
+    try:
+        result = _read_dun(string, flat_reader, **kwargs)
+        
+        if type(result) != expect:
+            raise DunlinStringError.top(expect)
+            
+    except DunlinStringError as e:
+        raise DunlinStringError.merge(e, f'Error in string: {string}')
+    except Exception as e:
+        raise e
+    
+    return result
+    
+def _read_dun(string, flat_reader=lambda x: x, min_depth=0, max_depth=3):
+    string = preprocess_string(string)
+    
+    i0     = 0
+    ignore = 0
+    nested = []
+    curr   = []
+    max_d  = 0
+    min_d  = min_depth <= 0
+    
+    for i, char in enumerate(string):
+        if char == '(':
+            ignore += 1
+            
+        elif char == ')':
+            ignore -= 1
+            
+        elif char == ',' and not ignore:
+            append_chunk(string, i0, i, char, curr)
+            
+            #Update position
+            i0 = i + 1
+        
+        elif char == '[' and not ignore:
+            append_chunk(string, i0, i, char, curr)
+            
+            #Increase depth
+            nested.append(curr)
+            curr = []
+            
+            #Update position
+            i0 = i + 1
+            
+            #Track/check depth
+            max_d += 1
+            if max_d > max_depth:
+                raise DunlinStringError.depth('max')
+            if max_d >= min_depth:
+                min_d = True
+                
+        elif char == ']' and not ignore:
+            if not nested:
+                raise DunlinStringError.bracket('open')
+            append_chunk(string, i0, i, char, curr)
+            
+            #Decrease depth
+            parsed = flat_reader(curr)
+            curr   = nested.pop()
+            curr.append(parsed)
+            i0 = i + 1
+            
+            #Track/check depth
+            max_d -= 1
+        else:
+            continue
+    
+    append_chunk(string, i0, len(string), None, curr)
+    
+    result = flat_reader(curr)
+    
+    if len(nested):
+        raise DunlinStringError.bracket('close')
+    elif not min_d:
+        raise DunlinStringError.depth('min')
+    return result
 
+###############################################################################
+#Key-Value Parser for CLEANED PY Strings
+###############################################################################
+def format_indent(string):
+    try:
+        name, code = string.split(':', 1)
+    except:
+        raise DunlinStringError.py(string)
+        
+    name = name.strip()
+    
+    lines = code.split('\n')
+
+    if len(lines) == 1:
+        return name, '\t' + lines[0].strip()
+    
+    elif not lines[0].strip():
+        return name, '\n'.join(lines[1:])
+
+    for i, line in enumerate(lines[1:], 1):
+        if line.strip():
+            break
+    
+    first_indent = re.search('\s*', line)[0]
+    line0        = first_indent + lines[0].strip()
+    formatted    = '\n'.join([line0, *lines[1:]])
+
+    return name, formatted

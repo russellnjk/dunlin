@@ -1,171 +1,290 @@
-import numpy  as np
-import pandas as pd
+import matplotlib.pyplot as plt
+import numpy             as np
+import pandas            as pd
 
 ###############################################################################
 #Non-Standard Imports
 ###############################################################################
 import addpath
-import dunlin as dn
+import dunlin                              as dn  
+import dunlin.model                        as dml  
+import dunlin._utils_model.dun_file_reader as dfr
+import dunlin._utils_model.ivp             as ivp
 
-###############################################################################
-#Test Classes
-###############################################################################
-class TestModelInstance:
-    
-    def test_read_1(self):
-        #Read .ini
-        model = dn.read_ini('_test/TestModel_1.ini')['model_1']['model']
-        assert model.states == ('x', 's', 'h')
-        assert model.params == ('ks', 'mu_max', 'synh', 'ys')
-        assert model.inputs == ('b',)
-    
-    def test_integrate_1(self):
-        #Test attributes related to integration   
-        model    = dn.read_ini('_test/TestModel_1.ini')['model_1']['model']
-        
-        tspan    = model.tspan
-        assert len(tspan) == 2
-        assert all( np.isclose(tspan[0], np.linspace(  0, 300, 31)) )
-        assert all( np.isclose(tspan[1], np.linspace(300, 600, 31)) )
-        
-        init = model.init_vals
-        y    = init.loc[0].values
-        assert all(y == 1)
-        
-        params = model.param_vals
-        p      = params.loc[0].values
-        assert all(p == [20, 0.1, 1, 2])
-        
-        inputs = model.input_vals
-        u      = inputs.loc[0].values
-        u0     = u[0]
-        assert all(u0 == [2])
-        
-        #Test model function
-        t = 0
-        f = model.func
-        
-        r = f(t, y, p, u0)
-        assert all(r)
-        
-        #Test integration
-        y_model, t_model = model(y, p, u, _tspan=tspan, scenario=0)
-        
-        assert y_model.shape == (3, 62)
-    
-    def test_exv_1(self):
-        #Test exv function
-        model  = dn.read_ini('_test/TestModel_2.ini')['model_1']['model']
-        exvs   = model.exvs
-        exv_1  = exvs['growth']
-        assert model.states == ('x', 's', 'h')
-        assert model.params == ('ks', 'mu_max', 'synh', 'ys')
-        assert model.inputs == ('b',)
-    
-        
-        tspan    = model.tspan
-        assert len(tspan) == 2
-        assert all( np.isclose(tspan[0], np.linspace(  0, 300, 31)) )
-        assert all( np.isclose(tspan[1], np.linspace(300, 600, 31)) )
-        
-        init = model.init_vals
-        y    = init.loc[0].values
-        assert all(y == 1)
-        
-        params = model.param_vals
-        p      = params.loc[0].values
-        assert all(p == [20, 0.1, 1, 2])
-        
-        inputs = model.input_vals
-        u      = inputs.loc[0].values
-        u0     = u[0]
-        assert all(u0 == [2])
-        
-        #Test model function
-        t = 0
-        f = model.func
-        
-        r = f(t, y, p, u0)
-        assert all(r)
-        
-        #Test integration
-        y_model, t_model = model(y, p, u, _tspan=tspan, scenario=0)
-        
-        assert y_model.shape == (3, 62)
-    
-        t1 = t_model[:2]
-        y1 = np.array([y, y+r]).T
-        p1 = np.array([p, p]).T
-        u1 = np.array([u0, u0]).T 
-        
-        xo1, yo1 = exv_1(t1, y1, p1, u1)
-        assert all(xo1 == t_model[:2])
-        assert np.isclose(yo1[0], r[0])
-    
-    def test_write_1(self):
-        #Test writing .ini
-        #Test updating
-        c = '''
-        [model_1]
-        states = 
-            x0 = [0, 1],
-            x1 = [2, 3]
-            
-        params = 
-            p0 = [0, 1],
-            p1 = [2, 3]
-            
-        inputs =
-            u0 = [[0, 0], [1, 1]],
-            u1 = [[0, 1], [1, 0]]
-    
-        tspan =
-            linspace(0, 100, 11)
-        
-        equations = 
-            dx0 = -p0*x0 -u0*x1
-            dx1 = -p1*x1 -u1*x0
-            
-        '''
-        model_data  = dn.read_inicode(c)
-        model       = model_data['model_1']['model']
-        ini_section = model_data['model_1']['ini_section']
-        
-        ix = pd.MultiIndex.from_tuples(((0, 0), (0, 1), (1, 0), (1, 1)), names=['scenario', 'segment'])
-        df = pd.DataFrame([[1, 2], [3, 4], [5, 6], [7, 80]], 
-                          columns = ['u0', 'u1'], 
-                          index   = ix
-                          )
-        
-        tspan = np.array([[0, 1, 2], [2, 3, 4]])
-        
-        #Update
-        input_vals = df
-        
-        init_vals = df.xs(0, level=1)
-        init_vals.columns = ['x0', 'x1']
-        
-        param_vals = df.xs(0, level=1)
-        param_vals.columns = ['p0', 'p1']
-        
-        to_update_model_1 = {'states': init_vals,
-                             'params': param_vals,
-                             'inputs': input_vals
-                             }
-        
-        new_filename   = '_test/writeModel_1.ini' 
-        new_inicode    = dn.make_updated_inicode(model_data, filename=new_filename, model_1=to_update_model_1)
-        new_model_data = dn.read_ini(new_filename)
-        new_model      = new_model_data['model_1']['model']
-        
-        assert all(input_vals == new_model.input_vals)
-        assert all(param_vals == new_model.param_vals)
-        assert all(init_vals  == new_model.init_vals )
-        
-        
 if __name__ == '__main__':
-    T = TestModelInstance()
-    T.test_read_1()
-    T.test_integrate_1()
-    T.test_exv_1()
-    T.test_write_1()
+    #Some overhead for testing
+    plt.close('all')
+    
+    ###############################################################################
+    #Part 1A: Instantiation from .dun
+    ###############################################################################
+    dun_data = dfr.read_file('model_test_files/M3.dun')
+    models   = dml.make_models(dun_data)
+    
+    try:
+        dun_data = dfr.read_file('model_test_files/M3_missing.dun')
+        models   = dml.make_models(dun_data)
+    except dml.DunlinModelError as e:
+        assert e.num == 10
+    else:
+        assert False
+        
+    try:
+        dun_data = dfr.read_file('model_test_files/M3_mismatched.dun')
+        models   = dml.make_models(dun_data)
+    except dml.DunlinModelError as e:
+        assert e.num == 11
+    else:
+        assert False
+    
+    try:
+        dun_data = dfr.read_file('model_test_files/M3_recursive.dun')
+        models   = dml.make_models(dun_data)
+    except dml.DunlinModelError as e:
+        assert e.num == 12
+    else:
+        assert False
+    
+    ###############################################################################
+    #Part 1B: One-Step Instantiation from .dun
+    ###############################################################################
+    dun_data, models = dml.read_file('model_test_files/M3.dun')
+    
+    ###############################################################################
+    #Part 2: RHS Tests
+    ###############################################################################
+    #Test rhs
+    m  = models['M3']
+    y0 = np.ones(len(m.states.columns))
+    p  = np.ones(len(m.params.columns))
+    t  = 0
+    
+    dy = m._rhs(t, y0, p)
+    assert all( dy == np.array([-1.,   0.5,  0.5,  1. ]))
+    
+    ###############################################################################
+    #Part 3A: Low-Level ODE Integration with 
+    ###############################################################################
+    def plot(t, y, AX, label='_nolabel'):
+        for i, ax in enumerate(AX):
+            ax.plot(t, y[i], label=label)
+            top = np.max(y[i])
+            top = top*1.2 if top else 1
+            top = np.maximum(top, ax.get_ylim()[1])
+            bottom = -top*.05 
+            ax.set_ylim(bottom=bottom, top=top)
+            
+            if label != '_nolabel':
+                ax.legend()
+    
+    rtol      = 1e-2
+    
+    dun_data, models = dml.read_file('event_test_files/M1.dun')
+    model0           = models['M1']
+    event_objs       = model0._events
+    
+    func_ = model0._rhs
+    y0    = np.array([1, 0, 0])
+    p     = np.array([0.01, 0.01])
+    tspan = np.linspace(0, 1000, 101)
+    
+    fig  = plt.figure()
+    AX   = [fig.add_subplot(1, 3, i+1) for i in range(3)]
+    
+    #Case 21: Dynamically generated Timer
+    print('Case 21: Dynamically generated Timer')
+    #Expect: Spike at 200
+    events_ = event_objs[:1]
+    t, y = ivp.integrate(func_, tspan, y0, p, events=events_, overlap=True, include_events=True)
+    
+    plot(t, y, AX, 'Case 21: Dynamically generated Timer')
+    df = pd.read_csv('event_test_files/simulate_event_1.csv')
+    answer = df.values
+    values = np.concatenate(([t], y), axis=0)
+    assert np.all( np.isclose(answer, values, rtol=rtol))
+    
+    # #Case 22: Dynamically generated Event
+    # print('Case 22: Dynamically generated Event')
+    # #Expect: Spike at 160
+    # events_ = event_objs[1:2]
+    # t, y = ivp.integrate(func_, tspan, y0, p, events=events_, overlap=True, include_events=True)
+    
+    # plot(t, y, AX, 'Case 22: Dynamically generated Event')
+    # df = pd.read_csv('event_test_files/simulate_event_2.csv')
+    # answer = df.values
+    # values = np.concatenate(([t], y), axis=0)
+    # assert np.all( np.isclose(answer, values, rtol=rtol))
+    
+    # #Case 23: Dynamically generated Event with delay
+    # print('Case 23: Dynamically generated Event with delay')
+    # #Expect: Spike at 425 and 830
+    # events_ = event_objs[2:3]
+    # t, y = ivp.integrate(func_, tspan, y0, p, events=events_, overlap=True, include_events=True)
+    
+    # plot(t, y, AX, 'Case 23: Dynamically generated Event with delay')
+    # df = pd.read_csv('event_test_files/simulate_event_3.csv')
+    # answer = df.values
+    # values = np.concatenate(([t], y), axis=0)
+    # assert np.all( np.isclose(answer, values, rtol=rtol))
+    
+    # #Case 24: Dynamically generated Event with delay and not persistent
+    # print('Case 24: Dynamically generated Event with delay and not persistent')
+    # #Expect: No spike
+    # events_ = event_objs[3:4]
+    # t, y = ivp.integrate(func_, tspan, y0, p, events=events_, overlap=True, include_events=True)
+    
+    # plot(t, y, AX, 'Case 24: Dynamically generated Event with delay and not persistent')
+    # df = pd.read_csv('event_test_files/simulate_event_4.csv')
+    # answer = df.values
+    # values = np.concatenate(([t], y), axis=0)
+    # assert np.all( np.isclose(answer, values, rtol=rtol))
+    
+    # #Case 25: Dynamically generated Event with delay and not persistent
+    # print('Case 25: Dynamically generated Event with trigger at start')
+    # #Expect: Spike at 10
+    # events_ = event_objs[4:5]
+    # t, y = ivp.integrate(func_, tspan, y0, p, events=events_, overlap=True, include_events=True)
+    
+    # plot(t, y, AX, 'Case 25: Dynamically generated Event with trigger at start')
+    # df = pd.read_csv('event_test_files/simulate_event_5.csv')
+    # answer = df.values
+    # values = np.concatenate(([t], y), axis=0)
+    # assert np.all( np.isclose(answer, values, rtol=rtol))
+    
+    # #Case 26: Dynamically generated Event with multiple events
+    # print('Case 26: Dynamically generated Event with multiple events')
+    # #Expect: Spike at 25 and 300
+    # events_ = [event_objs[1], event_objs[5]]
+    # t, y = ivp.integrate(func_, tspan, y0, p, events=events_, overlap=True, include_events=True)
+    
+    # plot(t, y, AX, 'Case 26: Dynamically generated Event with multiple events')
+    # df = pd.read_csv('event_test_files/simulate_event_6.csv')
+    # answer = df.values
+    # values = np.concatenate(([t], y), axis=0)
+    # assert np.all( np.isclose(answer, values, rtol=rtol))
+    
+    # #Case 27: Dynamically generated Event with prioritized events
+    # print('Case 27: Dynamically generated Event with prioritized events')
+    # #Expect: Spike at 800 with new value of 3.5
+    # events_ = [event_objs[6], event_objs[7]]
+    # t, y = ivp.integrate(func_, tspan, y0, p, events=events_, overlap=True, include_events=True)
+    
+    # plot(t, y, AX, 'Case 27: Dynamically generated Event with prioritized events')
+    # df = pd.read_csv('event_test_files/simulate_event_7.csv')
+    # answer = df.values
+    # values = np.concatenate(([t], y), axis=0)
+    # assert np.all( np.isclose(answer, values, rtol=rtol))
+    
+    ###############################################################################
+    #Part 3B: High-Level ODE Integration with 
+    ###############################################################################
+    dun_data, models = dn.read_file('event_test_files/M1.dun')
+    model0           = models['M1']
+    event_objs       = model0._events
+    
+    y0    = np.array([1, 0, 0])
+    p     = np.array([0.01, 0.01])
+    
+    fig  = plt.figure()
+    AX   = [fig.add_subplot(1, 3, i+1) for i in range(3)]
+    
+    #Case 21: Dynamically generated Timer
+    print('Case 21: Dynamically generated Timer')
+    #Expect: Spike at 200
+    model0._events = event_objs[:1]
+    t, y = model0.integrate('s0', y0, p, overlap=True, include_events=True)
+    
+    plot(t, y, AX, 'Case 21: Dynamically generated Timer')
+    df = pd.read_csv('event_test_files/simulate_event_1.csv')
+    answer = df.values
+    values = np.concatenate(([t], y), axis=0)
+    assert np.all( np.isclose(answer, values, rtol=rtol))
+    
+    #Case 22: Dynamically generated Event
+    print('Case 22: Dynamically generated Event')
+    #Expect: Spike at 160
+    model0._events = event_objs[1:2]
+    t, y = model0.integrate('s0', y0, p, overlap=True, include_events=True)
+    
+    plot(t, y, AX, 'Case 22: Dynamically generated Event')
+    df = pd.read_csv('event_test_files/simulate_event_2.csv')
+    answer = df.values
+    values = np.concatenate(([t], y), axis=0)
+    assert np.all( np.isclose(answer, values, rtol=rtol))
+    
+    #Case 23: Dynamically generated Event with delay
+    print('Case 23: Dynamically generated Event with delay')
+    #Expect: Spike at 425 and 830
+    model0._events = event_objs[2:3]
+    t, y = model0.integrate('s0', y0, p, overlap=True, include_events=True)
+    
+    plot(t, y, AX, 'Case 23: Dynamically generated Event with delay')
+    df = pd.read_csv('event_test_files/simulate_event_3.csv')
+    answer = df.values
+    values = np.concatenate(([t], y), axis=0)
+    assert np.all( np.isclose(answer, values, rtol=rtol))
+    
+    #Case 24: Dynamically generated Event with delay and not persistent
+    print('Case 24: Dynamically generated Event with delay and not persistent')
+    #Expect: No spike
+    model0._events = event_objs[3:4]
+    t, y = model0.integrate('s0', y0, p, overlap=True, include_events=True)
+    
+    plot(t, y, AX, 'Case 24: Dynamically generated Event with delay and not persistent')
+    df = pd.read_csv('event_test_files/simulate_event_4.csv')
+    answer = df.values
+    values = np.concatenate(([t], y), axis=0)
+    assert np.all( np.isclose(answer, values, rtol=rtol))
+    
+    #Case 25: Dynamically generated Event with delay and not persistent
+    print('Case 25: Dynamically generated Event with trigger at start')
+    #Expect: Spike at 10
+    model0._events = event_objs[4:5]
+    t, y = model0.integrate('s0', y0, p, overlap=True, include_events=True)
+    
+    plot(t, y, AX, 'Case 25: Dynamically generated Event with trigger at start')
+    df = pd.read_csv('event_test_files/simulate_event_5.csv')
+    answer = df.values
+    values = np.concatenate(([t], y), axis=0)
+    assert np.all( np.isclose(answer, values, rtol=rtol))
+    
+    #Case 26: Dynamically generated Event with multiple events
+    print('Case 26: Dynamically generated Event with multiple events')
+    #Expect: Spike at 25 and 300
+    model0._events = [event_objs[1], event_objs[5]]
+    t, y = model0.integrate('s0', y0, p, overlap=True, include_events=True)
+    
+    plot(t, y, AX, 'Case 26: Dynamically generated Event with multiple events')
+    df = pd.read_csv('event_test_files/simulate_event_6.csv')
+    answer = df.values
+    values = np.concatenate(([t], y), axis=0)
+    assert np.all( np.isclose(answer, values, rtol=rtol))
+    
+    #Case 27: Dynamically generated Event with prioritized events
+    print('Case 27: Dynamically generated Event with prioritized events')
+    #Expect: Spike at 800 with new value of 3.5
+    model0._events = [event_objs[6], event_objs[7]]
+    t, y = model0.integrate('s0', y0, p, overlap=True, include_events=True)
+    
+    plot(t, y, AX, 'Case 27: Dynamically generated Event with prioritized events')
+    df = pd.read_csv('event_test_files/simulate_event_7.csv')
+    answer = df.values
+    values = np.concatenate(([t], y), axis=0)
+    assert np.all( np.isclose(answer, values, rtol=rtol))
+    
+    ###############################################################################
+    #Part 4: Attribute Tests
+    ###############################################################################
+    m_ = m.copy()
+    assert m_ is not m
+    for k in m.keys():
+        r = m_[k] == m[k]
+        try:
+            assert r
+        except:
+            try:
+                assert all(r)
+            except:
+                assert False
+    
+    

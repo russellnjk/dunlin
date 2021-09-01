@@ -9,7 +9,7 @@ from numba               import njit
 import addpath
 import dunlin                          as dn  
 import dunlin.model                    as dml
-import dunlin.simulation               as sim
+import dunlin.simulate                 as sim
 import dunlin._utils_optimize.wrap_SSE as ws
 
 if __name__ == '__main__':

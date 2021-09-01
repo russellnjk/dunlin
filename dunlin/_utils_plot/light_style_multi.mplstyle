@@ -289,7 +289,7 @@ axes.edgecolor:     white   # axes edge color
 #axes.grid.axis:     both    # which axis the grid should apply to
 #axes.grid.which:    major   # gridlines at {major, minor, both} ticks
 #axes.titlelocation: center  # alignment of the title: {left, right, center}
-axes.titlesize:     18   # fontsize of the axes title
+axes.titlesize:     16   # fontsize of the axes title
 #axes.titleweight:   normal  # font weight of title
 axes.titlecolor:    black    # color of the axes title, auto falls back to
                              # text.color as default value

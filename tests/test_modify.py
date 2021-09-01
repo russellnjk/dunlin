@@ -70,7 +70,7 @@ if __name__ == '__main__':
     
     ###For saving###
     #df = pd.DataFrame(np.concatenate(([t], y), axis=0))
-    #df.to_csv('event_test_files/simulation_event_1.csv', index=False)
+    #df.to_csv('event_test_files/simulate_event_1.csv', index=False)
     ################
     
     #Case 31: Modify
@@ -78,7 +78,7 @@ if __name__ == '__main__':
     t, y = ivp.integrate(func, tspan, y0, p, modify=modify, overlap=True, include_events=True, scenario='s0')
     
     plot(t, y, AX, 'Case 31: Modify')
-    df = pd.read_csv('event_test_files/simulation_event_31.csv')
+    df = pd.read_csv('event_test_files/simulate_event_31.csv')
     answer = df.values
     values = np.concatenate(([t], y), axis=0)
     assert np.all( np.isclose(answer, values, rtol=rtol))
@@ -106,7 +106,7 @@ if __name__ == '__main__':
     t, y = ivp.integrate(func_, tspan, y0, p, modify=modify, overlap=True, include_events=True, scenario='s0')
     
     plot(t, y, AX, 'Case 41: Modify')
-    df = pd.read_csv('event_test_files/simulation_event_31.csv')
+    df = pd.read_csv('event_test_files/simulate_event_31.csv')
     answer = df.values
     values = np.concatenate(([t], y), axis=0)
     assert np.all( np.isclose(answer, values, rtol=rtol))

@@ -9,9 +9,9 @@ def safe_eval(string, patterns = ('__', '[A-Za-z]\.', 'lambda +[\w]'), locals=No
     string
     
     for pattern in patterns:
-        r = re.search(pattern, string)
+        __r = re.search(pattern, string)
 
-        if r:
+        if __r:
             msg = 'This string contains invalid characters and might be unsafe: \n{}'
             raise ValueError(msg.format(string))
     

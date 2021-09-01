@@ -1,0 +1,132 @@
+	
+`MCr1
+``states
+{state} : [<{scenario}: {{init}}>]
+	!scenario, 0, 1, 2, 3
+	~state, x,    S,   I, P, Q,    R,    T,   M,   U, H, G
+	~init,  0.01, 1e3, 0, 0, 0.45, 0.05, 0.1, 0.3, 0, 0, 0
+
+``params
+Sin        : [1e3]*4
+dil        : [0]*4
+v_uptake   : [500]*4
+k_uptake   : [5e2]*4
+v_synp     : [1e3]*4
+k_synp     : [1]*4
+yield_S    : [6.6]*4
+v_synprot  : [1080]*4
+k_synprot  : [1]*4
+k_PR       : [0.2]*4
+k_synG     : [1e-4]*4
+k_fr       : [1e-4]*4
+n_fr       : [2]*4
+k_fm       : [1e2, 1e2, 1, 1]
+n_fm       : [1]*4
+fq         : [0.45]*4
+fr         : [1]*4
+ft         : [0.25]*4
+fm         : [0.25]*4
+fu         : [0.4]*4
+ind        : [0, 1, 0, 1]
+f_ind      : [0.1]*4
+k_ind      : [0.2]*4
+degP       : [1e-3]*4
+
+;Definitions
+;v_uptake : Turnover number for uptake lumped with average mw of transporter
+
+``vrbs
+;Proteins from aa
+n_Q : Q/300
+n_R : R/7459
+n_T : T/300
+n_M : M/300
+n_H : H/230
+;Conversion between cell mass and aa
+x2aa_umol    : 1/110*1e6
+x_in_aa_umol : x*x2aa_umol
+;Uptake per umol of x_in_aa_umol
+uptake       : v_uptake*n_T*S/(k_uptake + S)
+synp         : v_synp  *n_M*I/(k_synp   + I)
+;Translation aa/min in 1 umol of x
+rsat    : P/(P+k_synprot)
+synprot : v_synprot*n_R*rsat
+mu      : synprot
+;R regulation
+PR       : 1-rsat
+synG     : 60*n_R*PR/(k_PR + PR)
+regR     : k_fr**n_fr/(k_fr**n_fr + G**n_fr)
+regM     : k_fm**n_fm/(k_fm**n_fm + P**n_fm)
+tfR      : fr*regR
+tfT      : ft
+tfM      : fm*regM
+tfU      : fu
+tfH      : f_ind*ind/(ind + k_ind)
+synQ     : synprot*fq
+syn{i}   : synprot*(1-fq)*tf{i} /(tfR + tfT + tfM + tfU + tfH)
+	~i, R, T, M, U, H
+
+``rts
+S : -dil*S +dil*Sin -uptake*x_in_aa_umol
+x : -dil*x +x*mu 
+I : -mu*I -synp +uptake
+P : -mu*P -synprot +uptake*yield_S 
+Q : -mu*Q +synQ
+R : -mu*R +synR
+T : -mu*T +synT
+M : -mu*M +synM
+U : -mu*U +synU
+H : -mu*H +synH
+G : -mu*G +synG -2.1*G
+
+; ``events
+; e0: [t > 100, fr = 0.01]
+
+``exvs
+uptake:
+	return t, uptake
+
+regR:
+	return t, regR
+
+regM:
+	return t, regM
+
+rfrac: 
+	return t, R/(Q+R+M+H)
+
+synprot:
+	return t, synprot
+
+rsat:
+	return t, rsat
+
+PR:
+	return t, PR
+
+tfR:
+	return t, tfR
+
+tfM:
+	return t, tfM
+
+total_R:
+	return t, R
+
+
+``sim_args
+line_args : [
+	label : scenario,
+	color : [
+		0 : coral, 
+		1 : cobalt, 
+		2 : ocean,
+		3 : steel
+		]
+	]
+;base color for C0: cobalt, C1: ocean
+
+``tspan
+{scenario}: [linspace(0, 400, 41)]
+	~scenario, 0, 1, 2, 3
+

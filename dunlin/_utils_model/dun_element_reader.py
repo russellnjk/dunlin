@@ -170,7 +170,7 @@ def split_dun_element(element):
         update(chunk, curr)
     else:
         template = chunk
-        
+    
     return template, h_vals, v_vals
     
 def substitute_horizontal(template, h_vals):
@@ -178,7 +178,7 @@ def substitute_horizontal(template, h_vals):
     keys = h_vals.keys()
     vals = h_vals.values()
     vals = list(zip(*vals))
-
+    
     def repl(m):
         try:
             result = [m[1].format(**dict(zip(keys, v))) for v in vals]
@@ -209,21 +209,13 @@ def eval_sub(string):
     if string_[-1] == ',':
         string_ = string_[:-1]
         
-    lst    = string_.split(',')
+    lst    = dsr.read_dun(string_, expect=list, flat_reader=lambda x:x)
     result = []
     temp   = []
     for i in lst:
-        if 'range' in i:
-            arg = int(i.replace('range(', ''))
-            temp.append(arg)
-        elif temp:
-            if ')' in i:
-                arg     = int(i.replace(')', ''))
-                result += [str(s) for s in range(*temp, arg)]
-                temp    = []
-            else:
-                arg = int(i)
-                temp.append(arg)
+        if 'range' in i or 'linspace' in i:
+            temp = eval(i, locals={'linspace': np.linspace})
+            result += [str(x) for x in temp]     
         else:
             result.append(i.strip())
     return result
@@ -303,26 +295,12 @@ def parse_tspan(data):
 
 @element_type('dun', min_depth=1, max_depth=1)
 def parse_states(data):
-    try:
-        result = pd.DataFrame.from_dict(data, orient='columns')
-    except:
-        try:
-            result = pd.DataFrame.from_dict({0: data}, orient='columns')
-        except:
-            raise DunlinElementError.value('states')
-    return result
+    return data
 
 @element_type('dun', min_depth=1, max_depth=1)
 def parse_params(data):
-    try:
-        result = pd.DataFrame.from_dict(data, orient='columns')
-    except:
-        try:
-            result = pd.DataFrame.from_dict({0: data}, orient='index')
-        except:
-            raise DunlinElementError.value('states')
-    return result
-
+    return data
+    
 @element_type('dun', min_depth=1, max_depth=3)
 def parse_reactions(data):
     return data

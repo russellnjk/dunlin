@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy  as np
 import pandas as pd
+from numba import njit
 
 ###############################################################################
 #Non-Standard Imports
@@ -11,7 +12,6 @@ import dunlin._utils_model.dun_file_reader as dfr
 import dunlin._utils_model.ode_coder       as odc
 
 if __name__ == '__main__':
-    import dun_file_reader as dfr
 
     dun_data0 = dfr.read_file('dun_test_files/M20.dun')
     dun_data1 = dfr.read_file('dun_test_files/M21.dun')
@@ -124,6 +124,26 @@ if __name__ == '__main__':
     p  = pd.DataFrame(params).values[0]
     dy = test_func(t, y, p)
     assert all( dy == np.array([-0.5, -1,  0,  -1.5 , 2]) )
+    
+    #Generate code for sim
+    code      = odc.sim2code(template0, model_data0)[1]
+    test_func = code.replace('sim_M1', 'test_func')
+
+    exec(test_func)
+    t  = np.array([0, 1])
+    y  = np.ones((5, 2))
+    p  = pd.DataFrame(params).values[0]
+    r  = test_func(t, y, p)
+    
+    answer = {'x0'  : np.array([1., 1.]),     'x1'  : np.array([1., 1.]), 
+              'x2'  : np.array([1., 1.]),     'x3'  : np.array([1., 1.]), 
+              'x4'  : np.array([1., 1.]),     'sat2': np.array([0.5, 0.5]), 
+              'd_x0': np.array([-0.5, -0.5]), 'd_x1': np.array([-1., -1.]), 
+              'd_x2': np.array([0., 0.]),     'd_x3': np.array([-1.5, -1.5]), 
+              'd_x4': np.array([2., 2.]),     't'   : np.array([0, 1])
+              }
+    for k, v in answer.items():
+        assert np.all(v == r[k])
     
     #Generate code for exv    
     codes     = odc.exvs2code(template0, model_data0)
@@ -245,7 +265,7 @@ if __name__ == '__main__':
     modify  = model_data0['modify'] 
     
     #Generate rhs function
-    code, func = odc.rhs2func(template0, model_data0)
+    func = odc.rhs2func(template0, model_data0)
     t  = 0 
     y  = np.ones(5)
     p  = pd.DataFrame(params).values[0]
@@ -253,8 +273,8 @@ if __name__ == '__main__':
     assert all( dy == np.array([-0.5, -1,  0,  -1.5 , 2]) )
     
     #Generate exv functions
-    codes, funcs = odc.exvs2func(template0, model_data0)
-    code, func   = codes['r0'], funcs['r0']
+    funcs = odc.exvs2func(template0, model_data0)
+    func   = funcs['r0']
     
     t  = np.array([0, 1])
     y  = np.ones((5, 2))
@@ -263,7 +283,7 @@ if __name__ == '__main__':
     assert all(r == 0.5)
     
     #Generate event functions for one event
-    codes, funcs = odc.event2func('e0', template0, model_data0)
+    funcs = odc.event2func('e0', template0, model_data0)
     
     func = funcs['trigger']
 
@@ -283,7 +303,7 @@ if __name__ == '__main__':
     assert r[1][0]              == 0.5
     
     #Generate event functions for all events
-    codes, funcs = odc.events2func(template0, model_data0)
+    funcs = odc.events2func(template0, model_data0)
     
     func = funcs['e0']['trigger']
 
@@ -303,7 +323,7 @@ if __name__ == '__main__':
     assert r[1][0]              == 0.5
     
     #Generate modify 
-    code, func = odc.modify2func(template0, model_data0)
+    func = odc.modify2func(template0, model_data0)
     t  = 10
     y  = np.array([0, 1, 1, 1, 1])
     p  = pd.DataFrame(params).values[0]
@@ -318,7 +338,7 @@ if __name__ == '__main__':
     func_data = odc.make_ode_data(model_data0)
     
     #Generate rhs function
-    code, func = func_data['rhs']
+    func = func_data['rhs']
     t  = 0 
     y  = np.ones(5)
     p  = pd.DataFrame(params).values[0]
@@ -326,8 +346,8 @@ if __name__ == '__main__':
     assert all( dy == np.array([-0.5, -1,  0,  -1.5 , 2]) )
     
     #Generate exv functions
-    codes, funcs = func_data['exvs']
-    code, func   = codes['r0'], funcs['r0']
+    funcs = func_data['exvs']
+    func  = funcs['r0']
     
     t  = np.array([0, 1])
     y  = np.ones((5, 2))
@@ -336,7 +356,7 @@ if __name__ == '__main__':
     assert all(r == 0.5)
     
     #Generate event functions for all events
-    codes, funcs = func_data['events']
+    funcs = func_data['events']
     
     func = funcs['e0']['trigger']
 
@@ -356,7 +376,7 @@ if __name__ == '__main__':
     assert r[1][0]              == 0.5
     
     #Generate modify 
-    code, func = func_data['modify']
+    func = func_data['modify']
     t  = 10
     y  = np.array([0, 1, 1, 1, 1])
     p  = pd.DataFrame(params).values[0]

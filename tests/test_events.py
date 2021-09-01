@@ -100,7 +100,7 @@ if __name__ == '__main__':
     
     ###For saving###
     #df = pd.DataFrame(np.concatenate(([t], y), axis=0))
-    #df.to_csv('event_test_files/simulation_event_.csv', index=False)
+    #df.to_csv('event_test_files/simulate_event_.csv', index=False)
     ################
     
     #Case 1: Timer
@@ -112,7 +112,7 @@ if __name__ == '__main__':
     t, y = ivp.integrate(func, tspan, y0, p, events=events, overlap=True, include_events=True)
     
     plot(t, y, AX, 'Case 1: Timer')
-    df = pd.read_csv('event_test_files/simulation_event_1.csv')
+    df = pd.read_csv('event_test_files/simulate_event_1.csv')
     answer = df.values
     values = np.concatenate(([t], y), axis=0)
     assert np.all( np.isclose(answer, values, rtol=rtol))
@@ -125,7 +125,7 @@ if __name__ == '__main__':
     t, y = ivp.integrate(func, tspan, y0, p, events=events, overlap=True, include_events=True)
     
     plot(t, y, AX, 'Case 2: Event')
-    df = pd.read_csv('event_test_files/simulation_event_2.csv')
+    df = pd.read_csv('event_test_files/simulate_event_2.csv')
     answer = df.values
     values = np.concatenate(([t], y), axis=0)
     assert np.all( np.isclose(answer, values, rtol=rtol))
@@ -138,7 +138,7 @@ if __name__ == '__main__':
     t, y = ivp.integrate(func, tspan, y0, p, events=events, overlap=True, include_events=True)
     
     plot(t, y, AX, 'Case 3: Event with delay')
-    df = pd.read_csv('event_test_files/simulation_event_3.csv')
+    df = pd.read_csv('event_test_files/simulate_event_3.csv')
     answer = df.values
     values = np.concatenate(([t], y), axis=0)
     assert np.all( np.isclose(answer, values, rtol=rtol))
@@ -151,7 +151,7 @@ if __name__ == '__main__':
     t, y = ivp.integrate(func, tspan, y0, p, events=events)
     
     plot(t, y, AX, 'Case 4: Event with delay and not persistent')
-    df = pd.read_csv('event_test_files/simulation_event_4.csv')
+    df = pd.read_csv('event_test_files/simulate_event_4.csv')
     answer = df.values
     values = np.concatenate(([t], y), axis=0)
     assert np.all( np.isclose(answer, values, rtol=rtol))
@@ -165,7 +165,7 @@ if __name__ == '__main__':
     t, y = ivp.integrate(func, tspan, y0, p, events=events)
     
     plot(t, y, AX, 'Case 5: Trigger at start')
-    df = pd.read_csv('event_test_files/simulation_event_5.csv')
+    df = pd.read_csv('event_test_files/simulate_event_5.csv')
     answer = df.values
     values = np.concatenate(([t], y), axis=0)
     assert np.all( np.isclose(answer, values, rtol=rtol))
@@ -179,7 +179,7 @@ if __name__ == '__main__':
     t, y = ivp.integrate(func, tspan, y0, p, events=events)
     
     plot(t, y, AX, 'Case 6: Multiple events')
-    df = pd.read_csv('event_test_files/simulation_event_6.csv')
+    df = pd.read_csv('event_test_files/simulate_event_6.csv')
     answer = df.values
     values = np.concatenate(([t], y), axis=0)
     assert np.all( np.isclose(answer, values, rtol=rtol))
@@ -193,7 +193,7 @@ if __name__ == '__main__':
     t, y = ivp.integrate(func, tspan, y0, p, events=events, overlap=True, include_events=True)
     
     plot(t, y, AX, 'Case 7: Prioritized events')
-    df = pd.read_csv('event_test_files/simulation_event_7.csv')
+    df = pd.read_csv('event_test_files/simulate_event_7.csv')
     answer = df.values
     values = np.concatenate(([t], y), axis=0)
     assert np.all( np.isclose(answer, values, rtol=rtol))
@@ -216,7 +216,7 @@ if __name__ == '__main__':
     # t, y = ivp.integrate(func, tspan, y0, p, events=events, overlap=True, include_events=True)
     
     # plot(t, y, AX, 'Case 1a: Change in parameter')
-    # df = pd.read_csv('event_test_files/simulation_event_1a.csv')
+    # df = pd.read_csv('event_test_files/simulate_event_1a.csv')
     # answer = df.values
     # values = np.concatenate(([t], y), axis=0)
     # assert np.all( np.isclose(answer, values, rtol=rtol))
@@ -229,7 +229,7 @@ if __name__ == '__main__':
     # t, y = ivp.integrate(func, tspan, y0, p, events=events, overlap=True, include_events=True)
     
     # plot(t, y, AX, 'Case 2a: Assignment affects r ')
-    # df = pd.read_csv('event_test_files/simulation_event_2a.csv')
+    # df = pd.read_csv('event_test_files/simulate_event_2a.csv')
     # answer = df.values
     # values = np.concatenate(([t], y), axis=0)
     # assert np.all( np.isclose(answer, values, rtol=rtol))
@@ -240,7 +240,7 @@ if __name__ == '__main__':
     # t, y = ivp.integrate(func, tspan, y0, p, events=events, overlap=True, include_events=True)
     
     # plot(t, y, AX, 'Case 3: Test reset')
-    # df = pd.read_csv('event_test_files/simulation_event_2a.csv')
+    # df = pd.read_csv('event_test_files/simulate_event_2a.csv')
     # answer = df.values
     # values = np.concatenate(([t], y), axis=0)
     # assert np.all( np.isclose(answer, values, rtol=rtol))
@@ -264,7 +264,7 @@ if __name__ == '__main__':
     # t, y = ivp.integrate(func, tspan, y0, p, events=events, overlap=True, include_events=True, _sort=False)
     
     # plot(t, y, AX, 'Case 8: Unprioritized events')
-    # df = pd.read_csv('event_test_files/simulation_event_8.csv')
+    # df = pd.read_csv('event_test_files/simulate_event_8.csv')
     # answer = df.values
     # values = np.concatenate(([t], y), axis=0)
     # assert np.all( np.isclose(answer, values, rtol=rtol))
@@ -280,7 +280,7 @@ if __name__ == '__main__':
 
     # plot(t, y, AX, 'Case 9: Exclude events')
     # t_, y_ = t, y
-    # df = pd.read_csv('event_test_files/simulation_event_9.csv')
+    # df = pd.read_csv('event_test_files/simulate_event_9.csv')
     # answer = df.values
     # values = np.concatenate(([t], y), axis=0)
     # assert np.all( np.isclose(answer, values, rtol=rtol))
@@ -295,7 +295,7 @@ if __name__ == '__main__':
     # t, y = ivp.integrate(func, tspan, y0, p, events=events, overlap=False, include_events=False)
 
     # plot(t, y, AX, 'Case 10: Exclude events and overlap')
-    # df = pd.read_csv('event_test_files/simulation_event_10.csv')
+    # df = pd.read_csv('event_test_files/simulate_event_10.csv')
     # answer = df.values
     # values = np.concatenate(([t], y), axis=0)
     # assert np.all( np.isclose(answer, values, rtol=rtol))
@@ -309,7 +309,7 @@ if __name__ == '__main__':
     # t, y = ivp.integrate(func, tspan, y0, p, events=events, overlap=False, include_events=True)
     
     # plot(t, y, AX, 'Case 11: Exclude overlap')
-    # df = pd.read_csv('event_test_files/simulation_event_11.csv')
+    # df = pd.read_csv('event_test_files/simulate_event_11.csv')
     # answer = df.values
     # values = np.concatenate(([t], y), axis=0)
     # assert np.all( np.isclose(answer, values, rtol=rtol))
@@ -338,7 +338,7 @@ if __name__ == '__main__':
     t, y = ivp.integrate(func_, tspan, y0, p, events=events_, overlap=True, include_events=True)
     
     plot(t, y, AX, 'Case 21: Dynamically generated Timer')
-    df = pd.read_csv('event_test_files/simulation_event_1.csv')
+    df = pd.read_csv('event_test_files/simulate_event_1.csv')
     answer = df.values
     values = np.concatenate(([t], y), axis=0)
     assert np.all( np.isclose(answer, values, rtol=rtol))
@@ -350,7 +350,7 @@ if __name__ == '__main__':
     t, y = ivp.integrate(func_, tspan, y0, p, events=events_, overlap=True, include_events=True)
     
     plot(t, y, AX, 'Case 22: Dynamically generated Event')
-    df = pd.read_csv('event_test_files/simulation_event_2.csv')
+    df = pd.read_csv('event_test_files/simulate_event_2.csv')
     answer = df.values
     values = np.concatenate(([t], y), axis=0)
     assert np.all( np.isclose(answer, values, rtol=rtol))
@@ -362,7 +362,7 @@ if __name__ == '__main__':
     t, y = ivp.integrate(func_, tspan, y0, p, events=events_, overlap=True, include_events=True)
     
     plot(t, y, AX, 'Case 23: Dynamically generated Event with delay')
-    df = pd.read_csv('event_test_files/simulation_event_3.csv')
+    df = pd.read_csv('event_test_files/simulate_event_3.csv')
     answer = df.values
     values = np.concatenate(([t], y), axis=0)
     assert np.all( np.isclose(answer, values, rtol=rtol))
@@ -374,7 +374,7 @@ if __name__ == '__main__':
     t, y = ivp.integrate(func_, tspan, y0, p, events=events_, overlap=True, include_events=True)
     
     plot(t, y, AX, 'Case 24: Dynamically generated Event with delay and not persistent')
-    df = pd.read_csv('event_test_files/simulation_event_4.csv')
+    df = pd.read_csv('event_test_files/simulate_event_4.csv')
     answer = df.values
     values = np.concatenate(([t], y), axis=0)
     assert np.all( np.isclose(answer, values, rtol=rtol))
@@ -386,7 +386,7 @@ if __name__ == '__main__':
     t, y = ivp.integrate(func_, tspan, y0, p, events=events_, overlap=True, include_events=True)
     
     plot(t, y, AX, 'Case 25: Dynamically generated Event with trigger at start')
-    df = pd.read_csv('event_test_files/simulation_event_5.csv')
+    df = pd.read_csv('event_test_files/simulate_event_5.csv')
     answer = df.values
     values = np.concatenate(([t], y), axis=0)
     assert np.all( np.isclose(answer, values, rtol=rtol))
@@ -398,7 +398,7 @@ if __name__ == '__main__':
     t, y = ivp.integrate(func_, tspan, y0, p, events=events_, overlap=True, include_events=True)
     
     plot(t, y, AX, 'Case 26: Dynamically generated Event with multiple events')
-    df = pd.read_csv('event_test_files/simulation_event_6.csv')
+    df = pd.read_csv('event_test_files/simulate_event_6.csv')
     answer = df.values
     values = np.concatenate(([t], y), axis=0)
     assert np.all( np.isclose(answer, values, rtol=rtol))
@@ -410,7 +410,7 @@ if __name__ == '__main__':
     t, y = ivp.integrate(func_, tspan, y0, p, events=events_, overlap=True, include_events=True)
     
     plot(t, y, AX, 'Case 27: Dynamically generated Event with prioritized events')
-    df = pd.read_csv('event_test_files/simulation_event_7.csv')
+    df = pd.read_csv('event_test_files/simulate_event_7.csv')
     answer = df.values
     values = np.concatenate(([t], y), axis=0)
     assert np.all( np.isclose(answer, values, rtol=rtol))

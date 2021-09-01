@@ -18,7 +18,7 @@ if __name__ == '__main__':
     #Test with neat string
     raw_values = 'range(0, 4, 2), 5, 6, 7'
     new_values = der.eval_sub(raw_values)
-    
+  
     assert new_values == ['0', '2', '5', '6', '7']
     
     #Test with messy string

@@ -289,7 +289,7 @@ axes.edgecolor:     black   # axes edge color
 #axes.grid.axis:     both    # which axis the grid should apply to
 #axes.grid.which:    major   # gridlines at {major, minor, both} ticks
 #axes.titlelocation: center  # alignment of the title: {left, right, center}
-axes.titlesize:     18   # fontsize of the axes title
+axes.titlesize:     16   # fontsize of the axes title
 #axes.titleweight:   normal  # font weight of title
 axes.titlecolor:    white    # color of the axes title, auto falls back to
                              # text.color as default value
@@ -464,7 +464,7 @@ legend.loc:           upper right
 ## * FIGURE                                                                  *
 ## ***************************************************************************
 ## See https://matplotlib.org/api/figure_api.html#matplotlib.figure.Figure
-figure.titlesize:   large     # size of the figure title (``Figure.suptitle()``)
+figure.titlesize:   24     # size of the figure title (``Figure.suptitle()``)
 #figure.titleweight: normal    # weight of the figure title
 #figure.figsize:     6.4, 4.8  # figure size in inches
 #figure.dpi:         100       # figure dots per inch
