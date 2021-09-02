@@ -5,13 +5,17 @@ import textwrap as tw
 ###############################################################################
 #Non-Standard Imports
 ###############################################################################
-# import dunlin.model              as dml
 import dunlin._strike_goldd_algo as sga
 
 ###############################################################################
 #Wrapper for Algorithm
 ###############################################################################
-
+def run_strike_goldd(model, **kwargs):
+    s, r, template = convert2symbolic(model, **kwargs)
+    sgresult       = sga.strike_goldd(**r)
+    sgresult_      = {str(k): v for k, v in sgresult.items()}
+    return {**template, **sgresult_}
+    
 ###############################################################################
 #Symbolic Generator
 ###############################################################################
@@ -23,10 +27,40 @@ def convert2symbolic(model, **kwargs):
     symbolic = dict(zip(pstr+xstr, [*p, *x]))
     
     #Collate arguments
-    model_ics = model.states.iloc[0].to_dict()
+    model_ics = {'init': model.states.iloc[0].to_dict()}
     kwargs_   = getattr(model, 'strike_goldd_args', {})
     kwargs_   = {**model_ics, **kwargs_, **kwargs}
-
+    
+    #Checks
+    if not kwargs_.get('unknown'):
+        raise ValueError('No unknown parameters listed.')
+    if any([param not in pstr for param in kwargs_['unknown']]):
+        raise ValueError('Unexpected parameter in list of unknown parameters.')
+    if not kwargs_.get('observed'):
+        raise ValueError('No observed states listed.')
+    if any([state not in xstr for state in kwargs_['observed']]):
+        raise ValueError('Unexpected parameter in list of unknown parameters.')
+        
+    #Create the template
+    #Assumes symbolic contains only param and state names
+    template  = {}
+    nominal   = model.params.iloc[0].to_dict()
+    unknown_p = []
+    to_sub    = {}
+    
+    for k, v in symbolic.items():
+        if k in xstr:
+            if k in kwargs_['observed']:
+                template[k] = True
+            
+        else:
+            if k not in kwargs_['unknown']:
+                template[k] = True
+                to_sub[v]   = nominal[k]
+            else:
+                unknown_p.append(v)
+    
+    #Overhead for argument extraction
     def test_h(h):
         if len(h) and all([i in x for i in h]):
             return True
@@ -59,23 +93,13 @@ def convert2symbolic(model, **kwargs):
     f = Matrix([symbolic[f'd_{i}'] for i in x])
     
     #Substitute known params
-    nominal   = model.params.iloc[0].to_dict()
-    unknown_p = []
-    to_sub    = {}
-    
-    for param in p:
-        if param in kwargs_['unknown']:
-            unknown_p.append(param)
-        else:
-            to_sub[param] = nominal[str(param)]
-            
     unknown_p = Matrix(unknown_p)
     f_sub     = f.subs(to_sub)
     
-    #Create the dictionary
-    result = {'h': Matrix(h), 'x': Matrix(x), 'p': unknown_p, 'f': f_sub, 'u': u, 'ics': ics, 'decomp' : decomp}
+    #Create the dictionaries
+    result   = {'h': Matrix(h), 'x': Matrix(x), 'p': unknown_p, 'f': f_sub, 'u': u, 'ics': ics, 'decomp' : decomp}
 
-    return symbolic, result
+    return symbolic, result, template
     
 def _get_args(arg, kwargs, symbolic, test):
     arg_ = kwargs.get(arg, {})

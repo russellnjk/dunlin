@@ -4,10 +4,10 @@ x0 : [0, 100]
 x1 : [0, 100]
 
 ``params
-p0 : [0.1]
-p1 : [0.1]
-u0 : [1  ]
-u1 : [9  ]
+p0 : [0.1, 0.1]
+p1 : [0.1, 0.1]
+u0 : [1  ,   1]
+u1 : [9  ,   9]
 
 ``rxns
 g0 : [   > x0, u0   ]
@@ -47,17 +47,17 @@ free_params : [
 	u1: [bounds: [0, 10], prior : [uniform, 0, 10]] 
 	]
 settings : [
-	maxiter       : 100
-	strategy      : best1bin
-	popsize       : 5
-	tol           : 0.01
-	mutation      : [0.5, 1]
-	recombination : 0.7
-	disp          : False
-	polish        : True
-	init          : latinhypercube
-	atol          : 0
-	updating      : immediate
+	maxiter       : 100,
+	strategy      : best1bin,
+	popsize       : 5,
+	tol           : 0.01,
+	mutation      : [0.5, 1],
+	recombination : 0.7,
+	disp          : False,
+	polish        : True,
+	init          : latinhypercube,
+	atol          : 0,
+	updating      : immediate,
 	workers       : 1
 	]
 line_args : [marker: [0: [u0: +,  u1: o, (u0, u1): o]], color: [ 0: [u0: steel,  u1: coral, (u0, u1): cyan]]]

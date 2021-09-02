@@ -337,6 +337,10 @@ def parse_sim_args(data):
 def parse_optim_args(data):        
     return data
 
+@element_type('dun')
+def parse_strike_goldd_args(data):
+    return data
+
 ###############################################################################
 #PY Type Parsers
 ###############################################################################
@@ -352,26 +356,28 @@ def parse_modify(data):
 #Index of Parsers
 ###############################################################################
 #subsection name: [function, argument name for instantiating model]
-parsers = {'tspan'        : [parse_tspan,        'tspan'    ],
-           'states'       : [parse_states,       'states'   ],
-           'params'       : [parse_params,       'params'   ],
-           'rxns'         : [parse_reactions,    'rxns'     ],
-           'reactions'    : [parse_reactions,    'rxns'     ],
-           'rts'          : [parse_rates,        'rts'      ],
-           'rates'        : [parse_rates,        'rts'      ],
-           'vrbs'         : [parse_variables,    'vrbs'     ],
-           'variables'    : [parse_variables,    'vrbs'     ],
-           'funcs'        : [parse_functions,    'funcs'    ],
-           'functions'    : [parse_functions,    'funcs'    ],
-           'evs'          : [parse_events,       'events'   ],
-           'events'       : [parse_events,       'events'   ],
-           'comps'        : [parse_compartments, 'comps'    ],
-           'compartments' : [parse_compartments, 'comps'    ],
-           'exvs'         : [parse_exvs,         'exvs'     ],
-           'modify'       : [parse_modify,       'modify'   ],
-           'int_args'     : [parse_int_args,     'int_args' ],
-           'sim_args'     : [parse_sim_args,     'sim_args' ],
-           'optim_args'   : [parse_optim_args,   'optim_args']
+parsers = {'tspan'             : [parse_tspan,             'tspan'            ],
+           'states'            : [parse_states,            'states'           ],
+           'params'            : [parse_params,            'params'           ],
+           'rxns'              : [parse_reactions,         'rxns'             ],
+           'reactions'         : [parse_reactions,         'rxns'             ],
+           'rts'               : [parse_rates,             'rts'              ],
+           'rates'             : [parse_rates,             'rts'              ],
+           'vrbs'              : [parse_variables,         'vrbs'             ],
+           'variables'         : [parse_variables,         'vrbs'             ],
+           'funcs'             : [parse_functions,         'funcs'            ],
+           'functions'         : [parse_functions,         'funcs'            ],
+           'evs'               : [parse_events,            'events'           ],
+           'events'            : [parse_events,            'events'           ],
+           'comps'             : [parse_compartments,      'comps'            ],
+           'compartments'      : [parse_compartments,      'comps'            ],
+           'exvs'              : [parse_exvs,              'exvs'             ],
+           'modify'            : [parse_modify,            'modify'           ],
+           'int_args'          : [parse_int_args,          'int_args'         ],
+           'sim_args'          : [parse_sim_args,          'sim_args'         ],
+           'optim_args'        : [parse_optim_args,        'optim_args'       ],
+           'strike_goldd_args' : [parse_strike_goldd_args, 'strike_goldd_args'],
+           'sg_args'           : [parse_strike_goldd_args, 'strike_goldd_args']
            }    
 
 

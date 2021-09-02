@@ -463,9 +463,6 @@ def plot_traces(opt_results, AX, palette=None, **line_args):
             ax         = upp.recursive_get(ax_, run, var) 
             line_args_ = {**opt_result.line_args, **line_args}
             line_args_ = {k: upp.recursive_get(v, run, var) for k, v in line_args_.items()}
-            scale      = opt_result.free_params[var]['scale']
-            scale      = scale_types[scale]
-            ax.set_yscale(scale)
             
             #Process special keywords
             color = line_args_.get('color')
@@ -491,11 +488,26 @@ def plot_traces(opt_results, AX, palette=None, **line_args):
                     line_args_['linestyle'] = 'None'
                 
                 if type(var) == tuple:
+                    #Axis scale
+                    scale = opt_result.free_params[var[0]].get('scale', 'lin')
+                    scale = scale_types[scale]
+                    ax.set_xscale(scale)
+                    scale = opt_result.free_params[var[1]].get('scale', 'lin')
+                    scale = scale_types[scale]
+                    ax.set_yscale(scale)
+                    
+                    #Plot
                     x_vals, y_vals = opt_result[var[0]].values, opt_result[var[1]].values
                     ax.plot(x_vals, y_vals, **line_args_)
                     ax.set_xlabel(var[0])
                     ax.set_ylabel(var[0])
                 else:
+                    #Axis scale
+                    scale = opt_result.free_params[var].get('scale', 'lin')
+                    scale = scale_types[scale]
+                    ax.set_yscale(scale)
+                    
+                    #Plot
                     y_vals = opt_result[var].values
                     ax.plot(y_vals, **line_args_)
                     ax.set_ylabel(var)

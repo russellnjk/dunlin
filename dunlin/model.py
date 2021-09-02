@@ -78,11 +78,16 @@ class Model():
     _sub   = {}
     
     #Attribute management
-    _locked  = ['model_key', 'rxns', 'vrbs', 'funcs']
+    _kw      = ['int_args', 'sim_args', 'optim_args', 'strike_goldd_args']
+    _checkkw = True
+    _locked  = ['model_key', 'rxns', 'vrbs', 'funcs', 'rts']
     _df      = ['states', 'params']
-    _default = {'int_args': {'method'  : 'LSODA'}
+    _default = {'int_args'          : {'method'  : 'LSODA'},
+                'sim_args'          : {},
+                'optim_args'        : {},
+                'strike_goldd_args' : {}
                 }
-    _tspan   = np.linspace(0, 100, 11)
+    _tspan   = np.linspace(0, 1000, 21)
     
     ###############################################################################
     #Hierarchy Tracking
@@ -153,6 +158,9 @@ class Model():
         super().__setattr__('tspan',     tspan    )
                 
         for k, v in {**self._default, **kwargs}.items():
+            if k not in self._kw and self._checkkw:
+                msg = f'Attempted to instantiate Model with invalid attribute: {k}'
+                raise DunlinModelError.invalid_attr(msg)
             super().__setattr__(k, v)
         
         #Create functions
