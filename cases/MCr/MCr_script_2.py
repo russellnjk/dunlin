@@ -255,9 +255,10 @@ def plot(g1, g1s, time, ax, xstate, ystate, interval=None, title='', **kw):
     
     
 if __name__ == '__main__':
-    dates = ['210715', '210719', '210721', '210824']#, '210804']
-    # dates = ['210817']
-    # dates = ['210819', '210820']
+    dates = ['210715', '210719', '210721', '210820', '210824', '210825']#, '210804']
+    dates = ['210820', '210824']
+    dates = ['210821']
+    dates = ['210817', '210820', '210824']
     dfs   = {}
     AXs   = {}
     
@@ -267,7 +268,7 @@ if __name__ == '__main__':
         df, AX = visualize(date, skip_scenario=skip_scenario, header=[0, 1, 2, 3])#Call here
         dfs[date] = df
         AXs[date] = AX
-        plt.close(plt.gcf())
+        # plt.close(plt.gcf())
     
     
     #Other analysis
@@ -275,29 +276,29 @@ if __name__ == '__main__':
     mean     = combined.groupby(axis=0, level=1).mean()
     sd       = combined.groupby(axis=0, level=1).std().fillna(0)
     
-    cdf, cAX = visualize(mean, sd=sd, thin=False)
-    # cAX[1].legend(ncol=2)
+    # cdf, cAX = visualize(mean, sd=sd, thin=False)
     
-    ###############################################
-    dates = ['210819', '210820', '210824', '210825']#CHS and Nar
-    dfs   = {}
-    AXs   = {}
     
-    skip_scenario = ['Nar2, M9+CA', 'C+Ind, M9', 'Ind, M9', 'C+Ind, M9+CA', 'Ind, M9+CA']#['Col 3', 'Col 4', 'Col 5', 'Col 10']
+    # ###############################################
+    # dates = ['210819', '210820', '210824', '210825']#CHS and Nar
+    # dfs   = {}
+    # AXs   = {}
     
-    #Apply the data analysis here
-    for date in dates:
-        df, AX = visualize(date, skip_scenario=skip_scenario, header=[0, 1, 2, 3])#Call here
-        dfs[date] = df
-        AXs[date] = AX
-        plt.close(plt.gcf())
+    # skip_scenario = ['Nar2, M9+CA', 'C+Ind, M9', 'Ind, M9', 'C+Ind, M9+CA', 'Ind, M9+CA']#['Col 3', 'Col 4', 'Col 5', 'Col 10']
+    
+    # #Apply the data analysis here
+    # for date in dates:
+    #     df, AX = visualize(date, skip_scenario=skip_scenario, header=[0, 1, 2, 3])#Call here
+    #     dfs[date] = df
+    #     AXs[date] = AX
+    #     plt.close(plt.gcf())
 
-    #Other analysis
-    combined = pd.concat(dfs, axis=0)
-    mean     = combined.groupby(axis=0, level=1).mean()
-    sd       = combined.groupby(axis=0, level=1).std().fillna(0)
+    # #Other analysis
+    # combined = pd.concat(dfs, axis=0)
+    # mean     = combined.groupby(axis=0, level=1).mean()
+    # sd       = combined.groupby(axis=0, level=1).std().fillna(0)
     
-    cdf, cAX = visualize(mean, sd=sd, thin=False)
-    # cAX[1].legend(ncol=2)
+    # cdf, cAX = visualize(mean, sd=sd, thin=False)
+    # # cAX[1].legend(ncol=2)
     
    

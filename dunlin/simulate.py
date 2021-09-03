@@ -35,14 +35,10 @@ def integrate_model(model, overlap=True, include_events=True, _params=None, _exv
     params      = model.params if _params is None else _params
     tspan       = {} if _tspan is None else _tspan
     
-    
-    if params.index.nlevels > 2:
-        raise ValueError('The index of the params argument has too many levels.')
-    
-    elif params.index.nlevels == 2:
+    if params.index.nlevels > 1:
         #Avoid using this for now
-        to_iter = params.index.levels[0]
-        return {e: integrate_model(model, overlap, include_events, params.loc[e], _exv_names, _tspan) for e in to_iter}
+        to_iter = params.groupby(axis=0, level=0)
+        return {i: integrate_model(model, overlap, include_events, g.droplevel(level=0), _exv_names, _tspan) for i, g in to_iter}
             
     sim_results = {}
     params      = sort_param_index(params, states)
