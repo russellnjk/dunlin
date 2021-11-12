@@ -10,7 +10,6 @@ import pandas         as pd
 ###############################################################################
 #Non-Standard Imports
 ###############################################################################
-from  .base_error import DunlinBaseError
 from  .funcs      import code2func
 '''
 Top Level function is make_ode_data
@@ -25,16 +24,18 @@ _args = 't', 'states', 'params'
 ###############################################################################
 #High-Level Protocols
 ###############################################################################
-def make_ode_data(model_data):
+def make_ode_data(model_data, numba=True):
     template  = make_template(model_data)
     func_data = {}
     
-    func_data['rhs'   ] = rhs2func(template, model_data)
+    func_data['rhs'   ] = rhs2func(template, model_data, numba=numba)
     func_data['sim'   ] = sim2func(template, model_data)
-    func_data['exvs'  ] = exvs2func(template, model_data)   if model_data.get('exvs'  ) else {} 
+    func_data['exvs'  ] = exvs2func(template, model_data) 
     func_data['events'] = events2func(template, model_data) if model_data.get('events') else []
     func_data['modify'] = modify2func(template, model_data) if model_data.get('modify') else None
     func_data['eqns']   = template
+    func_data['exvrhs'] = exvrhs2func(model_data, func_data['rhs'].code)
+    
     return func_data
     
 ###############################################################################
@@ -42,6 +43,10 @@ def make_ode_data(model_data):
 ###############################################################################
 def rhs2func(*args, **kwargs):
     temp = rhs2code(*args, **kwargs)
+    return code2func(temp)
+
+def exvrhs2func(model_data, rhscode):
+    temp = rhs2exvrhs(model_data, rhscode)
     return code2func(temp)
 
 def sim2func(*args, **kwargs):
@@ -75,13 +80,22 @@ def rhs2code(template, model_data, numba=True):
     model_key  = model_data['model_key']
     states     = model_data['states']
     return_val = ', '.join([f'd_{x}' for x in states])
-    return_val = f'\treturn np.array([{return_val}])'
+    return_val = f'\treturn np.array(({return_val}))'
+    
     func_name  = 'model_' + model_key
     sections   = [make_def(func_name, *_args, numba=numba), 
                   template,
                   return_val
                   ]
     code       = '\n'.join(sections)
+    
+    return func_name, code
+
+def rhs2exvrhs(model_data, rhscode):
+    model_key  = model_data['model_key']
+    func_name  = 'modelexv_' + model_key
+    code       = rhscode.replace('\treturn np.array', '\treturn np.stack')
+    code       = code.replace('model_', 'modelexv_')
     
     return func_name, code
 
@@ -120,11 +134,18 @@ def sim2code(template, model_data, numba=True):
 
 def exvs2code(template, model_data):
     global _args
-    
     model_key = model_data['model_key']
     exvs      = model_data['exvs'     ]
     sections  = [None, template, '\t#EXV', None]
     codes     = {}
+
+    #Create default exv func
+    vrbs     = list(model_data['vrbs']) if model_data.get('vrbs') else []
+    rxns     = list(model_data['rxns']) if model_data.get('rxns') else []
+    diffs    = [f'd_{x}' for x in model_data['states']]
+    combined = vrbs + rxns + diffs
+    exv_code = '\treturn {' + ', '.join([f'{repr(i)}: {i}' for i in combined]) + '}'
+    exvs     = {**{'all__': exv_code}, **exvs} if exvs else {'all__': exv_code}
     
     for exv_name, exv_code in exvs.items():
         if '@numba' in exv_code:
@@ -139,7 +160,7 @@ def exvs2code(template, model_data):
         sections[0]  = make_def(func_name, *_args, numba=numba)
         sections[-1] = exv_code_
         code         = '\n'.join(sections)
-        
+        code         = code.replace('model_', 'modelexv_')
         codes[exv_name] = func_name, code
     
     return codes
@@ -517,16 +538,16 @@ def isnum(x):
 ###############################################################################
 #Dunlin Exceptions
 ###############################################################################
-class DunlinCodeGenerationError(DunlinBaseError):
+class DunlinCodeGenerationError(Exception):
     @classmethod
     def invalid(cls, item, description=''):
-        return cls.raise_template(f'Invalid {item} definition. {description}', 0)
+        return cls(f'Invalid {item} definition. {description}')
     
     @classmethod
     def stoichiometry(cls, rxn):
-        return cls.raise_template(f'Negative stoichiometry in the reaction: {rxn}', 1)
+        return cls(f'Negative stoichiometry in the reaction: {rxn}')
     
     @classmethod
     def no_numba(cls, msg=''):
-        return cls.raise_template('Invalid use of numba.', 2)
+        return cls('Invalid use of numba.')
     

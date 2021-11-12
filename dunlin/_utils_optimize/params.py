@@ -4,11 +4,6 @@ from numba               import njit
 from scipy.stats         import norm, laplace, lognorm, loglaplace, uniform
 
 ###############################################################################
-#Non-Standard Imports
-###############################################################################
-import dunlin._utils_model.base_error as dbe
-
-###############################################################################
 #Classes for Parameters
 ###############################################################################
 class SampledParam():
@@ -154,32 +149,36 @@ class Bounds():
 ###############################################################################
 #Dunlin Errors
 ###############################################################################
-class DunlinOptimizationError(dbe.DunlinBaseError):    
+class DunlinOptimizationError(Exception):
+    @classmethod
+    def raise_template(cls, msg):
+        return cls(msg)
+    
     @classmethod
     def prior_type(cls, arg, value, correct):
-        return cls.raise_template(f'Invalid {arg}: {value}\nValue must be in {correct} ', 0)
+        return cls.raise_template(f'Invalid {arg}: {value}\nValue must be in {correct} ')
     
     @classmethod
     def prior_format(cls, arg, value, correct):
-        return cls.raise_template(f'Invalid {arg} format: {value}\nValue must be {correct} ', 1)
+        return cls.raise_template(f'Invalid {arg} format: {value}\nValue must be {correct} ')
     
     @classmethod
     def invalid_bounds(cls, name, bounds):
-        return cls.raise_template(f'Invalid bounds given for {name}: {bounds}', 2)
+        return cls.raise_template(f'Invalid bounds given for {name}: {bounds}')
     
     @classmethod
     def no_opt_result(cls):
-        return cls.raise_template('No optimization yet. Make sure you have run one of the optimization algorithms.', 10)
+        return cls.raise_template('No optimization yet. Make sure you have run one of the optimization algorithms.')
     
     @classmethod
     def nominal(cls):
-        return cls.raise_template('When instantiating an OptResult object, make sure the nominal is a DataFrame of dict that can be converted into a DataFrame.', 10)
+        return cls.raise_template('When instantiating an OptResult object, make sure the nominal is a DataFrame of dict that can be converted into a DataFrame.')
     
     @classmethod
     def no_algo(cls, algo):
-        return cls.raise_template(f'No algorithm called "{algo}".', 12)
+        return cls.raise_template(f'No algorithm called "{algo}".')
     
     @classmethod
     def no_optim_args(cls, model_key):
-        return cls.raise_template(f'The optim_args attribute for Model{model_key} has not been set.', 13)
+        return cls.raise_template(f'The optim_args attribute for Model{model_key} has not been set.')
     

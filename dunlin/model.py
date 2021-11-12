@@ -4,90 +4,46 @@ import pandas as pd
 ###############################################################################
 #Non-Standard Imports
 ###############################################################################
-import dunlin._utils_model.ode_coder       as odc
-import dunlin._utils_model.events          as uev
-import dunlin._utils_model.base_error      as dbe
-import dunlin._utils_model.dun_file_reader as dfr
-import dunlin._utils_model.ivp             as ivp
+import dunlin._utils_model.ode_classes as umo
+import dunlin.standardfile           as stf
 
 ###############################################################################
 #Main Instantiation Algorithm
 ###############################################################################
-def read_file(filename, _check_sub=True, _parse=True):
-    if _parse:
-        dun_data   = dfr.read_file(filename, _parse=_parse)
-        models     = make_models(dun_data, _check_sub=_check_sub)
-        
-        return dun_data, models
-    else:
-        return dun_data
+def read_file(*filenames, **kwargs):
+    
+    dun_data   = stf.read_file(*filenames)
+    models     = make_models(dun_data, **kwargs)
+    
+    return dun_data, models
 
 def make_models(dun_data, _check_sub=True):
-    models     = {}
-    for model_key, model_data in dun_data.items():
-        model             = Model(**model_data, _check_sub=False)
-        models[model_key] = model
+    models = {section['model_key'] : Model(**section) for section in dun_data if 'model_key' in section}
     
     if _check_sub:
-            for model_key in models:
-                Model._check_sub(model_key)
+            [model._check_sub(model.model_key) for model in models.values()]
     return models
 
 ###############################################################################
-#Dunlin Exceptions
-###############################################################################
-class DunlinModelError(dbe.DunlinBaseError):
-    @classmethod
-    def locked(cls, attr):
-        msg = "Model object's {} attribute is locked. Instantiate a new object if you wish to change it.".format(attr)
-        return cls.raise_template(msg, 0)
-    
-    @classmethod
-    def mismatch(cls, attr, expected, received):
-        msg = f'Expected keys/columns in {attr}: {expected}\nReceived: {received}'
-        return cls.raise_template(msg, 1)
-    
-    @classmethod
-    def invalid_attr(cls, msg):
-        return cls.raise_template(msg, 2)
-    
-    @classmethod
-    def submodel_missing(cls, model_key, submodel_key):
-        return cls.raise_template(f'{model_key} calls {submodel_key} but the submodel is missing.', 10)
-                     
-    @classmethod
-    def submodel_len(cls, model_key, submodel_key, arg):
-        return cls.raise_template(f'{model_key} calls {submodel_key} but the {arg} argument is of the wrong length.', 11)
-    
-    @classmethod
-    def submodel_recursion(cls, *chain):
-        chain_ = ' -> '.join([str(c) for c in chain])
-        return cls.raise_template('Recursive model hierarchy: ' + chain_, 12)
-    
-    @classmethod
-    def state_param_mismatch(cls, param_index, state_index):
-        msg = f'Param and state indices do not match.\nParam indices: {param_index}\nState indices: {state_index}'
-        return cls.raise_template(msg)
-        
-###############################################################################
-#Dunlin Models
+#Dunlin Model
 ###############################################################################        
-class Model():
+class Model:
+    '''
+    This is the front-end class for representing a model.
+    '''
     #Hierarchy management
     _cache = {}
     _sub   = {}
     
     #Attribute management
-    _kw      = ['int_args', 'sim_args', 'optim_args', 'strike_goldd_args']
     _checkkw = True
     _locked  = ['model_key', 'rxns', 'vrbs', 'funcs', 'rts']
     _df      = ['states', 'params']
-    _default = {'int_args'          : {'method'  : 'LSODA'},
+    _kw      = {'int_args'          : {'method'  : 'LSODA'},
                 'sim_args'          : {},
                 'optim_args'        : {},
-                'strike_goldd_args' : {}
+                'strike_goldd_args' : {},
                 }
-    _tspan   = np.linspace(0, 1000, 21)
     
     ###############################################################################
     #Hierarchy Tracking
@@ -116,125 +72,186 @@ class Model():
     @classmethod
     def _check_sub(cls, model_key, _super=()):
         if model_key in _super:
-            raise DunlinModelError.submodel_recursion(*_super, model_key)
+            raise SubmodelRecursionError(*_super, model_key)
             
         subs = cls._sub[model_key]
         
         for (sub, y_args, p_args) in subs:
             #Check if submodel exists
             if sub not in cls._cache:
-                raise DunlinModelError.submodel_missing(model_key, sub)
+                raise MissingSubmodelError(model_key, sub)
             
             #Check number of substates and subparams
-            if len(cls._cache[sub]._states) != y_args:
-                raise DunlinModelError.submodel_len(model_key, sub, 'states(y)')
-            elif len(cls._cache[sub]._params) != p_args:
-                raise DunlinModelError.submodel_len(model_key, sub, 'params(p)')
+            if len(cls._cache[sub].get_state_names()) != y_args:
+                raise SubmodelLenError(model_key, sub, 'states(y)')
+            elif len(cls._cache[sub].get_param_names()) != p_args:
+                raise SubmodelLenError(model_key, sub, 'params(p)')
             
             cls._check_sub(sub, _super=_super+(model_key,))
     
     ###############################################################################
     #Instantiation
     ###############################################################################  
-    def __init__(self, model_key, states, params, rxns=None, vrbs=None, funcs=None, rts=None, exvs=None, modify=None, events=None, tspan=dict(), _check_sub=True, **kwargs):
-        #Set the locked and constrained attributes
-        self._states     = tuple(states.keys()) 
-        self._params     = tuple(params.keys())
-        self._states_set = set(states.keys()) 
-        self._params_set = set(params.keys())
+    def __init__(self,      model_key,   states,       params, 
+                 rxns=None, vrbs=None,   funcs=None,   rts=None, 
+                 exvs=None, events=None, tspan=None,
+                 **kwargs
+                 ):
         
-        self.states = states
-        self.params = params
+        #Set the locked attributes using the super method
+        tspan_ = {} if tspan is None else {}
         
-        #Set the remaining attributes
         super().__setattr__('model_key', model_key)
+        super().__setattr__('_states_tuple', tuple(states.keys()))
+        super().__setattr__('_params_tuple', tuple(params.keys()))
         super().__setattr__('rxns',      rxns     )
         super().__setattr__('vrbs',      vrbs     )
         super().__setattr__('funcs',     funcs    )
         super().__setattr__('rts',       rts      )
         super().__setattr__('exvs',      exvs     )
-        super().__setattr__('modify',    modify   )
         super().__setattr__('events',    events   )
-        super().__setattr__('tspan',     tspan    )
-                
-        for k, v in {**self._default, **kwargs}.items():
+        super().__setattr__('tspan',     tspan_   )
+        
+        #Set property based attributes
+        self.states      = states
+        self.params      = params
+        
+        #Set analysis settings
+        for k, v in {**self._kw, **kwargs}.items():
             if k not in self._kw and self._checkkw:
                 msg = f'Attempted to instantiate Model with invalid attribute: {k}'
-                raise DunlinModelError.invalid_attr(msg)
+                raise AttributeError(msg)
             super().__setattr__(k, v)
         
-        #Create functions
-        #In the future, extend functionality by using model_type
-        model_data = self.to_dict()
-        func_data  = odc.make_ode_data(model_data)
-        event_objs = uev.make_events(func_data, model_data)
+        #Check types
+        if any([type(x) != str for x in self._states_tuple]):
+            raise NameError('States can only have strings as names.')
+        if any([type(x) != str for x in self._params_tuple]):
+            raise NameError('Params can only have strings as names.')
         
-        self._rhs    = func_data['rhs']
-        self._sim    = func_data['sim']
-        self._exvs   = func_data['exvs']
-        self._events = event_objs
-        self._modify = func_data['modify']
-        self._eqns   = func_data['eqns']
+        #Prepare dict to create functions
+        model_data = self.to_dict()
+        
+        #Create functions
+        super().__setattr__('ode', umo.ODEModel(**model_data))
+        
+        #Set mode
+        self._mode = 'ode'
         
         #Track model and submodels 
         self._sub[model_key]   = self._find_submodels(model_data)
         self._cache[model_key] = self 
         
-        if _check_sub:
-            self._check_sub(model_key)
-    
-    def copy(self):
+    def new(self, **kwargs):
         args = self.to_dict()
+        args = {**args, **kwargs} 
         return type(self)(**args)
     
     ###############################################################################
     #Attribute Management
     ###############################################################################
+    def _df2dict(self, attr, value):
+        if type(value) in [dict, pd.DataFrame]:
+            df = pd.DataFrame(value)
+        elif type(value) == pd.Series:
+            df = pd.DataFrame(value).T
+        else:
+            raise TypeError(f"Model object's '{attr} attribute can be assigned using dict, DataFrame or Series.")
+        
+        #Check values
+        if df.isnull().values.any():
+            raise ValueError('Missing or NaN values.')
+        
+        #Extract values
+        keys = list(getattr(self, '_' + attr + '_tuple'))
+        try:
+            df = df[keys]
+        except KeyError:
+            raise ModelMismatchError(keys, df.keys())
+        
+        #Save as dict
+        return dict(zip(df.index, df.values))
+    
+    def _dict2df(self, attr):
+        dct = getattr(self, '_'+attr)
+        # df  = pd.DataFrame(dct).from_dict(dct, 'index')
+        df  = pd.DataFrame(dct).T
+        
+        df.columns = getattr(self, '_'+attr+'_tuple')
+        return df
+    
+    @property
+    def states(self):
+        return self._dict2df('states')
+    
+    @states.setter
+    def states(self, df):
+        self._states = self._df2dict('states', df)
+    
+    @property
+    def params(self):
+        return self._dict2df('params')
+    
+    @params.setter
+    def params(self, df):
+        self._params = self._df2dict('params', df)
+    
+    @property
+    def state_names(self):
+        return self._states_tuple
+    
+    @state_names.setter
+    def state_names(self):
+        return AttributeError('State names are locked.')
+    
+    @property
+    def param_names(self):
+        return self._params_tuple
+    
+    @param_names.setter
+    def param_names(self):
+        return AttributeError('Parameter names are locked.')
+    
+    @property
+    def mode(self):
+        return self._mode
+
+    @mode.setter
+    def mode(self, value):
+        if value in ['ode']:
+            self._mode = value
+        else:
+            raise ValueError(f'Invalid mode: {value}')
+        
     def __setattr__(self, attr, value):
         if attr in self._locked:
-            raise DunlinModelError.locked(attr)
-        
-        elif attr in self._df:
-            _keys = getattr(self, '_' + attr)
-            _set  = getattr(self, '_' + attr + '_set')
-            try:
-                keys = value.keys()
-            except:
-                raise TypeError('Not a dict/DataFrame.')
-            
-            if len(_set.intersection(keys)) != len(_set):
-                raise DunlinModelError.mismatch(attr, list(_keys), list(keys))
-            
-            data = {k: value[k] for k in _keys}
-            try:
-                result = pd.DataFrame.from_dict(data, orient='columns')
-            except:
-                try:
-                    result = pd.DataFrame.from_dict({0: data}, orient='index')
-                except:
-                    raise DunlinModelError.value('states')
-            super().__setattr__(attr, result)        
+            raise AttributeError(f'{attr} attribute is locked.')
         else:
             super().__setattr__(attr, value)
     
+    def get_param_names(self):
+        return self._params_tuple
+    
+    def get_state_names(self):
+        return self._states_tuple
+    
     ###############################################################################
-    #Dict Duck Typing
+    #Dict-like Behaviour
     ###############################################################################
     def to_dict(self):
-        result = {k: v for k, v in self.__dict__.items() if k[0] != '_' }
+        result           = {k: v for k, v in self.__dict__.items() if k[0] != '_' }
+        result['states'] = self.states
+        result['params'] = self.params
         return result
-    
-    def __getitem__(self, key):
-        return self.__dict__[key]
-    
-    def __setitem__(self, key, value):
-        return self.__setattr__(key, value)
     
     def keys(self):
         return self.to_dict().keys()
     
     def values(self):
-        return self._to_dict().values()
+        return self.to_dict().values()
+    
+    def items(self):
+        return self.to_dict().items()
     
     def get(self, key, default=None):
         return getattr(self, key, default)
@@ -246,72 +263,52 @@ class Model():
             setattr(self, key, default)
         return default
     
-    def items(self):
-        return self.to_dict().items()
-    
     ###############################################################################
     #Representation
     ###############################################################################
     def __repr__(self):
-        return f'{type(self).__name__} {self.model_key}<states: {self._states}, params: {self._params}>'
+        return f'{type(self).__name__} {self.model_key}{{states: {self.get_state_names()}, params: {self.get_param_names()}}}'
     
     def __str__(self):
         return self.__repr__()
     
-    ###############################################################################
-    #Safe Accessors
-    ###############################################################################
-    def get_exv(self, exv_name):
-        return self._exvs[exv_name]
-    
-    def get_param_names(self):
-        return self._params
-    
-    def get_state_names(self):
-        return self._states
-    
-    def get_sorted_params(self):
-        if len(self.params) != len(self.states):
-            raise DunlinModelError.state_param_mismatch(self.params.index, self.states.index)
-        try:
-            return self.params.loc[self.states.index]
-        except:
-            raise DunlinModelError.state_param_mismatch(self.params.index, self.states.index)
-    
-    def get_tspan(self, scenario):
-        return self.tspan.get(scenario, self._tspan)
-    
-    ###############################################################################
-    #Integration
-    ###############################################################################
-    def __call__(self, *args, **kwargs):
-        return self._rhs(*args, **kwargs)
-    
-    def integrate(self,         scenario, 
-                  states_array, params_array, 
-                  overlap=True, include_events=True, 
-                  tspan=None,   modify=None,    
-                  events=None,  **int_args):
-        
-        t, y = ivp.integrate(self._rhs, 
-                             tspan          = self.get_tspan(scenario) if tspan is None else tspan, 
-                             y0             = states_array, 
-                             p              = params_array, 
-                             events         = self._events if events is None else modify, 
-                             modify         = self._modify if modify is None else modify,
-                             overlap        = overlap, 
-                             include_events = include_events,
-                             scenario       = scenario,
-                             **{**self.int_args, **int_args}
-                             )
-        
-        return t, y
-    
-    ###############################################################################
-    #Others
-    ###############################################################################
     def __len__(self):
         return len(self._states), len(self._params)
     
-   
+    ###########################################################################
+    #Integration
+    ###########################################################################
+    def __call__(self, *args, **kwargs):
+        if self._mode == 'ode':
+            return self.integrate_ode(*args, **kwargs)
+    
+    def integrate_ode(self,        y0=None,     p=None,     overlap=True,  
+                  raw=False,  
+                  include_events=True
+                  ):
+        
+        #Reassign and/or extract
+        y0_dct   = self._states      if y0     is None else y0
+        p_dct    = self._params      if p      is None else p  
+        int_args = self.int_args
+        tspan    = self.tspan
+        
+        return self.ode(y0_dct, p_dct, tspan, overlap, raw, include_events, **int_args)
+        
+class ModelMismatchError(Exception):
+    def __init__(self, expected, received):
+        super().__init__(f'Required keys: {list(expected)}. Recevied: {list(received)}')
+
+class MissingSubmodelError(Exception):
+    def __init__(self, model_key, submodel_key):
+        super().__init__(f'{model_key} calls {submodel_key} but the submodel is missing.')
+
+class SubmodelLenError(Exception):
+    def __init__(self, model_key, submodel_key, arg):
+        super().__init__(f'{model_key} calls {submodel_key} but the {arg} argument is of the wrong length.')
+
+class SubmodelRecursionError(Exception):
+    def __init__(self, *chain):
+        chain_ = ' -> '.join([str(c) for c in chain])
+        super().__init__('Recursive model hierarchy: ' + chain_)
         

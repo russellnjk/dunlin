@@ -4,16 +4,14 @@ from pathlib import Path
 ###############################################################################
 #Non-Standard Imports
 ###############################################################################
-import dunlin._utils_model.base_error as dbe
 import dunlin._utils_model.ode_coder  as odc
 
 ###############################################################################
 #Dunlin Exceptions
 ###############################################################################
-class DunlinEventError(dbe.DunlinBaseError):
-    @classmethod
-    def trigger_type(cls, trigger_type):
-        return cls.raise_template(f'Invalid trigger_type: {trigger_type}', 1)
+class TriggerError(Exception):
+    def __init__(self, trigger_type):
+        super().__init__(f'Invalid trigger_type: {trigger_type}')
 
 ###############################################################################
 #Main Instantiation Algorithm

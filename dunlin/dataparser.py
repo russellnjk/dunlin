@@ -1,8 +1,17 @@
 import numpy  as np 
 import pandas as pd
+from   pathlib import Path
 
+###############################################################################
+#Non-Standard Imports
+###############################################################################
 from optimize import plot_dataset
+from ._utils_plot import plot as upp
+from ._utils_dataparser import TimeResponseData
 
+###############################################################################
+#Preprocessing for Optimization
+###############################################################################
 def str2num(x):
     try:
         return int(x)
@@ -30,15 +39,16 @@ def state2dataset(raw_data, state):
         dataset[time_key] = time
     return dataset
 
-def format_multiindex(df, drop_lvl=None, truncate=None, thin=None):
+def format_multiindex(df,roll=2, thin=2, truncate=None, drop_lvl=None):
     if drop_lvl:
         df = df.droplevel(drop_lvl, axis=1)
-    
+        
     if truncate:
-        df = df.loc[truncate[0]:truncate[1]]
+        lb, ub = truncate
+        df = df.loc[lb:ub]
     
-    if thin:
-        df = df.loc[::thin]
+    df = df.rolling(roll, min_periods=1, center=True).mean()
+    df = df.iloc[::thin]
     
     scenarios = []
     for lvl in range(1, df.columns.nlevels):

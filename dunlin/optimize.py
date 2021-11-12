@@ -3,22 +3,20 @@ import pandas            as     pd
 import scipy.optimize    as     sop
 from numba               import njit
 from scipy.stats         import norm
-from time                import time, sleep
+from time                import time
   
 ###############################################################################
 #Non-Standard Imports
 ###############################################################################
-import dunlin.model                    as dml
 import dunlin.simulate                 as sim
 import dunlin._utils_optimize.wrap_SSE as ws
 import dunlin._utils_optimize.algos    as ag 
-import dunlin._utils_plot.plot         as upp
+import dunlin._utils_plot              as upp
 from dunlin._utils_optimize.params import SampledParam, Bounds, DunlinOptimizationError
 
 ###############################################################################
 #Globals
 ###############################################################################
-make_AX = upp.make_AX
 colors  = upp.colors
 
 ###############################################################################
@@ -44,40 +42,29 @@ def run_algo(opt_result, algo, **kwargs):
 ###############################################################################
 #High-level Functions
 ###############################################################################        
-def fit_model(model, dataset, n=1, algo='differential_evolution', AX=None, guess=':', **kwargs):
+def fit_model(model, dataset, n=1, algo='differential_evolution',guess=':', **kwargs):
         
-    opt_results = {}
+    opt_results = []
     sse_calc    = ws.SSECalculator(model, dataset)
-    opt_result  = OptResult.from_model(model, sse_calc) 
+    opt_result  = OptResult.from_model(model, sse_calc, name=0) 
     
     for i in range(n):
-        if n > 1:
-            opt_result = opt_result.seed()
-        if algo is not None:
-            run_algo(opt_result, algo, **kwargs)
-            
-        opt_results[i] = opt_result
+        if i > 0:
+            opt_result = opt_result.seed(i)
         
-        if AX:
-            args = {'label' : '_nolabel'} if i else {}
-            integrate_and_plot(model, AX, opt_results={i: opt_result}, dataset=dataset, guess=guess, **args)
-            sleep(0.1)
+        run_algo(opt_result, algo, **kwargs)
+        
+        opt_results.append(opt_result)
+        
     return opt_results
 
-def integrate_opt_result(model, opt_result, _tspan=None):
-    best_params, _ = opt_result.get_best()
-    sim_results    = sim.integrate_model(model, _params=best_params, _tspan=_tspan)
-    
-    return sim_results
-    
-def integrate_and_plot(model, AX, opt_results={}, dataset=None, guess=':', **line_args):
-    line_args_      = {**line_args, **{'label': 'scenario'}}
-    guess_line_args = {**model.sim_args['line_args'], **line_args_, **{'linestyle': guess}}
-    data_line_args  = {**model.sim_args['line_args'], **line_args_, **{'marker': 'o', 'linestyle': 'None'}}
+def simulate_and_plot(model, AX, optresults=None, dataset=None, guess_marker=':', **sim_args):
+    guess_line_args = {**sim_args.get('line_args', {}), **{'linestyle': guess_marker}}
+    data_line_args  = {**model.sim_args.get('line_args', {}), **sim_args.get('line_args', {}), **{'marker': 'o', 'linestyle': 'None'}}
     
     #Determine appropriate tspan
     tspan      = {}
-    opt_result = next(iter(opt_results.values())) if opt_results else None
+    opt_result = optresults[0] if optresults else None
     blank      = np.array([]) 
     for scenario in model.states.index:
         mtspan = model.get_tspan(scenario)
@@ -89,28 +76,28 @@ def integrate_and_plot(model, AX, opt_results={}, dataset=None, guess=':', **lin
         tspan[scenario] = max(mtspan, otspan, key=len)
         
     #Integrate opt results
-    first = True
-    if opt_results:
-        for run, opt_result in opt_results.items():
+    first     = True
+    sim_args_ = sim_args.copy()
+    if optresults:
+        for optr in optresults:
             if not first:
-                line_args_['label'] = '_nolabel'
-                
+                sim_args_['line_args']['label'] = '_nolabel'
+            
             #Integrate and plot
-            sim_results = integrate_opt_result(model, opt_result, tspan)
-            sim.plot_sim_results(sim_results, AX, **line_args_)
+            srs = optr.simulate(model)
+            sim.plot_simresults(srs, AX, **sim_args_)
             first = False
         
     #Integrate guess values
-    if guess not in ['None', '']:
-        if opt_results:
-            guess_line_args['label'] = '_nolabel'
-            
-        sim_results = sim.integrate_model(model, _tspan=tspan)
-        sim.plot_sim_results(sim_results, AX, **guess_line_args)
+    if optresults:
+        guess_line_args['label'] = '_nolabel'
+        
+        sim_results = sim.simulate_model(model)
+        sim.plot_simresults(sim_results, AX, **{'line_args': guess_line_args})
         
     #Overlay the data
     if dataset:
-        if opt_results or guess not in ['None', '']:
+        if optresults or guess_marker not in ['None', '']:
             data_line_args['label'] = '_nolabel'
         plot_dataset(dataset, AX, **data_line_args)            
 
@@ -138,33 +125,40 @@ class OptResult():
     regular log-likelihood for instantiation. For curve-fitting, this is 
     simply the SSE function.
     '''
+    scale_types = {'lin' : 'linear', 'log10': 'log', 'log': 'log'}
+    
     ###########################################################################
     #Instantiation
     ###########################################################################
     @classmethod
-    def from_model(cls, model, to_minimize=None):
+    def from_model(cls, model, to_minimize, name=0):
         #Check to_minimize
-        if callable(to_minimize):
-            to_minimize_ = to_minimize
-        else:
-            raise NotImplementedError('Still in the works.')
-            
+        if not callable(to_minimize):
+            raise ValueError('to_minimize must be callable.')
+        
         #Instantiate
-        nominal    = model.params
-        kwargs     = {**getattr(model, 'optim_args', {}), **{'to_minimize': to_minimize_, 'nominal': nominal}}
-        opt_result = cls(**kwargs)
+        nominal     = model.params
+        free_params = model.optim_args.get('free_params', {})
+        settings    = model.optim_args.get('settings',    {})
+        trace_args  = model.optim_args.get('trace_args',  {})
+        name        = name
+        opt_result = cls(nominal, free_params, to_minimize, name, settings, trace_args)
         
         return opt_result
     
-    def __init__(self, nominal, free_params, to_minimize, **kwargs):
-        self.settings           = kwargs.get('settings', {})
-        self.line_args          = kwargs.get('line_args', {})
+    def __init__(self, nominal, free_params, to_minimize, name=0, settings=None, trace_args=None):
+        self.settings           = {} if settings   is None else settings
+        self.trace_args         = {} if trace_args is None else trace_args
         self.neg_log_likelihood = to_minimize
         self.result             = {}
         self.fixed              = []
         self.free_params        = {}
         self.sampled_params     = []
+        self.name               = name 
         
+        if not free_params:
+            raise ValueError('No free parameters provided.')
+            
         for p in nominal.keys():
             if p in free_params:
                 kw = free_params[p]
@@ -398,7 +392,7 @@ class OptResult():
     ###########################################################################    
     def __repr__(self):
         lst = ', '.join([sp.name for sp in self.sampled_params])
-        return f'{type(self).__name__}<{lst}>'
+        return f'{type(self).__name__} {self.name}({lst})'
     
     def __str__(self):
         return self.__repr__()
@@ -440,98 +434,130 @@ class OptResult():
     ###############################################################################
     #Seeding
     ###############################################################################       
-    def seed(self):
+    def seed(self, new_name=0):
         nominal = self.nominal.copy()
         for sp in self.sampled_params:
             new_val          = sp.new_sample()
             nominal[sp.name] = new_val
             
         args = {'free_params' : self.free_params, 'to_minimize' : self.neg_log_likelihood,
-                'settings'    : self.settings,    'line_args'   : self.line_args
+                'settings'    : self.settings,    'trace_args'  : self.trace_args,
+                'name'        : new_name
                 }
         return type(self)(nominal, **args)        
+    
+    ###############################################################################
+    #Plotting
+    ###############################################################################       
+    def simulate(self, model):
+        best_params, _ = self.get_best()
+        p              = dict(zip(best_params.index, best_params.values))     
+        return sim.simulate_model(model, p=p)
+         
+    def simulate_and_plot(self, model, AX, **sim_args):
+        srs = self.simulate(model)
+        
+        return sim.plot_simresults(srs, AX, **sim_args)
+    
+    def plot_trace(self, var, ax, plot_type='line', **trace_args):
+        if plot_type == 'line':
+            if type(var) in [tuple, list]:
+                if len(var) == 1:
+                    return self.plot_trace_line(ax, None, var[0], **trace_args)
+                    
+                elif len(var) == 2:
+                    return self.plot_trace_line(ax, *var, **trace_args)
+                else:
+                    raise NotImplementedError(f'Cannot plot {var}. Length must be one or two.')
+                    
+            elif type(var) == str:
+                return self.plot_trace_line(ax, None, var, **trace_args)
+
+            else:
+                raise NotImplementedError(f'No implementation for {var}')
+        else:
+            raise ValueError(f'Unrecognized plot_type {plot_type}')
+        
+    def plot_trace_line(self, ax, x, y, **trace_args):
+        scale_types = self.scale_types
+        trace_args  = self._recursive_get(y, trace_args) if x is None else self._recursive_get((x, y), trace_args) 
+        
+        trace_args.setdefault('marker', '+')
+        trace_args.setdefault('linestyle','None')
+        
+        if x is not None:
+            scale = self.free_params[x].get('scale', 'lin')
+            scale = scale_types[scale]
+            ax.set_xscale(scale)
+            ax.set_xlabel(x)
+            x_vals = self[x].values
+        
+        scale = self.free_params[y].get('scale', 'lin')
+        scale = scale_types[scale]
+        ax.set_yscale(scale)
+        y_vals = self[y].values
+        ax.set_ylabel(y)
+        
+        #Plot
+        if x is not None:
+            return ax.plot(x_vals, y_vals, **trace_args)
+        else:
+            return ax.plot(y_vals, **trace_args)
+    
+    def _recursive_get(self, var, trace_args):
+        global colors
+
+        trace_args_ = {**self.trace_args, **trace_args}
+        trace_args_ = {k: upp.recursive_get(v, self.name, var) for k, v in trace_args_.items()}
+        
+        #Process special keywords
+        color = trace_args_.get('color')
+        if type(color) == str:
+            trace_args_['color'] = colors[color]
+            
+        label_scheme   = trace_args_.get('label', 'run')
+        if label_scheme == 'run':
+            label = f'Run {self.name}'
+        elif label_scheme == 'model_key':
+            label = f'Model {self.model_key}'
+        elif label_scheme == 'model_key, run':
+            label = f'Model {self.model_key}, Run {self.name}'
+        else:
+            label = f'Run {self.name}'
+        
+        trace_args_['label'] = label
+        
+        return trace_args_
 
 ###############################################################################
 #Plotting
-###############################################################################       
-def plot_traces(opt_results, AX, palette=None, **line_args):
-    global colors
-    scale_types = {'lin' : 'linear', 'log10': 'log', 'log': 'log'}
-    AX1         = AX
-    for run, opt_result in opt_results.items(): 
-        for var, ax_ in AX1.items():
-            ax         = upp.recursive_get(ax_, run, var) 
-            line_args_ = {**opt_result.line_args, **line_args}
-            line_args_ = {k: upp.recursive_get(v, run, var) for k, v in line_args_.items()}
-            
-            #Process special keywords
-            color = line_args_.get('color')
-            if type(color) == str:
-                line_args_['color'] = colors[color]
-                
-            label_scheme   = line_args_.get('label', 'scenario, run')
-            if label_scheme == 'run':
-                label = f'{run}'
-            elif label_scheme == 'model_key':
-                label = f'{opt_result.model_key}'
-            elif label_scheme == 'model_key, run':
-                label = f'{opt_result.model_key}, {run}'
-            else:
-                label = f'{run}'
-            
-            line_args_['label'] = label
-            plot_type           = line_args_.get('plot_type', 'line')
-            
-            #Plot
-            if plot_type == 'line':
-                if line_args_.get('marker', None) and 'linestyle' not in line_args_:
-                    line_args_['linestyle'] = 'None'
-                
-                if type(var) == tuple:
-                    #Axis scale
-                    scale = opt_result.free_params[var[0]].get('scale', 'lin')
-                    scale = scale_types[scale]
-                    ax.set_xscale(scale)
-                    scale = opt_result.free_params[var[1]].get('scale', 'lin')
-                    scale = scale_types[scale]
-                    ax.set_yscale(scale)
-                    
-                    #Plot
-                    x_vals, y_vals = opt_result[var[0]].values, opt_result[var[1]].values
-                    ax.plot(x_vals, y_vals, **line_args_)
-                    ax.set_xlabel(var[0])
-                    ax.set_ylabel(var[0])
-                else:
-                    #Axis scale
-                    scale = opt_result.free_params[var].get('scale', 'lin')
-                    scale = scale_types[scale]
-                    ax.set_yscale(scale)
-                    
-                    #Plot
-                    y_vals = opt_result[var].values
-                    ax.plot(y_vals, **line_args_)
-                    ax.set_ylabel(var)
-            else:
-                raise ValueError(f'Unrecognized plot_type {plot_type}')
+###############################################################################
+def plot_traces(optresults, AX, plot_type='line', **trace_args):
+    result = {}
+    for var, ax_ in AX.items():
+        for optr in optresults:
         
-    return AX1    
-    
-def plot_dataset(dataset, AX, **line_args):
+            ax   = upp.recursive_get(ax_, var, optr.name) 
+            plot = optr.plot_trace(var, ax, plot_type=plot_type, **trace_args)
+            
+            result.setdefault(var, {})[optr.name] = plot
+    return result
+          
+def plot_dataset(dataset, AX, **data_args):
     global colors
     
-    AX1 = AX
+    plots = {}
     
     for (dtype, scenario, var), data in dataset.items():
         if dtype != 'Data':
             continue
         
-        ax_ = upp.recursive_get(AX1, var, scenario) 
-        if type(ax_) == dict:
-            ax_ = ax_.values()
-        else:
-            ax_ = [ax_]
-                      
-        line_args_  = {**getattr(dataset, 'line_args', {}), **line_args}
+        ax = upp.recursive_get(AX, var, scenario) 
+
+        if not ax:
+            continue
+        
+        line_args_  = {**getattr(dataset, 'line_args', {}), **data_args}
         line_args_  = {k: upp.recursive_get(v, scenario, var) for k, v in line_args_.items()}
         
         #Process special keywords
@@ -551,11 +577,9 @@ def plot_dataset(dataset, AX, **line_args):
             y_err_ = dataset.get(('Yerr', scenario, var))
             x_err_ = dataset.get(('Xerr', scenario, var))
             
-            for ax in ax_:
-                ax.errorbar(x_vals, y_vals, y_err_, x_err_, **line_args_)
-                # ax.set_ylabel(var)
+            plots.setdefault(var, {})[scenario] = ax.errorbar(x_vals, y_vals, y_err_, x_err_, **line_args_)
         else:
             raise ValueError(f'Unrecognized plot_type {plot_type}')
         
-    return AX1
+    return plots
     

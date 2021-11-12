@@ -1,41 +1,7 @@
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mtick
 import numpy             as np 
-import seaborn           as sns
 from matplotlib          import get_backend
-
-
-###############################################################################
-#Globals
-###############################################################################
-#Refer for details: https://xkcd.com/color/rgb/
-colors = sns.colors.xkcd_rgb
-
-def light_palette(color, n_colors, *args, **kwargs):
-    global colors
-    if type(color) == str:
-        color = colors[color]
-        
-    palette = sns.light_palette(color, n_colors+2, *args, **kwargs)
-    palette = palette[1:len(palette)-1]
-    return palette
-
-def dark_palette(color, n_colors, *args, **kwargs):
-    global colors
-    if type(color) == str:
-        color = colors[color]
-        
-    palette = sns.dark_palette(color, n_colors+2, *args, **kwargs)
-    palette = palette[1:len(palette)-1]
-    return palette
-
-#Refer for details: https://seaborn.pydata.org/tutorial/color_palettes.html
-palette_types = {'color'    : sns.color_palette,
-                 'light'    : light_palette,
-                 'dark'     : dark_palette,
-                 'diverging': sns.diverging_palette,
-                 'cubehelix': sns.cubehelix_palette
-                 }    
 
 ###############################################################################
 #Utility Functions for Plotting 
@@ -66,15 +32,17 @@ def gridspec(rows, cols, *subplot_args, lb=-2, ub=4, nbins=4, title='', **title_
     fig.suptitle(title, **title_args)
     return fig, fig.axes
 
-def figure(rows, cols, n=None, lb=-2, ub=4, nbins=4, title='', **title_args):
+def figure(rows, cols, n=None, lb=-2, ub=4, nbins=4, title='', fullscreen=True, **title_args):
     fig = plt.figure()
     n   = rows*cols if n is None else n
     
     for i in range(n):
         ax = fig.add_subplot(rows, cols, i+1)
         scilimit(ax, lb, ub, nbins)
+    
+    if fullscreen:
+        fs(fig)
         
-    fs(fig)
     fig.suptitle(title, **title_args)
     return fig, fig.axes
 

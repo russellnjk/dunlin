@@ -2,27 +2,23 @@ import numpy    as np
 import warnings
 from   numba    import njit
 
+###############################################################################
+#Non-Standard Imports
+###############################################################################
+import dunlin.simulate as sim
+
+###############################################################################
+#Error Calculation
+###############################################################################
 class SSECalculator():
     ###########################################################################
     #SSE Calculation
     ###########################################################################       
-    def reconstruct(self, free_params_array):
-        sampled_index = self.sampled_index
-        nominal_dct   = self.nominal
-        p             = {} 
-        
-        for scenario in self.init:
-            nominal     = self.nominal[scenario]
-            recon_array = self._reconstruct(nominal_dct[scenario], sampled_index, free_params_array)
-            p[scenario] = recon_array
-        
-        return p
-        
     @staticmethod
     @njit
-    def _reconstruct(nominal, sampled_index, free_params_array):
+    def reconstruct(nominal, sampled_index, scaled_free_params_array):
         params                = nominal.copy()
-        params[sampled_index] = free_params_array
+        params[sampled_index] = scaled_free_params_array
         
         return params
     
@@ -44,12 +40,15 @@ class SSECalculator():
     ###########################################################################       
     def __init__(self, model, dataset):
         free_params                              = model.optim_args['free_params'] 
-        tspan, t_data, y_data, s_data = split_dataset(model, dataset)
-        init                                     = model._states
+        tspan, t_data, y_data, s_data, exv_names = split_dataset(model, dataset)
+        init                                     = get_init(model)
+        state_index                              = dict(zip(model._states, range(len(model._states))))
         
-        nominal_vals  = model._params
+        nominal_vals  = self.sort_params(model.params, model.states)
+        nominal_vals  = dict(zip(nominal_vals.index, nominal_vals.values))
         param_names   = model.get_param_names()
-        sampled_index = [i for i, p in enumerate(param_names) if p in free_params]
+        param_index   = {p: i for i, p in enumerate(param_names)} 
+        sampled_index = [param_index[p] for p in free_params]
         
         #Check
         param_check = set(param_names) 
@@ -61,43 +60,69 @@ class SSECalculator():
         self.t_data        = t_data
         self.y_data        = y_data
         self.s_data        = s_data
+        self.exv_names     = exv_names
         self.init          = init
+        self.state_index   = state_index
         self.model         = model
         self.nominal       = nominal_vals
         self.sampled_index = np.array(sampled_index)
         
+        #For testing/development
+        self.disp = False
+        
     ###########################################################################
     #Integration
     ###########################################################################       
-    def __call__(self, free_params_array):
-        SSE     = 0
-        t_data  = self.t_data
-        y_data  = self.y_data
-        s_data  = self.s_data
-        model   = self.model
-        p       = self.reconstruct(free_params_array)
+    def get_SSE(self, free_params_array):
+        SSE         = 0
+        tspan       = self.tspan
+        t_data      = self.t_data
+        y_data      = self.y_data
+        s_data      = self.s_data
+        exv_names   = self.exv_names
+        init        = self.init
+        state_index = self.state_index
+        model       = self.model
         
-        for ir in model(p=p, tspan=self.tspan, overlap=False, include_events=False):
-            scenario = ir.scenario
+        for scenario, y0 in init.items():
+            if scenario not in tspan:
+                continue
+
+            params_array = self.reconstruct(self.nominal[scenario], 
+                                            self.sampled_index, 
+                                            free_params_array
+                                        )
+            if self.disp:
+                print(scenario)
+                print(params_array)
+            t, y = model.integrate(scenario, 
+                                   y0, 
+                                   params_array, 
+                                   overlap        = False, 
+                                   include_events = False, 
+                                   tspan          = tspan[scenario]
+                                   )
             
-            for var, yd in t_data.get(scenario, {}).items():
-                ym  = ir[var]
-                idx = t_data[scenario][var]
-                yd  = y_data[scenario][var]
-                sd  = s_data[var]
+            if exv_names:
+                y = sim.IntResult(model, t, y, params_array, scenario, exv_names)
+
+            for var, yd in t_data[scenario].items():
+                ym   = y.get1d(var) if exv_names else y[state_index[var]]
+                idx  = t_data[scenario][var]
+                yd   = y_data[scenario][var]
+                sd   = s_data[var]
+                SSE += self.get_error(ym, yd, sd, idx) if hasattr(ym, '__iter__') else self.get_error(ym, yd, sd, None)
                 
-                if type(ym) == dict:
-                    ym = ym['y']
-                
-                SSE += self.get_error(ym, yd, sd, idx) if hasattr(ym, '__iter__') else self.get_error(ym, yd, sd, None) 
-           
         return SSE
+    
+    def __call__(self, params_array):
+        return self.get_SSE(params_array)
     
     ###########################################################################
     #Miscellaneous
     ###########################################################################       
     def __repr__(self):
-        return f'{type(self).__name__}(model: {self.model.model_key})'
+        return f'{type(self).__name__}<model: {self.model.model_key}>'
     
     def __str__(self):
         return self.__repr__()
@@ -106,23 +131,16 @@ class SSECalculator():
 #Preprocessing
 ###############################################################################
 def check_scenarios_match(model, dataset):
-    
     d_scenarios = set([k[1] for k in dataset.keys()])
     m_scenarios = set(model.states.index)
-    diff1       = d_scenarios.difference(m_scenarios)
-    diff2       = m_scenarios.difference(d_scenarios)
-    
-    if diff1:
+    intersect   = d_scenarios.intersection(m_scenarios)
+    if len(intersect) != len(d_scenarios):
         msg = f'There are one or scenarios in dataset that are not in model.states for model {model.model_key}'
         warnings.warn(msg)
     
     
-    if diff2:
-        msg = f'There are one or scenarios in dataset that are missing from model.states for model {model.model_key}'
-        warnings.warn(msg)
-    
 def split_dataset(model, dataset):    
-    mod_vars  = [*model.get_state_names(), *model.vrbs]
+    states     = model.get_state_names()
     model_exvs = model.exvs if model.exvs else []
     y_data     = {}
     t_data     = {}
@@ -134,6 +152,7 @@ def split_dataset(model, dataset):
     t_len      = {}
     tpoints    = {}
     max_vals   = {}
+    exv_names  = []
     
     for key, value in dataset.items():
         if key[0] == 'Data':
@@ -143,9 +162,11 @@ def split_dataset(model, dataset):
             y_data.setdefault(scenario, {})[var] = np.array(value)
             
             #Check if variable is a state or exv
-            if var in mod_vars :
+            if var in states:
                 y_set.add((scenario, var))
-            elif var not in model_exvs:
+            elif var in model_exvs:
+                exv_names.append(var)
+            else:
                 raise ValueError(f'exp_data contains an exv {var} which is not in the model.')
             
             #Track variable to determine if sd is provided
@@ -222,4 +243,18 @@ def split_dataset(model, dataset):
     #Check that scenarios match
     check_scenarios_match(model, dataset)
     
-    return tspan, t_data, y_data, s_data
+    return tspan, t_data, y_data, s_data, exv_names
+
+def get_init(model):
+    init = {k: v.values for k, v in model.states.T.to_dict('series').items()}
+    return init
+
+def get_nominal(model, free_params, nominal=None):
+    if nominal == None:
+        if len(model.states) != len(model.params):
+            raise ValueError('model.states and model.params do not have the same length.')
+        nominal_vals = dict(zip(model.states.index, model.params.values))
+    else:
+        temp         = model.loc[nominal]
+        nominal_vals = {i: temp for i in model.states.index}
+    return nominal_vals

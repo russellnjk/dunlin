@@ -4,10 +4,29 @@ from pathlib         import Path
 from scipy.integrate import solve_ivp
 
 ###############################################################################
+#Non-Standard Imports
+###############################################################################
+try:
+    from  .base_error  import DunlinBaseError
+    from  .custom_eval import safe_eval as eval
+except Exception as e:
+    if Path.cwd() == Path(__file__).parent:
+        from  base_error  import DunlinBaseError
+        from  custom_eval import safe_eval  as eval
+    else:
+        raise e
+
+###############################################################################
+#Dunlin Exceptions
+###############################################################################   
+class IVPError(DunlinBaseError):
+    pass
+
+###############################################################################
 #Main Algorithm
 ###############################################################################   
 def integrate(func, tspan, y0, p, 
-              events=(), modify=None,
+              events=(), modify=None, scenario=None, 
               overlap=True, include_events=True,
               _sort=True, **kwargs
               ):
@@ -28,6 +47,11 @@ def integrate(func, tspan, y0, p,
     #Event and parameter preprocessing
     #Set direction before integration
     events_ = sorted(list(events), key=lambda x: getattr(x, 'priority', 0), reverse=True) if _sort else list(events)
+    
+    #Run modify if applicable
+    if modify:
+        y0_, p_ = modify(y0_, p_, scenario)
+    
 
     #Set up events if any
     for index, event in enumerate(events_):
