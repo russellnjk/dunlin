@@ -119,13 +119,13 @@ def get_best(opt_results):
 class OptResult():
     '''
     Note: Many optimization algorithms seek to MINIMIZE an objective function, 
-    while Bayesian approaches attempt to MAXIMIZE the objective function.
+    while Bayesian formula attempts to MAXIMIZE the objective function.
     
     Therefore, the NEGATIVE of the log-likelihood should be used instead of the 
     regular log-likelihood for instantiation. For curve-fitting, this is 
     simply the SSE function.
     '''
-    scale_types = {'lin' : 'linear', 'log10': 'log', 'log': 'log'}
+    scale_types = {'lin' : 'linear', 'log10': 'log10', 'log': 'log'}
     
     ###########################################################################
     #Instantiation

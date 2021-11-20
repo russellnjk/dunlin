@@ -43,9 +43,9 @@ class SSECalculator():
     #Instantiators
     ###########################################################################       
     def __init__(self, model, dataset):
-        free_params                              = model.optim_args['free_params'] 
+        free_params                   = model.optim_args['free_params'] 
         tspan, t_data, y_data, s_data = split_dataset(model, dataset)
-        init                                     = model._states
+        init                          = model._states
         
         nominal_vals  = model._params
         param_names   = model.get_param_names()
@@ -122,7 +122,7 @@ def check_scenarios_match(model, dataset):
         warnings.warn(msg)
     
 def split_dataset(model, dataset):    
-    mod_vars  = [*model.get_state_names(), *model.vrbs]
+    mod_vars  = [*model.get_state_names(), *model.vrbs] if model.vrbs else model.get_state_names()
     model_exvs = model.exvs if model.exvs else []
     y_data     = {}
     t_data     = {}

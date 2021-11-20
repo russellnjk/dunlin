@@ -1,4 +1,5 @@
 from .color_generation import (colors,
+                               get_color,
                                make_light_scenarios,
                                make_dark_scenarios,
                                make_color_scenarios

@@ -12,7 +12,7 @@ class ODEModel:
     '''
     This class stores the auto-generated functions for ODE integration. During 
     numerical integration, dunlin's Model class will delegate the computation to 
-    this class. It is not meant to be used in isolation. 
+    this class. It is not meant to be used in isolation from the front-end. 
     '''
     default_tspan = np.linspace(0, 1000, 21)
     

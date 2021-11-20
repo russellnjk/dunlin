@@ -29,6 +29,7 @@ from ._utils_plot      import (figure,
                                scilimit, 
                                save_figs,
                                colors,
+                               get_color,
                                make_color_scenarios,
                                make_dark_scenarios,
                                make_light_scenarios

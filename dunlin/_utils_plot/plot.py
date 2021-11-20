@@ -19,20 +19,30 @@ def recursive_get(dct, *keys):
     else:
         return result
 
-def gridspec(rows, cols, *subplot_args, lb=-2, ub=4, nbins=4, title='', **title_args):
+def gridspec(rows, cols, *subplot_args, lb=-2, ub=4, nbins=4, title='', fullscreen=True, 
+             left=None, bottom=None, right=None, top=None, wspace=None, hspace=None, 
+             **title_args
+             ):
     fig = plt.figure()
     gs  = fig.add_gridspec(rows, cols)
+    
     for arg in subplot_args:
         
         s  = (slice(*arg[:2]), slice(*arg[2:]) )
         ax = fig.add_subplot(gs[s])
         scilimit(ax, lb, ub, nbins)
+       
+    if fullscreen:
+        fs(fig)
         
-    fs(fig)
     fig.suptitle(title, **title_args)
+    fig.subplots_adjust(left, bottom, right, top, wspace, hspace)
     return fig, fig.axes
 
-def figure(rows, cols, n=None, lb=-2, ub=4, nbins=4, title='', fullscreen=True, **title_args):
+def figure(rows, cols, n=None, lb=-2, ub=4, nbins=4, title='', fullscreen=True, 
+           left=None, bottom=None, right=None, top=None, wspace=None, hspace=None, 
+           **title_args
+           ):
     fig = plt.figure()
     n   = rows*cols if n is None else n
     
@@ -44,6 +54,7 @@ def figure(rows, cols, n=None, lb=-2, ub=4, nbins=4, title='', fullscreen=True, 
         fs(fig)
         
     fig.suptitle(title, **title_args)
+    fig.subplots_adjust(left, bottom, right, top, wspace, hspace)
     return fig, fig.axes
 
 def fs(figure):

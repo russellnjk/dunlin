@@ -221,8 +221,8 @@ class Model:
         if value in ['ode']:
             self._mode = value
         else:
-            raise ValueError(f'Invalid mode: {value}')
-        
+            raise ValueError(f'Invalid mode: {value}')    
+    
     def __setattr__(self, attr, value):
         if attr in self._locked:
             raise AttributeError(f'{attr} attribute is locked.')
@@ -282,16 +282,15 @@ class Model:
         if self._mode == 'ode':
             return self.integrate_ode(*args, **kwargs)
     
-    def integrate_ode(self,        y0=None,     p=None,     overlap=True,  
-                  raw=False,  
-                  include_events=True
-                  ):
+    def integrate_ode(self,         y0=None,   p=None,     tspan=None, 
+                      overlap=True, raw=False, include_events=True
+                      ):
         
         #Reassign and/or extract
         y0_dct   = self._states      if y0     is None else y0
         p_dct    = self._params      if p      is None else p  
         int_args = self.int_args
-        tspan    = self.tspan
+        tspan    = self.tspan if tspan is None else tspan
         
         return self.ode(y0_dct, p_dct, tspan, overlap, raw, include_events, **int_args)
         

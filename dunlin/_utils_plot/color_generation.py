@@ -6,6 +6,12 @@ import seaborn           as sns
 #Refer for details: https://xkcd.com/color/rgb/
 colors = sns.colors.xkcd_rgb
 
+def get_color(color):
+    global colors
+    if type(color) == str:
+        return colors.get(color, color)
+    return color
+                 
 ###############################################################################
 #Colors for Scenarios
 ###############################################################################
@@ -78,13 +84,15 @@ def _scenarios(func, scenarios, base_colors, reverse=False, palette_type=None):
 def _read_base_colors(base_colors, palette_type='pastel'):
     if type(base_colors) == int:
         base_colors = sns.color_palette(palette_type, base_colors)
+    elif hasattr(base_colors, 'items'):
+        base_colors = {k: get_color(v) for k, v in base_colors.items()}
     elif hasattr(base_colors, '__iter__') and type(base_colors) != str:
-        base_colors = [colors[color] if type(color) == str else color for color in base_colors]
+        base_colors = [get_color(color) for color in base_colors]
     else:
         raise BaseColorTypeError(base_colors)
     
     return base_colors
-                    
+
 def isnum(x):
     try:
         float(x)

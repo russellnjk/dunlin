@@ -1,7 +1,8 @@
 import numpy   as np 
 import pandas  as pd
 import seaborn as sns
-from   pathlib import Path
+from   mpl_toolkits import mplot3d
+from   pathlib      import Path
 
 ###############################################################################
 #Non-Standard Imports
@@ -17,22 +18,19 @@ class TimeResponseData:
     ###########################################################################
     #Instantiation
     ###########################################################################
-    def __init__(self, data, sd=None, base_colors=None, palette_type='light_palette', roll=2, 
-                 thin=2, truncate=None, levels=None, consolidate_colors=True, 
+    def __init__(self, data, base_colors=None, palette_type='light_palette', roll=2, 
+                 thin=2, truncate=None, levels=None, drop_scenarios=None, consolidate_colors=True, 
                  ):
         
         def _2dict(df):
             return {i: g.droplevel(axis=1, level=0) for i, g in df.groupby(axis=1, level=0)}
         
-        data   = self.preprocess(data, roll, thin, truncate, levels)
-        sd     = None if sd is None else self.preprocess(sd, roll, thin, truncate, levels)
+        data   = self.preprocess(data, roll, thin, truncate, levels, drop_scenarios)
         colors = self.make_colors(data, base_colors, palette_type)
         
         self.colors  = colors
         self._data   = data
-        self._sd     = sd
         self._dct    = _2dict(data)
-        self._dct_sd = None if sd is None else _2dict(sd)
         self._t      = pd.DataFrame(dict.fromkeys(colors, data.index), index=data.index) 
     
     ###########################################################################
@@ -53,7 +51,7 @@ class TimeResponseData:
         return colors
     
     @staticmethod
-    def preprocess(df, roll=2, thin=2, truncate=None, levels=None, state_var='State', to_dict=True):
+    def preprocess(df, roll=2, thin=2, truncate=None, levels=None, drop_scenarios=None):
         if levels:
             to_drop = [lvl for lvl in df.columns.names if lvl not in levels]
             df      = df.droplevel(to_drop, axis=1)
@@ -61,8 +59,13 @@ class TimeResponseData:
         
         if truncate:
             lb, ub = truncate
-            df = df.iloc[lb:ub]
+            df     = df.loc[lb:ub]
         
+        if drop_scenarios:
+            lvls = df.columns.names[1:]
+            temp = [g for i, g in df.groupby(level=lvls, axis=1) if i not in drop_scenarios]
+            df   = pd.concat(temp, axis=1, sort=False)
+           
         df = df.rolling(roll, min_periods=1).mean()
         df = df.iloc[::thin]
         
@@ -131,24 +134,12 @@ class TimeResponseData:
             return self[var]
         else:
             return var
-        
-    def _getsd(self, var, sdvar):
-        if sdvar is None:
-            if type(var) == str:
-                return self.getsd(var, ignore_none=True)
-            else:
-                return None
-        else:
-            if type(sdvar) == str:
-                return self.getsd(sdvar)
-            else:
-                return sdvar 
             
     ###########################################################################
     #Representation
     ###########################################################################  
     def __str__(self):
-        return f'type(self).__name__{tuple(self.keys())}'
+        return f'{type(self).__name__}{tuple(self.keys())}'
     
     def __repr__(self):
         return self.__str__()
@@ -250,7 +241,7 @@ class TimeResponseData:
     ###########################################################################
     #Plotting
     ###########################################################################  
-    def _set_axis_lim(self, ax, xlim, ylim):
+    def _set_axis_lim(self, ax, xlim, ylim, zlim=None):
         def helper(func, lim):
             if lim is None:
                 pass
@@ -258,45 +249,74 @@ class TimeResponseData:
                 func(**lim)
             else:
                 func(*lim)
-                
-        helper(ax.set_xlim, xlim)
-        helper(ax.set_ylim, ylim)
-            
+        
+        if zlim is None:
+            helper(ax.set_xlim, xlim)
+            helper(ax.set_ylim, ylim)
+        else:
+            helper(ax.set_xlim, xlim)
+            helper(ax.set_ylim, ylim)
+            helper(ax.set_zlim, zlim)
+    
+    def _parse_color(self, args):
+        color = args.get('color')
+        
+        if type(color) == str:
+            args['color'] = upp.colors[color]
+            return args
+        else:
+            return args
+    
     def plot(self, AX, yvar, bounds=None, **kwargs):
         xvar = self._t
         return self.plot2(AX, xvar, yvar, bounds, **kwargs)
     
     def plot2(self, AX, xvar, yvar, bounds=None, xsd=None, ysd=None, 
               skip=lambda scenario: False, title=None, xlim=None, ylim=None,
+              halflife=None, thin=1,
               **line_args):
         x          = self._getvar(xvar)
         y          = self._getvar(yvar)
-        xsd        = self._getsd(xvar, xsd) 
-        ysd        = self._getsd(yvar, ysd) 
         
         if bounds:
             lb, ub = bounds
             x      = x.loc[lb:ub]
             y      = y.loc[lb:ub]
-            xsd    = None if xsd is None else xsd.loc[lb:ub]
-            xsd    = None if ysd is None else ysd.loc[lb:ub]
-        
+            
         lines         = {}
         ax_with_title = set()
         for scenario, color in self.colors.items():
             if skip(scenario):
                 continue
                 
-            x_vals = x[scenario].values 
-            y_vals = y[scenario].values 
-            xerr   = None if xsd is None else xsd[scenario].values
-            yerr   = None if ysd is None else ysd[scenario].values
+            x_vals = x[scenario]
+            y_vals = y[scenario]
+            
+            if halflife is None:
+                x_vals = x_vals
+                y_vals = y_vals
+            else:
+                x_vals = x_vals.ewm(halflife=halflife, ignore_na=True).mean()
+                y_vals = y_vals.ewm(halflife=halflife, ignore_na=True).mean()
+            
+            if x_vals.index.nlevels > 1:
+                raise NotImplementedError()
+            else:
+                x_vals = x_vals.values[::thin]
+                xerr   = None
+            
+            if y.index.nlevels > 1:
+                raise NotImplementedError()
+            else:
+                y_vals = y_vals.values[::thin]
+                yerr   = None
+            
             ax     = AX[scenario] if hasattr(AX, 'items') else AX
             
             defaults   = {'marker': 'o',   'linestyle': 'None',
-                          'color' : color, 'label'    : scenario
+                          'color' : color, 'label'    : ', '.join([str(s) for s in scenario])
                           }
-            line_args_ = {**defaults, **line_args}
+            line_args_ = self._parse_color({**defaults, **line_args})
 
             lines[scenario] = ax.errorbar(x_vals, y_vals, yerr=yerr, xerr=xerr, **line_args_)
             
@@ -307,13 +327,81 @@ class TimeResponseData:
             self._set_axis_lim(ax, xlim, ylim)
                 
         return lines
+    
+    def plot3(self, AX, xvar, yvar, zvar, bounds=None,
+              skip=lambda scenario: False, title=None, xlim=None, ylim=None, zlim=None,
+              halflife=None, thin=1,
+              **line_args):
+        x = self._getvar(xvar)
+        y = self._getvar(yvar)
+        z = self._getvar(zvar)
         
-    def plot_linear(self, ax, xvar, yvar, bounds=None, 
+        if bounds:
+            lb, ub = bounds
+            x      = x.loc[lb:ub]
+            y      = y.loc[lb:ub]
+            z      = z.loc[lb:ub]
+            
+        lines         = {}
+        ax_with_title = set()
+        for scenario, color in self.colors.items():
+            if skip(scenario):
+                continue
+                
+            x_vals = x[scenario]
+            y_vals = y[scenario]
+            z_vals = z[scenario]
+            
+            if halflife is not None:
+                x_vals = x_vals.ewm(halflife=halflife, ignore_na=True).mean()
+                y_vals = y_vals.ewm(halflife=halflife, ignore_na=True).mean()
+                z_vals = z_vals.ewm(halflife=halflife, ignore_na=True).mean()
+                
+            if x_vals.index.nlevels > 1:
+                raise NotImplementedError()
+            else:
+                x_vals = x_vals.values[::thin]
+                xerr   = None
+            
+            if y.index.nlevels > 1:
+                raise NotImplementedError()
+            else:
+                y_vals = y_vals.values[::thin]
+                yerr   = None
+            
+            if z.index.nlevels > 1:
+                raise NotImplementedError()
+            else:
+                z_vals = z_vals.values[::thin]
+                zerr   = None
+                
+            ax     = AX[scenario] if hasattr(AX, 'items') else AX
+            
+            defaults   = {'marker': 'o',   'linestyle': 'None',
+                          'color' : color, 'label'    : ', '.join([str(s) for s in scenario])
+                          }
+            line_args_ = self._parse_color({**defaults, **line_args})
+
+            lines[scenario] = ax.plot(x_vals, y_vals, z_vals, **line_args_)
+            
+            if title is not None and ax not in ax_with_title:
+                ax.set_title(title)
+                ax_with_title.add(ax)
+            
+            self._set_axis_lim(ax, xlim, ylim, zlim)
+                
+        return lines
+    
+    
+    def plot_linear_average(self, ax, xvar, yvar, bounds=None, 
                     skip=lambda scenario: False, title=None, xlim=None, ylim=None,
                     xspan=None,
                     **line_args):
-        x          = self._getvar(xvar)
-        y          = self._getvar(yvar)
+        if title is not None:
+            ax.set_title(title)
+        
+        x = self._getvar(xvar)
+        y = self._getvar(yvar)
         
         to_plot  = [c for c in x.columns if not skip(c)]
         
@@ -336,53 +424,74 @@ class TimeResponseData:
         
         x = x[idx]
         y = y[idx]
-        # ax.plot(x, y, '+')
         A = np.vstack([x, np.ones(len(x))]).T
+        
         m, c = np.linalg.lstsq(A, y, rcond=None)[0]
         xmax = max(x) if xspan is None else xspan[1]
         xmin = min(x) if xspan is None else xspan[0]
         x_ = np.linspace(xmin, xmax)
         
         line_args_ = {**{'label': '_nolabel'}, **line_args}
+        self._set_axis_lim(ax, xlim, ylim)
+        self._parse_color(line_args_)
+        
         plots      = ax.plot(x_, m*x_+c, '-', **line_args_) 
         
+        return plots, m, c
+    
+    def plot_average(self, ax, yvar, bounds, **kwargs):
+        xvar = self._t
+        return self.plot2(ax, xvar, yvar, bounds, **kwargs)
+        
+    def plot2_average(self, ax, xvar, yvar, bounds=None, 
+                   skip=lambda scenario: False, title=None, xlim=None, ylim=None,
+                   halflife=5, thin=1,
+                   **line_args
+                   ):
         if title is not None:
             ax.set_title(title)
         
+        x = self._getvar(xvar)
+        y = self._getvar(yvar)
+        
+        to_plot  = [c for c in x.columns if not skip(c)]
+        
+        if not to_plot:
+            return
+        
+        x = x.loc[:,to_plot]
+        y = y.loc[:,to_plot]
+        
+        if bounds:
+            lb, ub = bounds
+            x      = x.loc[lb:ub]
+            y      = y.loc[lb:ub]
+        
+        x = x.mean(axis=1).ewm(halflife=halflife, ignore_na=True).mean()
+        y = y.mean(axis=1).ewm(halflife=halflife, ignore_na=True).mean()
+        
+        if x.index.nlevels > 1:
+            raise NotImplementedError()
+        else:    
+            x = x.iloc[::thin].values
+        
+        if y.index.nlevels > 1:
+            raise NotImplementedError()
+        else:
+            y = y.iloc[::thin].values
+        
+        line_args_ = self._parse_color({**{'label': '_nolabel'}, **line_args})
         self._set_axis_lim(ax, xlim, ylim)
         
-        return m, c, plots
-    
-    def average(self, ax, xvar, bounds, skip=lambda scenario: False, title=None, ylim=None, **bar_args):
-        x          = self._getvar(xvar)
+        plots = ax.plot(x, y, **line_args_)
         
-        series  = []
-        heights = []
-        for scenario, color in self.colors.items():
-            if skip(scenario):
-                continue
-            
-            if bounds:
-                lb, ub = bounds
-                x_     = x.loc[lb:ub]
-                
-            #Finish this part
-            x_vals = x_[scenario].values 
-            avr    = np.nanmean(x_vals)
-
-            series.append(str(scenario))
-            heights.append(avr)
+        return plots, x, y
         
+    def time_taken(self, ax, xvar, bounds, rel=True, skip=lambda scenario: False, title=None, ylim=None, **bar_args):
         if title is not None:
             ax.set_title(title)
         
-        self._set_axis_lim(ax, None, ylim)
-        bar_args_ = {**{'color': self.colors.values()}, **bar_args}
-
-        return series, heights, ax.bar(series, heights, **bar_args_)
-    
-    def time_taken(self, ax, xvar, bounds, rel=True, skip=lambda scenario: False, title=None, ylim=None, **bar_args):
-        x          = self._getvar(xvar)
+        x = self._getvar(xvar)
         
         series  = []
         heights = []
@@ -411,18 +520,16 @@ class TimeResponseData:
             if skip(scenario):
                 continue
 
-            series.append(str(scenario))
+            series.append(', '.join([str(s) for s in scenario]))
             heights.append(time[scenario])
             colors.append(color)
-        
-        if title is not None:
-            ax.set_title(title)
-        
-        self._set_axis_lim(ax, None, ylim)
+    
         bar_args_ = {**{'color': colors}, **bar_args}
-
-        return series, heights, ax.bar(series, heights, **bar_args_)
+        self._parse_color(bar_args_)
+        self._set_axis_lim(ax, None, ylim)
         
+        return ax.bar(series, heights, **bar_args_), series, heights
+    
     ###########################################################################
     #Export as Dataset
     ###########################################################################  
