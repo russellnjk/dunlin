@@ -1,0 +1,3 @@
+
+class OED:
+    pass

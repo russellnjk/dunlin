@@ -1,0 +1,224 @@
+;Resource
+`pools`     : R, M, U, H, Rel
+`scenarios` : 0, 1
+
+;;states
+{{state}} : [{init}]
+	$init          : {scenario} : {{value}}
+	$init.scenario : `scenarios`
+	$$value        : 0.1, 1e3, 0, 0, 0.2,  0, 0, 0.03, 0
+	$$state        : x,   s,   P, g, `pools`
+
+;;events
+init_OU : [
+	trigger : time == 0, 
+	assign : [
+		M = fcon*fM_con/(fR_con + fM_con + fU_con + fH_con), 
+		U = 1-R-M-H-Rel
+		]
+	]
+
+;;parameters
+v_uptake    : [1.2440e+03]*2
+k_uptake    : [2.2025e+05]*2
+Yield       : [9.7929]*2
+v_synprot   : [1.5800e+03]*2
+k_synprot   : [1.8126]*2
+fcon        : [0.4568]*2
+fR_con      : [1.0000]*2
+fR_var      : [1.0000]*2
+fM_con      : [0.0987]*2
+fM_var      : [17.7244]*2
+fU_con      : [4.9480]*2
+fU_var      : [0.0527]*2
+fH_con      : [0.0002]*2
+fH_var      : [6.5005]*2
+k_fR        : [3.0650e-05]*2
+n_fR        : [2.0000]*2
+k_fM        : [0.6348]*2
+k_fs        : [40.2882]*2
+n_fs        : [1.0000]*2
+n_fM        : [1.0000]*2
+k_fH        : [499.0376]*2
+n_fH        : [2.0000]*2
+k_P         : [0.0712]*2
+ind         : [0.0000, 1.0000]
+syng        : [1.2239e+05]*2
+k_ut        : [577.4183]*2
+k_ct        : [1.9520]*2
+degg        : [0.1816]*2
+degspot     : [0.4656]*2
+degrel      : [0.2740]*2
+fRel_con    : [1.1664e-06]*2
+fRel_var    : [5.4456e-03]*2
+k_fRel      : [0.2915]*2
+n_fRel      : [1.0000]*2
+
+# v_uptake    : [25.0]*2
+# k_uptake    : [1e4]*2
+# Yield       : [12.18]*2
+# v_synprot   : [1.58e3]*2
+# k_synprot   : [0.4]*2
+# fcon        : [0.46]*2
+# fR_con      : [1.00]*2
+# fR_var      : [1.00]*2
+# fM_con      : [5.31]*2
+# fM_var      : [20.68]*2
+# fU_con      : [35.28]*2
+# fU_var      : [0.21]*2
+# fH_con      : [0.03]*2
+# fH_var      : [0.5]*2
+# k_fR        : [0.5e-04]*2
+# n_fR        : [2]*2
+# k_fM        : [0.5]*2
+# k_fs        : [400]*2
+# n_fs        : [1]*2
+# n_fM        : [1]*2
+# k_fH        : [400]*2
+# n_fH        : [2]*2
+# k_P         : [0.01]*2
+# ind         : [0.00, 1.00]
+# syng        : [1e5]*2
+# k_ut        : [231.5]*2
+# k_ct        : [0.8197]*2
+# degg        : [0.02]*2
+# degspot     : [0.07]*2
+# degrel      : [0.02]*2
+# fRel_con    : [1.08e-04]*2
+# fRel_var    : [5.35e-04]*2
+# k_fRel      : [2]*2
+# n_fRel      : [1.00]*2
+
+#Definitions
+#v_uptake : Turnover number for uptake lumped with average mw of transporter
+
+;;variables
+#Proteins fRom aa
+n_R     : R/7459
+n_M     : M/300
+n_H     : H/230
+allprot : R+M+U+H
+R_frac  : R/allprot
+H_frac  : H/allprot
+
+#Conversion between cell mass and aa
+x2aa_umol    : 1/110*1e6
+x_in_aa_umol : x*x2aa_umol
+
+#Uptake per umol of x_in_aa_umol
+uptake       : v_uptake*n_M*s/(k_uptake + s)
+synp         : uptake
+
+#Translation aa/min in 1 umol of x
+rsat    : P/(P + k_synprot)
+A       : rsat
+A_      : 1-rsat 
+synprot : v_synprot*n_R*rsat
+mu      : synprot
+
+#Translational regulation
+#Assume fast ppgpp regulation
+regR   : k_fR**n_fR/(g**n_fR + k_fR**n_fR)
+regM   : P**n_fM/(P**n_fM + k_fM**n_fM)*s**n_fs/(k_fs**n_fs+s**n_fs)
+regU   : 1
+regH   : ind*k_fH**n_fH/(k_fH**n_fH+s**n_fH)*P/(k_P+P)
+regRel : P**n_fRel/(P**n_fRel + k_fRel**n_fRel)
+
+#g regulation
+syng_eff : syng*Rel*n_R*(A_*k_ut)/(1 +A_*k_ut +rsat*k_ct)
+degg_eff : degspot*rsat + degg
+
+#Same for all models
+fvar   : 1-fcon
+con{{i}} : fcon*f{{i}}_con/({fsum})
+	$fsum      : f{i}_con
+	$fsum.join : +
+	$fsum.i    : `pools`
+	$$i        : `pools`
+var{{i}} : fvar*f{{i}}_var*reg{{i}}/({fsum})
+	$fsum      : f{i}_var*reg{i}
+	$fsum.join : +
+	$fsum.i    : `pools`
+	$$i: `pools`
+j{{i}}   : con{{i}}+var{{i}}
+	$$i: `pools`
+syn_{{i}} : synprot*j{{i}}
+	$$i: `pools`
+
+;;rates
+s   : -uptake*x_in_aa_umol
+x   :  mu*x 
+P   : -mu*P -synprot +synp*Yield 
+R   : -mu*R +syn_R
+M   : -mu*M +syn_M
+U   : -mu*U +syn_U
+H   : -mu*H +syn_H
+g   : -mu*g +syng_eff -degg_eff*g
+Rel : -mu*Rel +syn_Rel -degrel*Rel
+
+;;optim_args
+free_parameters : [
+	v_uptake  : [bounds : [1e-1, 5e3  ],  scale : lin  ],
+	k_uptake  : [bounds : [1e0,  5e5  ],  scale : log10],
+	k_synprot : [bounds : [1e-1, 1e1  ],  scale : lin  ],
+	fcon      : [bounds : [4e-1, 6e-1 ],  scale : lin  ],
+	fM_con    : [bounds : [1e-2, 5e1  ],  scale : lin  ],
+	fM_var    : [bounds : [1e-2, 5e1  ],  scale : lin  ],
+	fU_con    : [bounds : [1e-2, 5e1  ],  scale : lin  ],
+	fU_var    : [bounds : [1e-2, 5    ],  scale : lin  ],
+	fH_con    : [bounds : [1e-4, 20   ],  scale : lin  ],
+	fH_var    : [bounds : [1e-2, 20   ],  scale : lin  ],
+	k_fR      : [bounds : [1e-7, 1e-3 ],  scale : log10],
+	k_fM      : [bounds : [1e-3, 5e1  ],  scale : log10],
+	k_fs      : [bounds : [1e1,  1e4  ],  scale : log10],
+	k_fH      : [bounds : [1e0,  1e4  ],  scale : log10],
+	k_P       : [bounds : [1e-4, 5e1  ],  scale : log10],
+	syng      : [bounds : [1e3,  1e7  ],  scale : log10],
+	degg      : [bounds : [1e-3, 5    ],  scale : log10],
+	k_ut      : [bounds : [1e2 , 1e3  ],  scale : log10],
+	k_ct      : [bounds : [1e-1, 1e1  ],  scale : log10],
+	degspot   : [bounds : [1e-4, 1e0  ],  scale : log10],
+	degrel    : [bounds : [1e-4, 1e0  ],  scale : log10],
+	fRel_con  : [bounds : [1e-6, 1e-2 ],  scale : log10],
+	fRel_var  : [bounds : [1e-6, 1e-2 ],  scale : log10],
+	k_fRel    : [bounds : [1e-3, 1e1  ],  scale : log10]
+	]
+settings : [
+	disp  : True,
+	niter : 100
+	]
+
+#Same for all models
+;;tspan
+{{scenario}} : !linspace, 0, 800, 41!
+	$$scenario: 0, 1
+
+;;int_args
+method : BDF
+
+;;sim_args
+line_args : [
+	marker: None,
+	linestyle: -,
+	label : '{{scenario}}mM',
+	color : [
+		0 : cobalt, 
+		1 : coral, 
+		2 : ocean,
+		3 : steel
+		]
+	]
+
+;;data_args;dataset
+line_args : [
+	color : [
+		0 : cobalt, 
+		1 : coral, 
+		],
+	capsize : 5
+	]
+
+;;extra
+final_H : [index, H_frac, -1]
+max_mu  : [max, mu]
+

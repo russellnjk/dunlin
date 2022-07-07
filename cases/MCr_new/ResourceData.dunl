@@ -1,0 +1,60 @@
+`excel_args` : sheet_name: Compiled, header : 4, thin : 5, drop : 1, truncate : [0, 750], roll: 3
+
+;GFP
+dtype   : time_response_data
+no_fit : 'all'
+
+;;concat_by_trial
+#Files in each group contain data for the same variables
+#They do not contain a header row for the trial number
+#The data frames produced by reading each file will be 
+#concatenated into a single multi-index data frame.
+#The names of the groups are only for the user's reference 
+#when writing the file and will be dropped after the 
+#data frames are created.
+#0.4% Glu + x% CA
+g4 : [
+	'expdata/data_211225_MCr.xlsx' : [`excel_args`],
+	'expdata/data_211120_MCr.xlsx' : [`excel_args`],
+	'expdata/data_211127_MCr.xlsx' : [`excel_args`]
+	]
+	
+#0.4% Gly + x% CA
+y4 : [
+	'expdata/data_211119_MCr.xlsx' : [`excel_args`],
+	'expdata/data_211128_MCr.xlsx' : [`excel_args`],
+	'expdata/data_211219_MCr.xlsx' : [`excel_args`]
+	]
+
+#0.8% Glu + x% CA
+g8 : [
+	'expdata/data_211129_MCr.xlsx' : [`excel_args`],
+	'expdata/data_211221_MCr.xlsx' : [`excel_args`],
+	'expdata/data_211222_MCr.xlsx' : [`excel_args`]
+	]
+
+#0.2% Gly + x% CA
+y2 : [
+	'expdata/data_02gly_0.xlsx' : [`excel_args`],
+	'expdata/data_02gly_1.xlsx' : [`excel_args`],
+	'expdata/data_02gly_2.xlsx' : [`excel_args`]
+	]
+
+
+;LZGFP
+dtype  : time_response_data
+no_fit : 'all'
+
+;;concat_by_trial
+#LZGFP 0.4% Glu + x% CA
+lg4  : [
+	'expdata/data_04glu_0_LZ.xlsx' : [`excel_args`],
+	'expdata/data_04glu_1_LZ.xlsx' : [`excel_args`],
+	'expdata/data_04glu_2_LZ.xlsx' : [`excel_args`],
+	]
+	
+lg4c : [
+	'expdata/data_04glu02ca_0_LZ.xlsx' : [`excel_args`],
+	'expdata/data_04glu02ca_1_LZ.xlsx' : [`excel_args`],
+	'expdata/data_04glu02ca_2_LZ.xlsx' : [`excel_args`]
+	]

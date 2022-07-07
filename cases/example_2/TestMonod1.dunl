@@ -1,0 +1,77 @@
+;Monod
+dtype : ode
+
+;;states
+x : [0.1: 0.25,  0.15: 0.25,  0.2: 0.25 ]
+S : [0.1: 5.5e3, 0.15: 8.3e3, 0.2: 1.1e4]
+H : [0.1: 0,     0.15: 0,     0.2: 0    ]
+
+;;parameters
+mu_max  : [0.1: 0.012, 0.15: 0.012, 0.2: 0.012]
+k_S     : [0.1: 8.5e4, 0.15: 8.5e4, 0.2: 8.5e4]
+yield_S : [0.1: 1.8e4, 0.15: 1.8e4, 0.2: 1.8e4]
+k_ind   : [0.1: 0.5,   0.15: 0.5,   0.2: 0.5  ]
+v_H_max : [0.1: 200,   0.15: 200,   0.2: 200  ]
+dil     : [0.1: 0,     0.15: 0,     0.2: 0    ]
+Sin     : [0.1: 0,     0.15: 0,     0.2: 0    ]
+ind     : [0.1: 0,     0.15: 0,     0.2: 0    ]
+
+;;variables
+mu : mu_max*S/(S + k_S)
+
+;;reactions
+dil_x  : [x ->  , dil*x            ]
+dil_S  : [S ->  , dil*S            ]
+dil_H  : [H ->  , dil*H            ]
+feed   : [  -> S, dil*Sin          ]
+growth : [  -> x, mu*x             ]
+S_up   : [S ->  , mu*x*yield_S     ]
+syn_H  : [  -> H, ind/(ind + k_ind)]
+
+;;tspan
+0.1  : !linspace, 0, 600, 61!
+0.15 : !linspace, 0, 600, 61!
+0.2  : !linspace, 0, 600, 61!
+
+;;optim_args
+free_parameters : [
+	mu_max  : [bounds: [1e-4, 1e-1], scale: lin, prior: [normal, 1e-2, 5e-3]],
+	k_S     : [bounds: [1e3,  1e4 ], scale: lin],
+	]
+settings : [
+	disp    : True
+	]
+line_args :
+	[
+	marker    : "None",
+	linestyle : "--"
+	]
+
+;;sim_args
+line_args : [
+	color: [
+		0.1  : coral,
+		0.15 : sea,
+		0.2  : cobalt
+		]
+	]
+
+;;data_args;dataset
+line_args : [
+	color : [
+		0.1  : coral,
+		0.15 : sea,
+		0.2  : cobalt
+		],
+	capsize : 5
+	]
+
+;MonodData
+dtype : time_response_data
+model : Monod
+
+;;file_data
+timeresponse.csv: [
+	header: 3, 
+	trial: True
+	]

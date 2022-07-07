@@ -1,47 +1,23 @@
-import sys
-import os
-from os.path  import dirname, join
+# import sys
+# import os
+# from os.path  import dirname, join
 
-#Add path
-_dir = dirname(__file__)
-if _dir not in sys.path:
-    sys.path.insert(0, _dir)
+# #Add path
+# _dir = dirname(__file__)
+# if _dir not in sys.path:
+#     sys.path.insert(0, _dir)
     
-#Import front end
-# from .standardfile     import *
-from .model            import (read_file, 
-                               make_models, 
-                               Model
+#Import front end functions
+from .standardfile     import *
+from .ode              import *
+from .load             import load_file
+from .optimize         import *
+from .data             import *
+from .simulate         import (simulate_model,
+                               plot_line,
+                               plot_bar,
                                )
-from .simulate         import (plot_simresults, 
-                               simulate_model, 
-                               simulate_and_plot_model, 
-                               SimResult
-                               )
-from .optimize         import (fit_model,
-                               plot_dataset,
-                               simulate_and_plot,
-                               OptResult
-                               )
-from ._utils_plot      import (figure, 
-                               gridspec, 
-                               colors, 
-                               scilimit, 
-                               save_figs,
-                               colors,
-                               get_color,
-                               make_color_scenarios,
-                               make_dark_scenarios,
-                               make_light_scenarios
-                               )
+from .utils_plot       import *
 
-styles = {}
-
-_utils_plot_path = join(_dir, '_utils_plot')
-for file in os.listdir(_utils_plot_path):
-    try:
-        name, ext = file.split('.')
-        if ext == 'mplstyle':
-            styles[name] = join(_utils_plot_path, file)
-    except:
-        pass
+#Import datastructures for advanced use
+from . import datastructures

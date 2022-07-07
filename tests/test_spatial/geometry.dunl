@@ -1,0 +1,120 @@
+;A
+
+#SBML Compartment
+;;compartments
+#SBML CompartmentMapping : DomainType
+cp0: [
+	domain_type: dmtype0,
+	contains   : [x0]
+	]
+
+#For dunlin, make units optional
+#SBML Geometry
+;;geometry
+#SBML ListofCoordinateComponents
+;;;coordinate_components
+#SBML CoordinateComponent
+#id or name: [Boundary: [boundaryMin, boundaryMax], unit: UniSIdRef]
+x: [bounds: [0, 10], unit: m]
+y: [bounds: [0, 10], unit: m]
+z: [bounds: [0, 10], unit: m]
+
+#SBML ListofDomainTypes
+;;;domain_types
+#SBML DomainType
+#id or name: [spatialDimensions : int, SpatialSymbolReference: Parameter, unit: UniSIdRef]
+dmntype0: [ndim: 3, variable: vrb0 , unit: m]
+dmntype1: [ndim: 2, variable: vrb0 , unit: m]
+
+;;;domains
+#id or name: [domainType: DomainType, ListofInteriorPoints: [InteriorPoint...]]
+dmn0: [
+	domain_type: dmntype0
+	points: [
+		[0, 0, 0]
+		]
+	]
+
+dmn1: [
+	domain_type: dmntype0
+	points: [
+		[10, 10, 10]
+		]
+	]
+
+#SBML ListofAdjacentDomains
+;;;adjacent
+#SBML AdjacentDomains
+#id or name: [Domain...]
+adjc0: [dmn0, dmn1]
+
+#SBML GeometryDefinition
+;;;geometry_definition
+#The SBML version has attribute isActive which can only be true for one definition.
+#In dunlin, the active definition is explicitly specified by the definition attribute
+definition : analytic
+
+#SBML AnalyticGeometry
+#For equation-based definition
+analytic: [
+	#SBML ListofAnalyticVolumes
+	#SBML AnalyticVolume
+	#id or name: [domain_type: DomainType, ordinal: int, math: math, functionType: FunctionKind]
+	vol0 : [
+		domain_type: dmn0,
+		order      : 0, #For parsing overlapping volumes
+		math       : 8*(x-1)**2 +8*(y-1)**2 +8*(z-1)**2 < 1,
+		function   : layered #This is the only allowed value for now.
+		]
+	]
+
+#SBML CSGeometry
+#For primitive shape-based definition
+constructed_solid: [
+	#SBML ListofCSGObjects
+	#SBML CSGObject
+	#id or name: [domain_type: DomainType, ordinal: int, csgNode: CSGNode]
+	csg0 :[
+		domain_type: dmn0,
+		order      : 1, #For parsing overlapping volumes
+		node       : #Needs its own formatting to maintain readbility
+			translate: [x: 5.439, y: 5.88, z: 1.078,
+				rotate :[x: 2.4391, y: 1.5373, z: 0.58404, angleinradians: 0.9104
+					scale: [x: 0.075833, y: 0.080451, z: 0.029583
+						sphere #This is a primitive
+						],
+					],
+				]
+		]
+	]
+
+#SBML SampledFieldGeometry
+#For image-based definition
+sampled_field: [
+	#SBML sampledField: SpIDRef
+	#SBML ListofSampledFields
+	#SBML SampledField
+	#It appears that ListofSampledFields is expected to contain only one element at any time
+	#It is thus convenient to simply specify that element directly instead of using nested containers
+	to_sample: fld0
+	#SBML ListofSampledVolumes
+	#SBML SampledVolume
+	volumes: [
+		#id or name: [domain_type: DomainType, minVal: double, maxVal: double, sampledValue: double]
+		vom0: [
+			domain_type: dmn0,
+			bounds     : [0, 64], #Or value if all pixels are the same
+			]
+		],
+	]
+
+;;;sampled_fields
+fld0 : [
+	interpolation: linear,
+	compression  : uncompressed,
+	dtype        : uint8,
+	shape        : [51, 59, 23],
+	length       : 1255, #Used with compression for validation
+	values       : !dim3, 51, 59, 23, 0! #Use of builtin OR import an image
+	]
+

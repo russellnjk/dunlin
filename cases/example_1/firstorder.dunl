@@ -1,0 +1,97 @@
+
+`tspan` : !linspace, 0, 100, 21!
+`tc0` : '!linspace, 0, 100, 21!'
+ 
+;firstorder
+
+;;states
+x0 : [c0 : 1, c1 : 1]
+x1 : [c0 : 0, c1 : 0]
+x2 : [c0 : 0, c1 : 0]
+
+;;parameters
+p0 : [c0: 0.02, c1 : 0.02]
+p1 : [c0: 0.02, c1 : 0.02]
+p2 : [c0: 0.02, c1 : 0.02]
+u0 : [c0: 0,    c1 : 1  ]
+
+;;events
+ev0 : [
+	trigger : time == 50,
+	assign : [
+		x0 = x0 + u0,
+		x2 = x2 + u0
+		],
+	]
+
+;;reactions
+r0 : [x0 -> x1, p0*x0]
+r1 : [x1 -> x2, p1*x1, p2*x2]
+
+;;tspan
+c0 : !linspace, 0, 100, 21!
+c1 : !linspace, 0, 100, 21!
+
+;;sim_args;line_args
+color: [
+	c0 : coral,
+	c1 : cobalt
+	],
+linestyle : "--"
+marker : [
+	c0 : o,
+	c1 : x
+	]
+
+;firstorder_with_final
+
+;;states
+x0 : [c0 : 1, c1 : 1]
+x1 : [c0 : 0, c1 : 0]
+x2 : [c0 : 0, c1 : 0]
+
+;;parameters
+p0 : [c0: 0.02, c1 : 0.02]
+p1 : [c0: 0.02, c1 : 0.02]
+p2 : [c0: 0.02, c1 : 0.02]
+u0 : [c0: 0,    c1 : 1  ]
+
+;;events
+ev0 : [
+	trigger : time == 50,
+	assign : [
+		x0 = x0 + u0,
+		x2 = x2 + u0
+		],
+	]
+
+;;reactions
+r0 : [x0 -> x1, p0*x0]
+r1 : [x1 -> x2, p1*x1, p2*x2]
+
+;;tspan
+c0 : !linspace, 0, 100, 21!
+c1 : !linspace, 0, 100, 21!
+
+;;sim_args;line_args
+color: [
+	c0 : coral,
+	c1 : cobalt
+	],
+linestyle : "--"
+marker : [
+	c0 : o,
+	c1 : x
+	]
+
+;;sim_args;bar_args
+color: [
+	c0 : coral,
+	c1 : cobalt,
+	final_x1 : sea,
+	x2_at_60 : marigold
+	]
+
+;;extra
+final_x1 : [index, x1, -1]
+x2_at_60 : [where, time > 60, x2]
