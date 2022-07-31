@@ -29,6 +29,33 @@ def od2x(od, od2g=0.5, dcwfrac=0.55):
     return x
 
 def rfp_od2rfrac(au, od, od2g=0.5, dcwfrac=0.55, medium='M9'):
+    '''
+    
+
+    Parameters
+    ----------
+    au : float
+        Fluorescence in AU.
+    od : float
+        Optical density at 600nm.
+    od2g : float, optional
+        g dry cell weight per OD. The default is 0.5.
+    dcwfrac : TYPE, optional
+        g protein per g dry cell weight. The default is 0.55.
+    medium : str, optional
+        LB or M9. The default is 'M9'.
+    
+    Notes
+    -------
+    LB is less reliable and values fluctuate each time the medium is calibrated.
+    Probably due to LB colornot being consistent.
+
+    Returns
+    -------
+    float
+        Ribosome fraction.
+
+    '''
     #fp in g/L
     #x in g/L
     # fp   = au*2.771e-6
@@ -42,11 +69,48 @@ def rfp_od2rfrac(au, od, od2g=0.5, dcwfrac=0.55, medium='M9'):
         
     x    = od*od2g*dcwfrac
     fp_x = fp/x
-    fp2r = 820490/27e3
+    
+    #Convert from RFP to Ribosomes
+    #Assume 7459 amino acids per ribosome
     #820490 = 7459*110
+    #RFP molecular weight is 27000
+    
+    #Ratio of ribo mass to rfp mass is:
+    fp2r = 820490/27e3
+    
+    #Return ribo fraction
     return fp_x*fp2r
 
 def gfp_od2hfrac(au, od,  od2g=0.5, stoich=1, dcwfrac=0.55, medium='M9'):
+    '''
+    
+
+    Parameters
+    ----------
+    au : float
+        Fluorescence in AU.
+    od : float
+        Optical density at 600nm.
+    od2g : float, optional
+        g dry cell weight per OD. The default is 0.5.
+    stoich : float, optional
+        Mass stoichiometric scaling i.e. MW of H protein/MW of GFP. The default is 1.
+    dcwfrac : TYPE, optional
+        g protein per g dry cell weight. The default is 0.55.
+    medium : str, optional
+        LB or M9. The default is 'M9'.
+
+    Notes
+    -------
+    LB is less reliable and values fluctuate each time the medium is calibrated.
+    Probably due to LB colornot being consistent.
+
+    Returns
+    -------
+    float
+        GFP fraction.
+
+    '''
     # fp   = 4.9770e-15*au**2 + 5.7066e-08*au
     
     if medium == 'M9':

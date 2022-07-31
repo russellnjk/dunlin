@@ -35,7 +35,7 @@ def compare_cycle(ax0, ax1, title, skip):
     ax0.set_title(title, pad=20)
     ax0.legend(title='IPTG')
     
-    plot_args = {'linestyle': pp.linestyle,  
+    plot_args = {'linestyle': '',  
                  'color'    : pp.ind_color, 
                  'thin'     : pp.thin if 'Gly' in title else 1, #Needs more points
                  'label'    : 'None',
@@ -53,7 +53,7 @@ def compare_cycle(ax0, ax1, title, skip):
 def compare_media(ax, skip, title, colors, markers):
     
     label   = lambda ref, variable, scenario: scenario[0]
-    plot_args = {'marker'   : markers, 'linestyle': '-',  'color'     : colors, 
+    plot_args = {'marker'   : markers, 'linestyle': '',  'color'     : colors, 
                  'thin'     : pp.thin, 'label'    : label,
                  'xlabel': 'λ (1/min)',
                  'ylabel': '$ϕ_R$',

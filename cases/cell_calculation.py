@@ -21,6 +21,32 @@ def rfrac2mu(rfrac, rsat=1, ract=1, r2aa=7459, kr=18):
     return mu
 
 def rfp_od2rfrac(au, od, au2ug=2.771e-6, od2g=0.5, mw_fp=27e3, mw_r=820490, stoich=1, dcwfrac=0.5):
+    '''
+    Parameters
+    ----------
+    au : float
+        Fluorescence in AU.
+    od : float
+        Biomass in OD.
+    au2g : float
+        ug FP per AU per L.
+    od2g : float
+        g DCW per OD per L.
+    mw_fp : TYPE, optional
+        DESCRIPTION. The default is 27e3.
+    mw_r : TYPE, optional
+        DESCRIPTION. The default is 820490.
+    stoich : TYPE, optional
+        DESCRIPTION. The default is 1.
+    dcwfrac : float
+        g protein per g dry cell weight
+        
+    Returns
+    -------
+    float
+        Ribosome fraction
+
+    '''
     fp_x =  fp_od_2_frac(au, od, au2ug, od2g, dcwfrac)
     fp2r = stoich*mw_r/mw_fp
     
@@ -45,6 +71,8 @@ def fp_od_2_frac(au, od, au2g, od2g, dcwfrac=0.5):
         ug FP per AU per L.
     od2g : float
         g DCW per OD per L.
+    dcwfrac : float
+        g protein per g dry cell weight
 
     Returns
     -------

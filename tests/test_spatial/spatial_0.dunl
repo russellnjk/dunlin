@@ -1,0 +1,135 @@
+;M1
+;;states
+H : [0, 0]
+A : [0, 0]
+B : [0, 0]
+
+;;parameters
+k_synH   : [1,   1]
+k_synB   : [10, 10]
+k_synH_A : [0.05, 0.05]
+
+J_H_x : [0.1, 0.1]
+J_H_y : [0.1, 0.1]
+J_A_x : [0.1, 0.1]
+J_A_y : [0.1, 0.1]
+J_B_x : [0.1, 0.1]
+J_B_y : [0.1, 0.1]
+
+F_H_x : [0, 0]
+F_H_y : [0, 0]
+F_A_x : [1, 1]
+F_A_y : [1, 1]
+F_B_x : [1, 1]
+F_B_y : [1, 1]
+
+;;reactions
+#Need to infer which reactions apply to bulk/boundary
+#name str: [eqn: str, fwd: num|str, rev: num|str]
+synH : [      -> H, k_synH]
+synB : [H + A -> B, k_synB*H*A, k_synH_A*B]
+
+;;diffusion
+#Must allow scalar and tensor values for each dimension
+#name str: [species: str, dim0: str|num|tensor|path, dim1: str|num|tensor|path, dim2: str|num|tensor|path]
+dfnH : [H, J_H_x, J_H_y]
+dfnA : [A, J_A_x, J_A_y]
+dfnB : [B, J_B_x, J_B_y]
+
+;;advection
+#Must allow scalar and tensor values for each dimension
+#name str: [species: str, dim0: str|num|tensor|path, dim1: str|num|tensor|path, dim2: str|num|tensor|path]
+advH : [H, F_H_x, F_H_y]
+advA : [A, F_A_x, F_A_y]
+advB : [A, F_A_x, F_A_y]
+
+;;compartments
+cytosol : [
+	domain_type: cytosolic,
+	contains   : [H],
+	unit_size  : 1
+	]
+
+medium : [
+	domain_type: extracellular,
+	contains   : [A, B],
+	unit_size  : 1
+	]
+	
+
+;Geo0
+;;boundary_conditions
+#If a reaction is specified, a boundary_condition cannot be used
+#If neither a reaction nor boundary_condition is specified, assume a Neumann type boundary_condition with flux of zero
+#name str: [species: str, expr: str|num, boundary_type: str, coordinate: str|list]
+#boundary_type: Neumann, Dirichlet, Robin*
+#coordinate: str|[{x, y, z}, {min, max}]
+bcA : [A, 0, Neumann, extracellular]
+
+;;coordinate_components
+#For now assume only cartesian coordinates are allowed
+#name str: [bounds: [min, max], unit: str]
+#name: {x, y, z}
+#If there is a need to add new kinds of coordinates, add more possible values for name
+x: [bounds: [0, 10], unit: m]
+y: [bounds: [0, 10], unit: m]
+z: [bounds: [0, 10], unit: m]
+
+#SBML ListofDomainTypes
+;;domain_types
+#SBML DomainType
+#id or name: [spatialDimensions : int, SpatialSymbolReference: Parameter, domains: [domain str: internal_points list]]
+extracellular : [
+	domains: [
+		medium0: [[1, 1]]
+		]
+	]
+cytosolic : [
+	domains: [
+		cytosol0: [[[5, 5]]
+			]
+		]
+	]
+#no. of dimensions should be inferred from internal_points
+#units should be inferred from coordinate_components
+
+;;adjacent_domains
+#name str: [domain0 str, domain1 str]
+cytosol0_medium0: [cytosol0, medium0]
+
+#SBML GeometryDefinition
+;;geometry_definitions
+cell : [
+	definition : csg,
+	domain_type: cytosolic,
+	order      : 0,
+	node       : [
+		circle0 : circle
+		]
+	]
+
+field : [
+	definition : csg,
+	domain_type: cytosolic,
+	order      : 0,
+	node       : [difference, [square, [scale, 5, 5], [translate, 5, 5]], [circle]]
+	node       : [
+		circle0 : [
+			circle
+			],
+		square0 : [
+			square, 
+			[scale, 5, 5], 
+			[translate, 5, 5]
+			],
+		result : [difference, square0, circle0]
+		]
+	]
+
+#More on node
+#Each element represents some operation or definition of a shape
+#The last element is taken to be the resultant geometry definition
+#node: [shape str: primitive str|transformed_primitive dict|operation list, ... ]
+#primitive str: {circle, square, sphere, cube, cylinder, cone}
+#transformed_primitive dict: [primitive: primitive, **kwargs]
+#operation list: [{union, intersection, difference}, shape, shape]

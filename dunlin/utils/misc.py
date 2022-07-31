@@ -224,30 +224,6 @@ def split_functionlike(x, allow_num=True):
 ###############################################################################
 #Variable Extraction
 ###############################################################################
-# def get_eqn_variables(eqn):
-#     if islistlike(eqn):
-#         result = set()
-#         for e in eqn:
-#             temp = get_eqn_variables(e)
-#             result.update(temp)
-#         return result
-#     else:
-#         pattern   = '[a-zA-Z_][a-zA-Z0-9_.]*|[0-9]e[0-9]'
-#         found     = re.findall(pattern, eqn.strip()) 
-#         variables = set()
-        
-#         for v in found:
-#             if isnum(v):
-#                 continue
-#             elif v == 'time':
-#                 continue
-#             elif v in reserved:
-#                 raise ValueError('Detected reserved keyword in equation.')
-#             else:
-#                 variables.add(v)
-        
-#         return variables
-
 def get_namespace(eqn, allow_reserved=False, add_reserved=False):
     if not eqn:
         return set()
@@ -260,6 +236,7 @@ def get_namespace(eqn, allow_reserved=False, add_reserved=False):
         return result
     else:
         pattern   = '[a-zA-Z_][a-zA-Z0-9_.]*|[0-9]e[0-9]'
+        pattern   = '[a-zA-Z_][a-zA-Z0-9_.]*|[0-9]e-?[0-9]'
         found     = re.findall(pattern, eqn.strip()) 
         variables = set()
         

@@ -10,6 +10,32 @@ class Reaction(_AItem):
     ###########################################################################
     #Preprocessing
     ###########################################################################
+    @classmethod
+    def eqn2stoich(cls, eqn):
+        #An example eqn is a + 2*b -> c
+        #Split the reaction
+        try:
+            rcts, prds = eqn.split('->')
+            rcts = rcts.strip()
+            prds = prds.strip()
+        except:
+            raise exc.InvalidDefinition('reaction equation', '<reactants> -> <products>', eqn)
+        
+        #Get the stoichiometry
+        if rcts:
+            rcts_stoich = [cls.get_stoich(chunk, invert_sign=True) for chunk in rcts.split('+')]
+        else:
+            rcts_stoich = []
+        
+        if prds:
+            prds_stoich = [cls.get_stoich(chunk, invert_sign=False) for chunk in prds.split('+')]
+        else:
+            prds_stoich = []
+            
+        stoich      = dict(rcts_stoich + prds_stoich)
+        
+        return stoich
+        
     @staticmethod
     def get_stoich(rct: str, invert_sign: bool =False) -> tuple[str, str]:
         rct_ = rct.strip().split('*')
@@ -56,28 +82,30 @@ class Reaction(_AItem):
                  bounds: Optional[Bnd]=None,
                  compartment: OStr = None
                  ):
-        #An example eqn is a + 2*b -> c
-        #Split the reaction
-        try:
-            rcts, prds = eqn.split('->')
-            rcts = rcts.strip()
-            prds = prds.strip()
-        except:
-            raise exc.InvalidDefinition('reaction equation', '<reactants> -> <products>', eqn)
+        # #An example eqn is a + 2*b -> c
+        # #Split the reaction
+        # try:
+        #     rcts, prds = eqn.split('->')
+        #     rcts = rcts.strip()
+        #     prds = prds.strip()
+        # except:
+        #     raise exc.InvalidDefinition('reaction equation', '<reactants> -> <products>', eqn)
         
-        #Get the stoichiometry
-        if rcts:
-            rcts_stoich = [self.get_stoich(chunk, invert_sign=True) for chunk in rcts.split('+')]
-        else:
-            rcts_stoich = []
+        # #Get the stoichiometry
+        # if rcts:
+        #     rcts_stoich = [self.get_stoich(chunk, invert_sign=True) for chunk in rcts.split('+')]
+        # else:
+        #     rcts_stoich = []
         
-        if prds:
-            prds_stoich = [self.get_stoich(chunk, invert_sign=False) for chunk in prds.split('+')]
-        else:
-            prds_stoich = []
+        # if prds:
+        #     prds_stoich = [self.get_stoich(chunk, invert_sign=False) for chunk in prds.split('+')]
+        # else:
+        #     prds_stoich = []
             
-        stoich      = dict(rcts_stoich + prds_stoich)
-
+        # stoich      = dict(rcts_stoich + prds_stoich)
+        
+        stoich = self.eqn2stoich(eqn)
+        
         #Parse the reaction rates
         rate, rxn_variables = self.get_rxn_rate(fwd, rev)
         rxn_variables.update(stoich)

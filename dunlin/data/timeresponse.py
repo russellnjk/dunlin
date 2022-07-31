@@ -5,8 +5,7 @@ from typing import Optional, Sequence, TypeVar, Union
 
 import dunlin.utils      as ut
 import dunlin.utils_plot as upp
-from dunlin.utils.typing import (ODict, OStr, OScenario,
-                                 Dflst, Dfdct, Index, Num, 
+from dunlin.utils.typing import (Dflst, Dfdct, Index, Num, 
                                  Model, Scenario, VScenario,
                                  VData
                                  )
@@ -200,13 +199,47 @@ class TimeResponseData:
     ###########################################################################
     @classmethod
     def load_files(cls, 
-                   file_data: ODict = None, 
-                   concat_by_trial: ODict = None, 
-                   dataset_args: ODict = None, 
+                   file_data: dict = None, 
+                   concat_by_trial: dict = None, 
+                   dataset_args: dict = None, 
                    model: Optional[Model] = None, 
                    no_fit: Optional[bool] = None,
                    **kwargs
-                   ):
+                   ) -> 'TimeResponseData':
+        '''
+        Instantiates the object by reading the files containing the data.
+
+        Parameters
+        ----------
+        file_data : dict, optional
+            A dictionary where the keys are the file names and the values are 
+            arguments for Pandas's `read_csv` and `read_excel` functions. The 
+            default is None.
+        concat_by_trial : dict, optional
+            A nested dictionary. The keys are arbitrary names for grouping files 
+            together and do not affect the instantiation process. The values are 
+            dictionaries described by the `file_data` argument. Use this 
+            argument when you have multiple replicates of the same experimental 
+            data. The files for each replicate have the same format. Their index 
+            can only have one level. This method will then concatenate them into 
+            a DataFrame/Series with a multi-level index. The default is None.
+        dataset_args : dict, optional
+            Arguments that will be stored and used later for plotting. The default 
+            is None.
+        model : Optional[Model], optional
+            A model object. If this argument is used, it will override  
+            `dataset_args` by using the model's `dataset_args` where possible. 
+            The default is None.
+        no_fit : Optional[bool], optional
+            A list/tuple of variables that will not be used for curve-fitting. 
+            They can still be plotted. The default is None.
+
+        Returns
+        -------
+        dataset : TimeResponseData
+            Returns a TimeResponseData object.
+
+        '''
         
         dfs = []
         
@@ -263,9 +296,40 @@ class TimeResponseData:
     def __init__(self, *dfs: Sequence[pd.DataFrame], 
                  model: Optional[Model] = None, 
                  no_fit: Sequence[str] = None, 
-                 dataset_args: ODict = None, 
+                 dataset_args: dict = None, 
                  dtype: str = 'time_response_data'
                  ):
+        '''
+        Instantiates a TimeResponseData object.
+
+        Parameters
+        ----------
+        *dfs : Sequence[pd.DataFrame]
+            DataFrames for regular variables:
+                Columns: Top row for the state/variable name. Subsequent 
+                rows for the scenario.
+                Index: First level for time points. Second level for trial number (
+                    if applicable). 
+            
+            DataFrames for extra variables:
+                Columns: Only one row and corresponds to state/variable names.
+                Index: First level for time points. Second level for trial number (
+                    if applicable.)
+        dataset_args : dict, optional
+            Arguments that will be stored and used later for plotting. The default 
+            is None.
+        model : Optional[Model], optional
+            A model object. If this argument is used, it will override  
+            `dataset_args` by using the model's `dataset_args` where possible. 
+            The default is None.
+        no_fit : Optional[bool], optional
+            A list/tuple of variables that will not be used for curve-fitting. 
+            They can still be plotted. The default is None.
+        dtype : str, Optional
+            Used for checking data types when loading from dunl files. The only 
+            acceptable value is `"time_response_data"`.
+
+        '''
         
         if dtype != 'time_response_data':
             msg = f'Attempted to instantiate {type(self).__name__} with {dtype} data.'
@@ -362,8 +426,8 @@ class TimeResponseData:
             
         return self.get(variable, scenario)
     
-    def has(self, variable: OStr = None, 
-            scenario: OScenario = None
+    def has(self, variable: str = None, 
+            scenario: Scenario = None
             ) -> bool:
         if type(variable) in [list, tuple]:
             return all([self.has(v, scenario) for v in variable])
@@ -440,7 +504,7 @@ class TimeResponseData:
         
         return result_dct
     
-    def apply(self, f: callable, *variables: Sequence[str], name: OStr = None, 
+    def apply(self, f: callable, *variables: Sequence[str], name: str = None, 
               fillna: Num = None, no_fit: bool = True
               ):
         self._check_derived_variable(name, no_fit, *variables)
@@ -657,7 +721,7 @@ class TimeResponseData:
     #Intermediate Processing for Curve-fitting
     ###########################################################################
     def reindex(self, variables: Sequence[str], scenarios: Sequence[Scenario], 
-                model: Model = None, dataset_args: ODict = None, 
+                model: Model = None, dataset_args: dict = None, 
                 no_fit: Sequence[str] = None
                 ):
         variables = variables if ut.isdictlike(variables) else {x: x for x in variables}
