@@ -318,6 +318,9 @@ class ODEResult:
 #SimResult Class
 ###############################################################################
 class ODESimResult:
+    _line_args = {}
+    _bar_args  = {'width': 0.4, 'bottom': 0}
+    
     ###########################################################################
     #Instantiators
     ###########################################################################
@@ -472,10 +475,17 @@ class ODESimResult:
             if upp.check_skip(skip, c):
                 continue
             
-            kwargs = self._process_line_args(line_args, 
-                                             scenario=c, 
-                                             variable=variable,
-                                             )
+            #Process the plotting args
+            line_args  = line_args if line_args else self.sim_args.get('line_args')
+            keys       = [c, variable]
+            sub_args   = dict(scenario=c, variable=variable, ref=self.ref)
+            converters = {'color': upp.get_color}
+            line_args  = upp.process_kwargs(line_args, 
+                                            keys, 
+                                            default=self._line_args, 
+                                            sub_args=sub_args, 
+                                            converters=converters
+                                            )
             
             #Determine axs
             ax = upp.recursive_get(ax_dct, c)
@@ -484,45 +494,16 @@ class ODESimResult:
                 continue
             
             #Plot
-            result[c] = ax.plot(ir[x], ir[y], **kwargs)           
+            result[c] = ax.plot(ir[x], ir[y], **line_args)           
             
             #Label axes
             upp.label_ax(ax, x, xlabel, y, ylabel)
             upp.set_title(ax, title, self.ref, variable, c)
             
         return result
-    
-    def _process_line_args(self, ext_args, scenario, variable):
-        self_args = self.sim_args.get('line_args', {})
-        ref       = self.ref
-        
-        #Recurse through the arguments
-        keys = scenario, variable
-        
-        def recurse(dct):
-            if dct is None:
-                return {}
-            return {k: upp.recursive_get(v, *keys) for k, v in dct.items()}
-        
-        
-        #Flatten and merge
-        self_args = recurse(self_args)
-        ext_args  = recurse(ext_args) 
-        kwargs    = {**self_args, **ext_args}
-        
-        #Collate args for processing
-        args     = dict(scenario=scenario, variable=variable, ref=ref)
-        #Process the label
-        upp.replace(kwargs, 'label', '{scenario}', **args)
-        #Process color
-        upp.replace(kwargs, 'color', None, upp.get_color, **args)
-        #Replace other callable args
-        upp.call(kwargs, ['label', 'color'], **args)
-        
-        return kwargs
-            
-    def plot_bar(self, ax, variable, by='scenario', xnames=None, ynames=None, 
-                 skip=None, **bar_args
+         
+    def plot_bar(self, ax, variable, by='scenario', xlabel=None, ylabel=None, 
+                 skip=None, horizontal=False, stacked=False, **bar_args
                  ):
         '''For extra only
         '''
@@ -556,49 +537,34 @@ class ODESimResult:
         else:
             df = df.unstack(by).stack(0)
         
-        if callable(xnames):
-            df.index = [xnames(i) for i in df.index]
-        elif type(xnames) == str:
-            if df.index.nlevels == 1:
-                df.index = [xnames.format(i) for i in df.index]
-            else:
-                df.index = [xnames.format(*i) for i in df.index]
-        
+
         #Prepare the sim args
-        self_args = self.sim_args.get('bar_args', {})
-        kwargs    = {**self_args, **bar_args}
-        
-        #Replace other callable args
-        upp.call(kwargs, 
-                 [], 
-                 ref=self.ref,
-                 scenarios=tuple(df.index), 
-                 variables=variables
-                 )
-        
-        #ynames
-        cols            = []
-        ori             = kwargs.get('color', {})
-        kwargs['color'] = {}
-        for c in df.columns:
-            if callable(ynames):
-                new_c = ynames(c)
-            elif type(ynames) == str:
-                if df.columns.nlevels == 1:    
-                    new_c = ynames.format(c)
-                else:
-                    new_c = ynames.format(*c)
+        def getter(d, f=None):
+            if hasattr(d, 'items') and f:
+                return {k: f(v) for k, v in d.items()}
             else:
-                new_c = c
-            
-            kwargs['color'][new_c] = upp.get_color(ori.get(c))   
-            cols.append(new_c)
+                return d
         
-        df.columns = cols
+        bar_args   = bar_args if bar_args else self.sim_args.get('bar_args', {})
+        keys       = []
+        sub_args   = dict(scenario=c, variable=variable, ref=self.ref)
+        converters = {'color'     : lambda d: getter(d, upp.get_color),
+                      'edgecolor' : lambda d: getter(d, upp.get_color),
+                      }
+        bar_args   = upp.process_kwargs(bar_args, 
+                                        keys, 
+                                        default=self._bar_args, 
+                                        sub_args=sub_args, 
+                                        converters=converters
+                                        )
         
-        #Plot the bars
-        result = df.plot.bar(ax=ax, **kwargs)
-        ax.get_legend().remove()
-        
+        result = upp.plot_bar(ax, 
+                              df, 
+                              xlabel, 
+                              ylabel, 
+                              horizontal=horizontal, 
+                              stacked=stacked, 
+                              **bar_args
+                              )
         return result
     

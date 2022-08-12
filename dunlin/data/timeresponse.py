@@ -12,6 +12,9 @@ from dunlin.utils.typing import (Dflst, Dfdct, Index, Num,
 
 
 class TimeResponseData:
+    _line_args = {'marker': 'o', 'linestyle': 'None'}
+    _bar_args  = {'width': 0.4, 'bottom': 0, 'capsize': 10}
+    
     ###########################################################################
     #Preprocessing
     ###########################################################################
@@ -860,11 +863,17 @@ class TimeResponseData:
                 xerr   = None if series.index.nlevels == 1 else gb.std()[::thin].values
             
             #Parse kwargs
-            kwargs = self._process_plot_args(self_args, 
-                                             ext_args, 
-                                             scenario=c, 
-                                             var=variable
-                                             )
+            #Process the plotting args
+            line_args  = line_args if line_args else self.dataset_args.get('line_args')
+            keys       = [c, variable]
+            sub_args   = dict(scenario=c, variable=variable, ref=self.ref)
+            converters = {'color': upp.get_color}
+            line_args  = upp.process_kwargs(line_args, 
+                                            keys, 
+                                            default=self._line_args, 
+                                            sub_args=sub_args, 
+                                            converters=converters
+                                            )
             
             #Determine ax
             ax = upp.recursive_get(ax_dct, c)
@@ -873,7 +882,7 @@ class TimeResponseData:
                 continue
 
             #Plot
-            result[c] = ax.errorbar(x_vals, y_vals, yerr=yerr, xerr=xerr, **kwargs)
+            result[c] = ax.errorbar(x_vals, y_vals, yerr=yerr, xerr=xerr, **line_args)
             
             #Label axes
             upp.label_ax(ax, x, xlabel, y, ylabel)
@@ -881,40 +890,8 @@ class TimeResponseData:
             
         return result
     
-    def _process_plot_args(self, self_args, ext_args, **to_recurse):
-        #Recurse through the arguments
-        keys = to_recurse.values()
-        def recurse(dct):
-            if dct is None:
-                return {}
-            return {k: upp.recursive_get(v, *keys) for k, v in dct.items()}
-        
-        
-        self_args = recurse(self_args)
-        ext_args  = recurse(ext_args) 
-        kwargs    = {**self_args, **ext_args}
-        
-        #Collate args for processing
-        scenario = to_recurse.get('scenario', '')
-        var      = to_recurse.get('var', '') 
-        args     = dict(scenario=scenario, variable=var, ref=self.ref)
-        #Process the label
-        upp.replace(kwargs, 'label', '{scenario}', **args)
-        #Process color
-        upp.replace(kwargs, 'color', None, upp.get_color, **args)
-        #Process marker
-        upp.replace(kwargs, 'marker', 'o', **args)
-        #Process linestyle
-        upp.replace(kwargs, 'linestyle', 'None', **args)
-        
-        #Replace other callable args
-        upp.call(kwargs, ['label', 'color'])
-        
-        return kwargs
-        
-    
-    def plot_bar(self, ax, variable, by='scenario', xnames=None, ynames=None, 
-                 **bar_args):
+    def plot_bar(self, ax, variable, by='scenario', xlabel=None, ylabel=None, 
+                 horizontal=False, stacked=False, **bar_args):
         '''For extra only
         '''
         #Determine which variables to plot
@@ -952,53 +929,36 @@ class TimeResponseData:
         else:
             df = df.unstack(by).stack(0)
             sd = sd.unstack(by).stack(0)
-            
-        if callable(xnames):
-            df.index = [xnames(i) for i in df.index]
-            sd.index = [xnames(i) for i in sd.index]
-        elif type(xnames) == str:
-            if df.index.nlevels == 1:
-                df.index = [xnames.format(i) for i in df.index]
-                sd.index = [xnames.format(i) for i in sd.index]
-            else:
-                df.index = [xnames.format(*i) for i in df.index]
-                sd.index = [xnames.format(*i) for i in sd.index]
         
         #Prepare the sim args
-        self_args = self.dataset_args.get('bar_args', {})
-        kwargs    = {**self_args, **bar_args}
-        
-        #Replace other callable args
-        upp.call(kwargs, 
-                 [], 
-                 ref=self.ref,
-                 scenarios=tuple(df.index), 
-                 variables=variables
-                 )
-        
-        #ynames
-        cols            = []
-        ori             = kwargs.get('color', {})
-        kwargs['color'] = {}
-        for c in df.columns:
-            if callable(ynames):
-                new_c = ynames(c)
-            elif type(ynames) == str:
-                if df.columns.nlevels == 1:    
-                    new_c = ynames.format(c)
-                else:
-                    new_c = ynames.format(*c)
+        def getter(d, f=None):
+            if hasattr(d, 'items') and f:
+                return {k: f(v) for k, v in d.items()}
             else:
-                new_c = c
-            
-            kwargs['color'][new_c] = upp.get_color(ori.get(c))   
-            cols.append(new_c)
+                return d
         
-        df.columns = cols
-        
-        #Plot the bars
-        result = df.plot.bar(ax=ax, yerr=sd, **kwargs)
-        ax.get_legend().remove()
+        bar_args   = bar_args if bar_args else self.dataset_args.get('bar_args', {})
+        keys       = []
+        sub_args   = dict(scenario=c, variable=variable, ref=self.ref)
+        converters = {'color'     : lambda d: getter(d, upp.get_color),
+                      'edgecolor' : lambda d: getter(d, upp.get_color),
+                      }
+        bar_args   = upp.process_kwargs(bar_args, 
+                                        keys, 
+                                        default=self._bar_args, 
+                                        sub_args=sub_args, 
+                                        converters=converters
+                                        )
+
+        result = upp.plot_bar(ax, 
+                              df, 
+                              xlabel, 
+                              ylabel, 
+                              horizontal=horizontal, 
+                              stacked=stacked, 
+                              yerr=sd,
+                              **bar_args
+                              )
         
         return result
         

@@ -87,27 +87,33 @@ bar_args = {'color': {'init_x0'   : 'red',
 
 sr.plot_bar(AX_[0], ['init_x0', 'init_x1'], by='scenario', **bar_args)
 sr.plot_bar(AX_[1], ['init_x0', 'init_x1'], by='variable', **bar_args)
+AX_[0].legend()
+AX_[1].legend()
 
-xnames = lambda i: f'{i[0]}+{i[1]}'
-ynames = lambda i: 'Inducer : {}'.format(i)
+xlabel = lambda scenario: f'{scenario[0]}+{scenario[1]}'
+ylabel = lambda scenario: 'Inducer : {}'.format(scenario)
+
 sr.plot_bar(AX_[2], ['init_x0', 'init_x1'], by=1, **bar_args, 
-            xnames=xnames, ynames=ynames
+            xlabel=xlabel, ylabel=ylabel
             )
+AX_[2].legend()
 
-xnames = '{}->{}'
-ynames = 'Inducer = {}'
-width  = lambda ref, scenarios, variables: 0.2
-color  = lambda ref, scenarios, variables: {'init_x0'   : 'red', 
-                                            'init_x1'   : 'blue',
-                                            'init_x2'   : 'green',
-                                            ('c0', 0)   : 'cobalt',
-                                            ('c1', 0)   : 'crimson',
-                                            ('c0', 1)   : 'sea',
-                                            ('c1', 1)   : 'violet',
-                                            0 : 'olive',
-                                            1 : 'salmon'
-                                            }
-rot    = lambda ref, scenarios, variables: -30
+#Try modifying x and y labels
+xlabel = lambda c: f'{c[0]}->{c[1]}'
+ylabel = 'Inducer = {}'
+width  = lambda ref, scenario, variable: 0.2
+color  = lambda ref, scenario, variable: {'init_x0'   : 'red', 
+                                          'init_x1'   : 'blue',
+                                          'init_x2'   : 'green',
+                                          ('c0', 0)   : 'cobalt',
+                                          ('c1', 0)   : 'crimson',
+                                          ('c0', 1)   : 'sea',
+                                          ('c1', 1)   : 'violet',
+                                          0 : 'olive',
+                                          1 : 'salmon'
+                                          }
+rot    = lambda ref, scenario, variable: -30
 sr.plot_bar(AX_[3], ['init_x0', 'init_x1'], by=1, color=color, rot=rot, 
-            xnames=xnames, ynames=ynames, width=width, stacked=True
+            xlabel=xlabel, ylabel=ylabel, width=width, stacked=True
             )
+AX_[3].legend()

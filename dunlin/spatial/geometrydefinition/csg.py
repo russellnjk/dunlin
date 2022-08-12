@@ -3,13 +3,13 @@ from numba             import njit
 from numba.core.errors import NumbaPerformanceWarning
 from typing            import Sequence, Union
 
-from .csgbase import Fillable, Circular, Squarelike, CSGObject, Primitive
+from .csgbase import PointCloud, Circular, Squarelike, CSGObject, Primitive
 from .sparse import make_sparse
 
 ###############################################################################
 #Primitives
 ###############################################################################
-class Square(Squarelike, Fillable):
+class Square(Squarelike, PointCloud):
     def __init__(self, _center=None, _axes=None, _orientation=None):
         center      = [0, 0] if _center      is None else _center
         axes        = [1, 1] if _axes        is None else _axes
@@ -17,7 +17,7 @@ class Square(Squarelike, Fillable):
         
         super().__init__(center, axes, orientation, 2)
 
-class Cube(Squarelike, Fillable):
+class Cube(Squarelike, PointCloud):
     def __init__(self, _center=None, _axes=None, _orientation=None):
         center      = [0, 0, 0]    if _center      is None else _center
         axes        = [1, 1, 1]    if _axes        is None else _axes
@@ -25,7 +25,7 @@ class Cube(Squarelike, Fillable):
         
         super().__init__(center, axes, orientation, 3)
 
-class Circle(Circular, Fillable):
+class Circle(Circular, PointCloud):
     def __init__(self, _center=None, _radii=None, _orientation=None) -> None:
         radii       = [1, 1] if _radii       is None else _radii
         center      = [0, 0] if _center      is None else _center
@@ -33,18 +33,46 @@ class Circle(Circular, Fillable):
         
         super().__init__(center, radii, orientation, _ndims=2)
 
-class Sphere(Circular, Fillable):
+class Sphere(Circular, PointCloud):
     def __init__(self, _center=None, _radii=None, _orientation=None) -> None:
         radii       = [1, 1, 1]    if _radii       is None else _radii
         center      = [0, 0, 0]    if _center      is None else _center
         orientation = [0, 0, 0, 0] if _orientation is None else _orientation
         
         super().__init__(center, radii, orientation, _ndims=3)
+
+class Cylinder(Primitive, PointCloud):
+    def __init__(self, _center=None, _radii=None, _orientation=None) -> None:
+        radii       = [1, 1, 1]    if _radii       is None else _radii
+        center      = [0, 0, 0]    if _center      is None else _center
+        orientation = [0, 0, 0, 0] if _orientation is None else _orientation
+    
+        super().__init__(center, radii, orientation, _ndims=3)
+    
+    @staticmethod
+    @njit
+    def _contains_points(points, center, axes, rtol):
+        upper   = center + axes*(1+rtol)
+        lower   = center - axes*(1+rtol)
+        radii   = axes[:2]*(1+rtol)
+        center_ = center[:2]
+        result  = np.zeros(len(points), dtype=np.bool_)
+        
+        for i, p in enumerate(points):
+            if np.any(p > upper):
+                continue
+            elif np.any(p < lower):
+                continue
+            
+            p_        = p[:2]
+            result[i] = np.sum( ((p_-center_)/radii)**2 ) <= 1
+            
+        return result
     
 ###############################################################################
 #Composite
 ###############################################################################
-class Composite(CSGObject, Fillable):
+class Composite(CSGObject, PointCloud):
     _allowed = 'union', 'intersection', 'difference'
     
     def __init__(self, op, *shapes) -> None:
@@ -184,25 +212,18 @@ class Composite(CSGObject, Fillable):
         return new_composite
     
     def make_grid(self, step=0.1) -> np.ndarray:
-        pass
-    
-    def make_grid_iterative(self, step=0.1) -> np.ndarray:
         shapes = self._shapes 
+        points = set()
         
         if self._op == 'difference':
             points = {tuple(point) for point in shapes[0].make_grid(step)}
-            
         else:
             points = {tuple(point) for shape in shapes 
                       for point in shape.make_grid(step)
                      }
-            
-        points = np.array(list(points), dtype=np.float64)
-        atol   = step/2
-        grid   = make_sparse(points, atol)
-        grid   = np.array(grid, dtype=np.float64)
         
-        return grid
+        points = np.array(list(points), dtype=np.float64)
+        return points
     
     ###########################################################################
     #Representation

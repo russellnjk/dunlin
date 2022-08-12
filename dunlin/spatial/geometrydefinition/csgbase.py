@@ -232,36 +232,6 @@ class Primitive(CSGObject):
         
         return type(self)(new_center, new_axes, new_orientation)
     
-    def make_grid(self, step:float=0.1) -> np.ndarray:
-        center     = self._center
-        axes       = self._axes
-        orientation = self._orientation
-        
-        #Get linspace args
-        min_vals = center - axes
-        max_vals = center + axes 
-        
-        intervals = [int(i) + 1 for i in (max_vals - min_vals)/step]
-        
-        itr  = zip(min_vals, max_vals, intervals)
-        axes = [np.linspace(*args) for args in itr]
-        grid = np.meshgrid(*axes, sparse=False)
-        grid = np.stack([a.flatten() for a in grid], axis=1)
-        
-        #Rotate grid into the correct frame of reference
-        if self.ndims == 2 and orientation:
-            radians = orientation
-            x, y    = center
-            grid    = rotate2D(grid, radians, x, y)
-            
-        elif self.ndims == 3 and any(orientation):
-            grid = rotate3D(grid, *orientation)
-        
-        #Remove duplicates
-        grid = {tuple(p) for p in grid}
-        grid = np.array(list(grid))
-        return grid
-    
     ###########################################################################
     #Abstract Methods
     ###########################################################################
@@ -287,26 +257,61 @@ class Squarelike(Primitive):
         result = np.array([np.all( (p <= upper) & (p >= lower) ) for p in points])
         
         return result
-    
+
 ###############################################################################
 #Mixins 
 ###############################################################################
-class Fillable(ABC):
+class PointCloud(ABC):
+    center      : np.ndarray
+    axes        : np.ndarray
+    orientation : Number | np.ndarray
+    ndims       : int
+    
     ###########################################################################
     #Point Filling
     ###########################################################################
-    def fill(self, grid: np.ndarray=None, 
+    def make_grid(self, step:float=0.1) -> np.ndarray:
+        center      = self.center
+        axes        = self.axes
+        orientation = self.orientation
+        
+        #Get the intervals for meshgrid
+        min_vals  = center - axes
+        max_vals  = center + axes 
+        intervals = [int(i) + 1 for i in (max_vals - min_vals)/step]
+        
+        #Call numpy's meshgrid
+        itr  = zip(min_vals, max_vals, intervals)
+        axes = [np.linspace(*args) for args in itr]
+        cloud = np.meshgrid(*axes)
+        cloud = np.stack([a.flatten() for a in cloud], axis=1)
+        
+        #Rotate cloud into the correct frame of reference
+        if self.ndims == 2 and orientation:
+            radians = orientation
+            x, y    = center
+            cloud    = rotate2D(cloud, radians, x, y)
+            
+        elif self.ndims == 3 and any(orientation):
+            cloud = rotate3D(cloud, *orientation)
+        
+        #Round the numbers
+        cloud = cloud//step * step
+
+        return cloud
+    
+    def fill(self, cloud: np.ndarray=None, 
              exterior: bool=False, 
              step: float=0.1
              ) -> Union[np.ndarray, tuple[np.ndarray, np.ndarray]]:
         
-        grid = self.make_grid(step) if grid is None else grid
+        cloud = self.make_grid(step) if cloud is None else cloud
         
-        is_inside = self.contains_points(grid)
-        interior  = grid[is_inside]
+        is_inside = self.contains_points(cloud)
+        interior  = cloud[is_inside]
         
         if exterior:
-            exterior = grid[~is_inside]
+            exterior = cloud[~is_inside]
             
             return interior, exterior
         else:
@@ -316,13 +321,13 @@ class Fillable(ABC):
     ###########################################################################
     #Plotting
     ###########################################################################
-    def scatter_2D(self, ax, grid=None, step=0.1, interior=True, exterior=False, 
+    def scatter_2D(self, ax, cloud=None, step=0.1, interior=True, exterior=False, 
                   interior_args=None, exterior_args=None
                   ) -> list:
         if self.ndims != 2:
             raise ValueError('Shape is not 2-D.')
         
-        interior_, exterior_ = self.fill(grid, exterior=True, step=step)
+        interior_, exterior_ = self.fill(cloud, exterior=True, step=step)
         
         interior_args = {} if interior_args is None else interior_args
         exterior_args = {} if exterior_args is None else exterior_args
@@ -338,13 +343,13 @@ class Fillable(ABC):
             
         return result
     
-    def scatter_3D(self, ax, grid=None, step=0.1, interior=True, exterior=False, 
+    def scatter_3D(self, ax, cloud=None, step=0.1, interior=True, exterior=False, 
                   interior_args=None, exterior_args=None
                   ) -> list:
         if self.ndims != 3:
             raise ValueError('Shape is not 3-D.')
         
-        interior_, exterior_ = self.fill(grid, exterior=True, step=step)
+        interior_, exterior_ = self.fill(cloud, exterior=True, step=step)
         
         interior_args = {} if interior_args is None else interior_args
         exterior_args = {} if exterior_args is None else exterior_args
@@ -360,11 +365,5 @@ class Fillable(ABC):
             
         return result
     
-    ###########################################################################
-    #Abstract Methods
-    ###########################################################################
-    @abstractmethod
-    def make_grid(self, step: float=0.1):
-        ...
         
     

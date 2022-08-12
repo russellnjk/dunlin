@@ -10,7 +10,10 @@ from .plot             import (label_ax,
                                truncate_axis, 
                                save_figs
                                )
-from .keywords         import (recursive_get, 
+from .keywords         import (flatten_kwargs,
+                               recursive_get, 
                                replace, 
-                               call
+                               call,
+                               process_kwargs
                                )
+from .bar              import (plot_bar)  

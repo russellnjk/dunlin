@@ -10,9 +10,9 @@ def make_sparse(points, atol=0.01):
         skip = False
         for pp in result:
             #Eliminate points outside the bounding box
-            if pp[0] > p[0] + atol or pp[0] < p[0] - atol or pp[1] > p[1] + atol or pp[1] < p[1] - atol:
+            if np.any(pp > p + atol):
                 continue
-            elif pp[1] > p[1] + atol or pp[1] < p[1] - atol:
+            elif np.any(pp < p - atol):
                 continue
             
             #Calculate dist for points inside

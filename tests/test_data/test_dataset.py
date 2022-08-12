@@ -4,7 +4,7 @@ import pandas            as     pd
 
 import addpath
 import dunlin                    as dn  
-import dunlin.data.dataset       as dts
+import dunlin.data.timeresponse  as dts
 import dunlin.utils_plot         as upp
 
 plt.ion()
@@ -63,29 +63,29 @@ exdf  = pd.DataFrame([[10, 20]], columns=['ex0', 'ex1'], index=[0, 1])
 ##############################################################################
 #Instantiate without Model
 ##############################################################################
-dataset = dts.Dataset(df0, df1, exdf)
+trd = dts.TimeResponseData(df0, df1, exdf)
 
-value = dataset.get('x0')
+value = trd.get('x0')
 # assert 0 in value['x0']
 # assert 1 in value['x0']
 # print(value)
 
-value = dataset['x0', 0]
+value = trd['x0', 0]
 # print(value.head())
 ###############################################################################
 #Instantiate with Model
 ###############################################################################
 
-dataset = dts.Dataset(df0, df1, model=model)
+trd = dts.TimeResponseData(df0, df1, model=model)
 
-# print(dataset['x0', 0].head())
+# print(trd['x0', 0].head())
 
 fig, AX_ = upp.figure(1, 2)
 
 def label(scenario, variable, ref):
     return f'Ref {ref}, Scenario {scenario}'
 
-dataset.plot_line(AX_[0], 'x0', label=label)
+trd.plot_line(AX_[0], 'x0', label=label)
 AX_[0].legend()
 
 ###############################################################################
@@ -97,30 +97,32 @@ df0_    = pd.concat(dict(enumerate([minus_y, df0, plus_y])))
 df0_    = df0_.swaplevel(axis=0)
 df0_    = df0_.loc[sorted(df0_.index)]
 
-dataset = dts.Dataset(df0_, df1, model=model)
+trd = dts.TimeResponseData(df0_, df1, model=model)
 
 def label(scenario, variable, ref):
     return f'Ref {ref}, Scenario {scenario}'
 
-dataset.plot_line(AX_[1], 'x0', label=label)
+trd.plot_line(AX_[1], 'x0', label=label)
 AX_[1].legend()
 
 ###############################################################################
 #Bar Plot
 ###############################################################################
-dataset = dts.Dataset(df0, df1, exdf, model=model)
+trd = dts.TimeResponseData(df0, df1, exdf, model=model)
 
 fig, AX_ = upp.figure(1, 2)
 
-dataset.plot_bar(AX_[0], ['ex0', 'ex1'])
+trd.plot_bar(AX_[0], ['ex0', 'ex1'])
 AX_[0].legend()
 
+#Create multiple trials/replicates with MultiIndex
 plus_y  = exdf + 5
 minus_y = exdf - 5
 exdf_   = pd.concat(dict(enumerate([minus_y, exdf, plus_y])))
 exdf_   = exdf_.swaplevel(axis=0)
 exdf_   = exdf_.loc[sorted(exdf_.index)]
 
-dataset = dts.Dataset(df0, df1, exdf_)
+trd = dts.TimeResponseData(df0, df1, exdf_)
 
-dataset.plot_bar(AX_[1], ['ex0', 'ex1'])
+trd.plot_bar(AX_[1], ['ex0', 'ex1'])
+AX_[1].legend()

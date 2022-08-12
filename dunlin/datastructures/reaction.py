@@ -70,7 +70,7 @@ class Reaction(_AItem):
         except:
             raise exc.InvalidDefinition('reaction rate', received=rate)
         
-        variables = ut.get_eqn_variables(rate)
+        variables = ut.get_namespace(rate)
         
         return rate, variables
     
@@ -82,28 +82,7 @@ class Reaction(_AItem):
                  bounds: Optional[Bnd]=None,
                  compartment: OStr = None
                  ):
-        # #An example eqn is a + 2*b -> c
-        # #Split the reaction
-        # try:
-        #     rcts, prds = eqn.split('->')
-        #     rcts = rcts.strip()
-        #     prds = prds.strip()
-        # except:
-        #     raise exc.InvalidDefinition('reaction equation', '<reactants> -> <products>', eqn)
-        
-        # #Get the stoichiometry
-        # if rcts:
-        #     rcts_stoich = [self.get_stoich(chunk, invert_sign=True) for chunk in rcts.split('+')]
-        # else:
-        #     rcts_stoich = []
-        
-        # if prds:
-        #     prds_stoich = [self.get_stoich(chunk, invert_sign=False) for chunk in prds.split('+')]
-        # else:
-        #     prds_stoich = []
-            
-        # stoich      = dict(rcts_stoich + prds_stoich)
-        
+        #An example eqn is a + 2*b -> c
         stoich = self.eqn2stoich(eqn)
         
         #Parse the reaction rates
@@ -158,7 +137,7 @@ class Reaction(_AItem):
     ###########################################################################
     #Export
     ###########################################################################
-    def to_dict(self) -> dict:
+    def to_data(self) -> dict:
         #Needs to be changed for export
         dct = {}
         for attr in ['eqn', 'fwd', 'rev', 'bounds']:
