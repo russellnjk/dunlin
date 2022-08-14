@@ -2,10 +2,10 @@ from typing import Sequence
 
 import dunlin.utils                       as ut
 import dunlin.standardfile.dunl.writedunl as wd
-from dunlin.datastructures.bases import _ADict, _AItem
+from dunlin.datastructures.bases import NamespaceDict, GenericItem
 from dunlin.utils.typing         import ODict
 
-class ExtraVariable(_AItem):
+class ExtraVariable(GenericItem):
     ###########################################################################
     #Constructor
     ###########################################################################
@@ -51,7 +51,7 @@ class ExtraVariable(_AItem):
     def to_data(self) -> list:
         return [self.func_name, *self.args_ori]
 
-class ExtraDict(_ADict):
+class ExtraDict(NamespaceDict):
     itype = ExtraVariable
     
     ###########################################################################

@@ -480,7 +480,7 @@ class ODESimResult:
             keys       = [c, variable]
             sub_args   = dict(scenario=c, variable=variable, ref=self.ref)
             converters = {'color': upp.get_color}
-            line_args  = upp.process_kwargs(line_args, 
+            line_args_ = upp.process_kwargs(line_args, 
                                             keys, 
                                             default=self._line_args, 
                                             sub_args=sub_args, 
@@ -494,7 +494,7 @@ class ODESimResult:
                 continue
             
             #Plot
-            result[c] = ax.plot(ir[x], ir[y], **line_args)           
+            result[c] = ax.plot(ir[x], ir[y], **line_args_)           
             
             #Label axes
             upp.label_ax(ax, x, xlabel, y, ylabel)
@@ -551,7 +551,7 @@ class ODESimResult:
         converters = {'color'     : lambda d: getter(d, upp.get_color),
                       'edgecolor' : lambda d: getter(d, upp.get_color),
                       }
-        bar_args   = upp.process_kwargs(bar_args, 
+        bar_args_  = upp.process_kwargs(bar_args, 
                                         keys, 
                                         default=self._bar_args, 
                                         sub_args=sub_args, 
@@ -564,7 +564,7 @@ class ODESimResult:
                               ylabel, 
                               horizontal=horizontal, 
                               stacked=stacked, 
-                              **bar_args
+                              **bar_args_
                               )
         return result
     

@@ -4,9 +4,9 @@ import dunlin.utils                    as ut
 import dunlin.datastructures.exception as exc
 import dunlin.standardfile.dunl.writedunl as wd
 from dunlin.utils.typing         import Bnd, OStr
-from dunlin.datastructures.bases import _ADict, _AItem
+from dunlin.datastructures.bases import NamespaceDict, GenericItem
 
-class Reaction(_AItem):
+class Reaction(GenericItem):
     ###########################################################################
     #Preprocessing
     ###########################################################################
@@ -153,7 +153,7 @@ class Reaction(_AItem):
                 
         return dct
 
-class ReactionDict(_ADict):  
+class ReactionDict(NamespaceDict):  
     itype = Reaction
     
     ###########################################################################

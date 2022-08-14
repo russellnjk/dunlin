@@ -868,7 +868,7 @@ class TimeResponseData:
             keys       = [c, variable]
             sub_args   = dict(scenario=c, variable=variable, ref=self.ref)
             converters = {'color': upp.get_color}
-            line_args  = upp.process_kwargs(line_args, 
+            line_args_ = upp.process_kwargs(line_args, 
                                             keys, 
                                             default=self._line_args, 
                                             sub_args=sub_args, 
@@ -882,7 +882,7 @@ class TimeResponseData:
                 continue
 
             #Plot
-            result[c] = ax.errorbar(x_vals, y_vals, yerr=yerr, xerr=xerr, **line_args)
+            result[c] = ax.errorbar(x_vals, y_vals, yerr=yerr, xerr=xerr, **line_args_)
             
             #Label axes
             upp.label_ax(ax, x, xlabel, y, ylabel)

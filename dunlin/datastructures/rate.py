@@ -2,9 +2,9 @@ from typing import Union
 
 import dunlin.utils                       as ut
 import dunlin.standardfile.dunl.writedunl as wd
-from dunlin.datastructures.bases import _ADict, _AItem
+from dunlin.datastructures.bases import NamespaceDict, GenericItem
 
-class Rate(_AItem):
+class Rate(GenericItem):
     ###########################################################################
     #Constructor
     ###########################################################################
@@ -12,6 +12,8 @@ class Rate(_AItem):
         #Check that the state is in ext_namespace
         if name not in ext_namespace:
             raise NameError(f'Encountered a Rate for an undefined namespace: {name}')
+        
+        ut.check_valid_name(name)
         
         #Parse expression and check
         expr_ori  = self.format_primitive(expr)
@@ -21,12 +23,18 @@ class Rate(_AItem):
         if undefined:
             raise NameError(f'Undefined namespace: {undefined}.')
             
-        #It is now safe to call the parent's init
-        #Use the derivate, not the state name
+        #Use the derivate, not the state name as this object's name
         d_name = ut.diff(name)
-        super().__init__(ext_namespace, name, d_name)
         
+        #Mimic the parent constructor
+        self.name = d_name
         
+        if d_name in ext_namespace:
+            raise NameError(f'Redefinition of {d_name}.')
+        else:
+            #Update the namespace
+            ext_namespace.add(d_name)
+            
         #Save attributes
         self.expr      = expr
         self.expr_ori  = expr_ori
@@ -43,7 +51,7 @@ class Rate(_AItem):
         return self.expr_ori
     
 
-class RateDict(_ADict):
+class RateDict(NamespaceDict):
     itype = Rate
     
     ###########################################################################

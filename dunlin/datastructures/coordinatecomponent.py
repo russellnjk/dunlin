@@ -1,54 +1,73 @@
-from typing import Literal, Optional
+import pandas as pd
+from numbers import Number
+from typing  import Callable, Literal
 
-import dunlin.utils                    as ut
-import dunlin.datastructures.exception as exc
-import dunlin.standardfile.dunl.writedunl as wd
-from dunlin.utils.typing         import Bnd, OStr
-from dunlin.datastructures.bases import _CDict, _CItem
-
-class CoordinateComponent(_CItem):
-    allowed = ['x', 'y', 'z']
-    def __init__(self, coordinate: Literal['x', 'y', 'z'], 
-                 bounds: Bnd, unit: str = 'm'
-                 ) -> None:
+import dunlin.utils as ut
+import dunlin.standardfile.dunl as sfd
+from dunlin.datastructures.bases import GenericItem, GenericDict, TabularDict
+    
+class CoordinateComponentDict(TabularDict):
+    def __init__(self, mapping: dict, n_format: Callable=sfd.format_num):
+        _data = {}
         
-        if coordinate not in self.allowed:
-            msg = f'Unexpected value {coordinate}. Expected one of {self.allowed}'
+        for axis, bounds in mapping.items():
+            lb, ub  = bounds
+            
+            #Check bounds
+            if lb >= ub:
+                raise ValueError(f'Lower bound is not less than upper bound: {lb}, {ub}')
+            
+            _data[axis] = lb, ub
+        
+        #Sort _data
+        _data = {k: _data[k] for k in sorted(_data)}
+        
+        #Check that valid coordinate combinations are used
+        if len(_data) == 1 and list(_data.keys()) != ['x']:
+            msg = f'Expected axes: ["x"]. Received: {list(_data.keys())}'
+            raise ValueError(msg)
+        elif len(_data) == 2 and list(_data.keys()) != ['x', 'y']:
+            msg = f'Expected axes: ["x", "y"]. Received: {list(_data.keys())}'
+            raise ValueError(msg)
+        elif len(_data) == 3 and list(_data.keys()) != ['x', 'y', 'z']:
+            msg = f'Expected axes: ["x", "y", "z"]. Received: {list(_data.keys())}'
             raise ValueError(msg)
         
-        #Check bounds
-        lb, ub = bounds
-        if lb > ub:
-            raise ValueError(f'Lower bound is more than upper bound: {bounds}')
         
-        bounds = lb, ub
-        
-        #Check unit
-        if type(unit) != str:
-            msg  = 'Expected unit argument to be a string. '
-            msg += f'Received: {type(unit).__name__}'
-            raise TypeError(msg)
-        
-        self.coordinate = coordinate
-        self.bounds     = bounds
-        self.unit       = unit
-        
-        #It is now safe to call the parent constructor
-        super().__init__()
+        #Override the parent constructor by directly saving the attributes
+        self.name     = 'coordinate_components'
+        self._df      = pd.DataFrame(_data)
+        self.n_format = n_format
         
         #Freeze
         self.freeze()
     
-    def to_dunl(self, multiline=False, **kwargs) -> str:  
-        return wd.write_dict(self.to_data(), multiline=multiline, **kwargs)
-
-
+    @property
+    def ndims(self) -> int:
+        return len(self._df.columns)
+    
+    @property
+    def axes(self):
+        s = list(self._df.columns)
+        return s
+    
     def to_data(self) -> dict:
-        return {'bounds': list(self.bounds), 'unit': self.unit}
+        return self._df.to_dict('list')
     
-class CoordinateComponentDict(_CDict):
-    itype = CoordinateComponent
+    @property
+    def spans(self) -> dict:
+        return self.to_data()
     
-    def __init__(self, mapping: dict):
-        super().__init__(mapping)
-        
+    def __contains__(self, point):
+        for coordinate, coordinate_component in zip(point, self.values()):
+            if not ut.isnum(coordinate):
+                msg  = 'Error in determining if {point} is in coordinate components.'
+                msg += f' Coordinate {coordinate} is not a number.'
+                raise ValueError(msg)
+            
+            lb, ub = coordinate_component
+            if coordinate < lb or coordinate > ub:
+                return False
+        return True
+    
+    

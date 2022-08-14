@@ -172,4 +172,4 @@ if __name__ == '__main__':
     ttest('0.4Glu+0.2CA', pp.trd0)
     
     ###########################################################################
-    fig.savefig('figures/2.png', dpi=1200)
+    # fig.savefig('figures/2.png', dpi=1200)

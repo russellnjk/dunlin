@@ -71,9 +71,19 @@ bcA : [A, 0, Neumann, extracellular]
 #name str: [bounds: [min, max], unit: str]
 #name: {x, y, z}
 #If there is a need to add new kinds of coordinates, add more possible values for name
-x: [bounds: [0, 10], unit: m]
-y: [bounds: [0, 10], unit: m]
-z: [bounds: [0, 10], unit: m]
+x: [0, 10]
+y: [0, 10]
+z: [0, 10]
+
+;;units
+x: m
+y: m
+z: m
+
+;;grid_config
+gr_main: [config: [0.04, [0, 10], [0, 10], [0, 10]], children: [gr_1]]
+gr_0   : [config: [0.01, [3, 7 ], [3, 7 ], [3, 7 ]]                  ]
+gr_1   : [config: [0.02, [2, 8 ], [2, 8 ], [2, 8 ]], children: [gr_0]]
 
 #SBML ListofDomainTypes
 ;;domain_types
@@ -113,17 +123,6 @@ field : [
 	domain_type: cytosolic,
 	order      : 0,
 	node       : [difference, [square, [scale, 5, 5], [translate, 5, 5]], [circle]]
-	node       : [
-		circle0 : [
-			circle
-			],
-		square0 : [
-			square, 
-			[scale, 5, 5], 
-			[translate, 5, 5]
-			],
-		result : [difference, square0, circle0]
-		]
 	]
 
 #More on node

@@ -1,4 +1,5 @@
 from numbers import Number
+from typing  import Callable
 
 import dunlin.standardfile.dunl.writedictlist as wdl
 
@@ -25,7 +26,7 @@ def format_num(x: Number) -> str:
     
     return s
 
-def write_numeric_df(df, n_format: callable = format_num) -> str:
+def write_numeric_df(df, n_format: Callable = format_num) -> str:
     if all(df.index == list(range(len(df.index)))):
         return write_numeric_df_no_index(df, n_format)
         
@@ -64,7 +65,7 @@ def write_numeric_df(df, n_format: callable = format_num) -> str:
         line  = line[:-2] + ']'
         code += line + '\n'
     
-    return code
+    return code.rstrip()
 
 def write_numeric_df_no_index(df, n_format: callable = format_num) -> str:
     max_len_col = 0
@@ -89,7 +90,73 @@ def write_numeric_df_no_index(df, n_format: callable = format_num) -> str:
         line  = line[:-2] + ']'
         code += line + '\n'
     
-    return code
+    return code.rstrip()
+
+def write_non_numeric_df(df) -> str:   
+    if all(df.index == list(range(len(df.index)))):
+        return write_non_numeric_df_no_index(df)
+    
+    max_len_col = 0
+    max_len_idx = 0
+    columns     = []
+    indices     = []
+    
+    #Extract column values
+    for col in df.columns:
+        if type(col) == tuple:
+            col = wdl.write_list(col)
+        else:
+            col = wdl.write_primitive(col)
+    
+        max_len_col = max(len(col), max_len_col)
+        columns.append(col)
+        
+    for idx in df.index:
+        if type(idx) == tuple:
+            idx = wdl.write_list(idx)
+        else:
+            idx = wdl.write_primitive(idx)
+        
+        max_len_idx = max(len(idx), max_len_idx)
+        indices.append(idx)
+    
+    code = ''
+    for name, col in zip(columns, df.columns):
+        array = df[col]
+        line  = name + ' '*(max_len_col-len(col) + 1) + ' : ['
+        for subname, value in zip(indices, array):
+            lhs   = subname + ' '*(max_len_idx-len(idx) + 1)
+            rhs   = str(value) + ', ' 
+            line += lhs + ' : ' + rhs
+        line  = line[:-2] + ']'
+        code += line + '\n'
+    
+    return code.rstrip()
+
+def write_non_numeric_df_no_index(df) -> str:
+    max_len_col = 0
+    columns     = []
+    
+    #Extract column values
+    for col in df.columns:
+        if type(col) == tuple:
+            col = wdl.write_list(col)
+        else:
+            col = wdl.write_primitive(col)
+    
+        max_len_col = max(len(col), max_len_col)
+        columns.append(col)
+        
+    code = ''
+    for name, col in zip(columns, df.columns):
+        array = df[col]
+        line  = name + ' '*(max_len_col-len(col) + 1) + ' : ['
+        for value in array:
+            line += str(value) + ', '
+        line  = line[:-2] + ']'
+        code += line + '\n'
+    
+    return code.rstrip()
 
 ###############################################################################
 #Custom Lists

@@ -14,7 +14,8 @@ from .writedictlist import (write_dict,
                             Primitive
                             )
 from .writecustom   import (write_numeric_df, 
-                            write_numeric_df_no_index, 
+                            write_numeric_df_no_index,
+                            write_non_numeric_df,
                             write_multiline_list,
                             format_num,
                             increase_directory

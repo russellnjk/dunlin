@@ -4,9 +4,9 @@ from typing import Sequence
 import dunlin.utils                       as ut
 import dunlin.datastructures.exception    as exc
 import dunlin.standardfile.dunl.writedunl as wd
-from dunlin.datastructures.bases import _ADict, _AItem
+from dunlin.datastructures.bases import NamespaceDict, GenericItem
 
-class Event(_AItem):
+class Event(GenericItem):
     @staticmethod
     def get_trigger_expr(trigger: str):
         if not ut.isstrlike(trigger):
@@ -138,7 +138,7 @@ class Event(_AItem):
             
         return dct
 
-class EventDict(_ADict):
+class EventDict(NamespaceDict):
     itype = Event
     
     ###########################################################################

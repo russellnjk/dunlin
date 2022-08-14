@@ -137,9 +137,6 @@ class RegularGrid(BaseGrid):
     @property
     def _plot_args(self):
         return dict(name=self.name, step=self.step, spans=self.spans)
-    
-    # def __getitem__(self, booleans):
-    #     return SlicedGrid.from_boolean(self, booleans)
   
 class BasicGrid(RegularGrid):
     @classmethod
@@ -204,12 +201,6 @@ class BasicGrid(RegularGrid):
         for point in grid:
             key        = tuple(point) 
             graph[key] = self.make_neighbours(point, step, spans)
-            
-            # for shift in shifts:
-            #     neighbour = tuple(point + shift)
-                
-            #     if self._check_corner(neighbour, *spans):
-            #         graph[key].append(neighbour)
         
         self._points  = grid
         self._graph = graph
@@ -227,7 +218,7 @@ class NestedGrid(RegularGrid):
             raise ValueError(msg)
     
     @staticmethod
-    def _check_child_inside(parent, child):
+    def _check_child_inside(parent, child) -> None:
         pmax = parent.spans[:, 1]
         pmin = parent.spans[:, 0]
         cmax = child.spans[:, 1]
@@ -245,7 +236,7 @@ class NestedGrid(RegularGrid):
             raise ValueError(msg)
         
     @staticmethod
-    def _check_children_separate(child, others):
+    def _check_children_separate(child, others) -> None:
         for child_ in others:
             for axis, axis_ in zip(child.spans, child_.spans):
                 if axis_[0] <= axis[0] <= axis_[1] or axis_[0] <= axis[1] <= axis_[1]:
@@ -253,7 +244,7 @@ class NestedGrid(RegularGrid):
                     msg += f'{child}\n{child_}'
                     raise ValueError(msg)
     
-    def __init__(self, parent, *children, name=''):
+    def __init__(self, parent, *children, name: str='') -> None:
         #Check type
         for obj in [parent, *children]:
             if not isinstance(obj, RegularGrid):
@@ -303,146 +294,10 @@ class NestedGrid(RegularGrid):
         self._points  = np.array(list(graph))
         self._step  = parent.step 
 
-class ShapeStack:
-    #For plotting
-    _scatter_args = dict(s=100, label='{name}')
-    _line_args    = dict(color='black', marker='None', linewidth=1)
-    
-    def __init__(self, grid, *shapes):
-        self._grid = grid
-        
-        points     = grid.points
-        shape_nums = np.zeros(len(points), dtype=np.int32) 
-        
-        for i, shape in enumerate(shapes, start=1):
-            is_inside             = shape.contains_points(points)
-            shape_nums[is_inside] = i
-        
-        points_      = list(grid.graph)
-        point2shape  = dict(zip(points_, shape_nums))
-        shape2points = {}
-        edges        = {}
-        graph        = grid.graph
-        
-        for point, shape_num in point2shape.items():
-            shape2points.setdefault(shape_num, []).append(point)
-            
-            for neighbour in graph[point].values():
-                shape_num_ = point2shape[neighbour]
-                
-
-                edge = tuple(sorted([shape_num, shape_num_]))
-                pair = tuple(sorted([point, neighbour]))
-                
-                lst = edges.setdefault(edge, [])
-                if pair not in lst:
-                    lst.append(pair)
-                
-        self._point2shape  = point2shape
-        self._shape2points = shape2points
-        self._edges        = edges
-        self._names        = [getattr(obj, 'name', '') for obj in [grid, *shapes]]
-        
-    @property
-    def point2shape(self):
-        return self._point2shape
-    
-    @property
-    def shape2points(self):
-        return self._shape2points
-    
-    @property
-    def interfaces(self):
-        return {k: v for k,v in self._edges.items() if k[0] != k[1]}
-    
-    @property
-    def edges(self):
-        return self._edges
-    
-    @property
-    def names(self):
-        return self._names
-    
-    def __getitem__(self, shape_num):
-        points = np.array(self.shape2points[shape_num])
-        return points
-    
-    def plot_lines(self, ax, edge=None, **line_args):
-        #Check the format of edge
-        if edge == None:
-            edge = list(self.edges)
-            return [self.plot_lines(ax, i, **line_args) for i in edge]
-        if isinstance(edge, Number):
-            edge = edge, edge
-        elif len(edge) == 2 and all([isinstance(i, Number) for i in edge]):
-            edge = tuple(sorted(edge))
-        elif [len(i) == 2 and all([isinstance(ii, Number) for ii in i]) for i in edge]:
-            return [self.plot_lines(ax, i, **line_args) for i in edge]
-        else:
-            msg  = 'Expected a number, pair numbers or a list of pairs of numbers.'
-            msg += f' Received {edge}'
-            raise ValueError(msg)
-            
-        #Parse plot args
-        names        = self.names[edge[0]], self.names[edge[1]]
-        sub_args     = {'edge': edge, 'name': names}
-        converters   = {'color': upp.get_color}
-        line_args    = upp.process_kwargs(line_args, 
-                                          [edge], 
-                                          self._line_args, 
-                                          sub_args, 
-                                          converters
-                                          )
-        
-        #Plot on the axes
-        if edge not in self.edges:
-            return []
-        
-        pairs = self.edges[edge]
-        pairs = np.array(pairs)
-        
-        result = []
-        for pair in pairs:
-            pair = pair.T
-            temp = ax.plot(*pair, **line_args)
-            result.append(temp)
-            
-        return result
-    
-    def plot_shape(self, ax, shape_num=None, **scatter_args):
-        #Check the format of shape_num
-        if shape_num is None:
-            shape_num = list(self.shape2points)
-            return [self.plot_shape(ax, i, **scatter_args) for i in shape_num]
-        elif isinstance(shape_num, Number):
-            pass
-        elif all([isinstance(i, Number) for i in shape_num]): 
-            return [self.plot_shape(ax, i, **scatter_args) for i in shape_num]
-        else:
-            msg = f'Expected a number or list of numbers. Received {shape_num}'
-            raise ValueError(msg)
-            
-        #Parse plot args
-        sub_args     = {'shape_num': shape_num, 'name': self.names[shape_num]}
-        converters   = {'c': upp.get_color}
-        scatter_args = upp.process_kwargs(scatter_args, 
-                                          [shape_num], 
-                                          self._scatter_args, 
-                                          sub_args, 
-                                          converters
-                                          )
-    
-        #Plot on the axes
-        points = self[shape_num]
-        values = points.T
-        result = ax.scatter(*values, **scatter_args)
-        
-        return result
-    
 ###############################################################################
 #Instantiation from Config Dicts
 ###############################################################################
-def make_grids_from_config(grid_config, use_cache=True):
+def make_grids_from_config(grid_config: dict, use_cache=True) -> dict[str, NestedGrid]:
     basic_grids  = make_basic_grids(grid_config)
     nested_grids = {}
     cache        = {} if use_cache else None
@@ -458,7 +313,7 @@ def make_grids_from_config(grid_config, use_cache=True):
     
     return nested_grids
 
-def make_basic_grids(grid_config):
+def make_basic_grids(grid_config: dict) -> dict[str, BasicGrid]:
     basic_grids = {}
     
     for name, config in grid_config.items():
@@ -481,8 +336,11 @@ def make_basic_grids(grid_config):
     return basic_grids
     
 
-def merge_basic_grids(basic_grids, grid_config, parent_name, cache=None, 
-                      _hierarchy=()
+def merge_basic_grids(basic_grids: dict[str, BasicGrid], 
+                      grid_config: dict, 
+                      parent_name: str, 
+                      cache: dict=None, 
+                      _hierarchy: Sequence=()
                       ) -> NestedGrid:
     #Set up cache and return if possible
     cache = {} if cache is None else cache

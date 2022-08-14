@@ -30,26 +30,26 @@ class ModelData(dict):
     ###########################################################################
     #Export
     ###########################################################################
-    def to_data(self, flattened=True, _skip=None) -> dict:
-        skip = () if _skip is None else _skip
-        
-        if flattened:
-            dct = {}
-            for k, v in self.items():
-                if k in skip or not v:
-                    continue
+    def to_data(self, keys) -> dict:
+        '''When implemented in the subclasses, should only export the core data. 
+        '''
+        dct = {}
+        for k, v in self.items():
+            if k not in keys:
+                continue
+            elif not v:
                 
-                if hasattr(v, 'to_data'):
-                    dct[k] = v.to_data()
-                else:
-                    dct[k] = v
+                continue
             
-            return dct
-        else:
-            #TODO
-            raise NotImplementedError()
-    
-    def to_dunl(self) -> str:
-        dct = dict(self)
-        return sfd.write_dunl_code(dct)
+            if hasattr(v, 'to_data'):
+                dct[k] = v.to_data()
+            else:
+                dct[k] = v
         
+        return dct
+    
+    def to_dunl_dict(self) -> str:
+        dct = self.to_data()
+        dct.pop('ref', None)
+        
+        return dct

@@ -2,9 +2,9 @@ from typing import Sequence
 
 import dunlin.utils                       as ut
 import dunlin.standardfile.dunl.writedunl as wd
-from dunlin.datastructures.bases import _ADict, _AItem
+from dunlin.datastructures.bases import NamespaceDict, GenericItem
 
-class Function(_AItem):
+class Function(GenericItem):
     ###########################################################################
     #Constructor
     ###########################################################################
@@ -45,7 +45,7 @@ class Function(_AItem):
     def to_data(self) -> list:
         return [*self.args, self.expr_ori]
 
-class FunctionDict(_ADict):
+class FunctionDict(NamespaceDict):
     itype = Function
     
     ###########################################################################

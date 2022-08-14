@@ -15,8 +15,9 @@ J_H_membrane_y : [0.1, 0.1]
 Flow0_x    : [0.1, 0.1]
 Flow0_y    : [0.1, 0.1]
 
+
 ;;reactions
-r0 : [eqn: iH -> eH, loc: local]
+tr_membrane : [eqn: iH -> eH, loc: local, compartment]
 
 ;;compartments
 #SBML CompartmentMapping : DomainType

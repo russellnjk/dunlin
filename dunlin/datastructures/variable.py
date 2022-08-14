@@ -1,9 +1,9 @@
 from typing import Union
 
 import dunlin.utils                       as ut
-from dunlin.datastructures.bases import _ADict, _AItem
+from dunlin.datastructures.bases import NamespaceDict, GenericItem
 
-class Variable(_AItem):
+class Variable(GenericItem):
     ###########################################################################
     #Constructor
     ###########################################################################
@@ -33,7 +33,7 @@ class Variable(_AItem):
     def to_data(self) -> str:
         return self.expr_ori
 
-class VariableDict(_ADict):
+class VariableDict(NamespaceDict):
     itype = Variable
     
     ###########################################################################

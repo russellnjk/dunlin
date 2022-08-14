@@ -47,7 +47,7 @@ assert 'init_m0.x0' in value
 ##############################################################################
 #Test Plotting
 ##############################################################################
-fig, AX_ = upp.figure(4, 2)
+fig, AX_ = upp.figure(3, 2)
 
 for x, ax in zip(model.state_names, AX_):
     sr.plot_line(ax, x)

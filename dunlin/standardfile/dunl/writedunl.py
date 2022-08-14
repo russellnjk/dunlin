@@ -78,7 +78,10 @@ def write_dunl_code(dct: dict, max_dir: int = 3, indent_type: str = '\t',
     
     #Iterate and update
     for key, value in dct.items():
-        if type(value) == dict:
+        if type(value) == dict or hasattr(value, 'to_dunl_dict'):
+            if hasattr(value, 'to_dunl_dict'):
+                value = value.to_dunl_dict()
+                
             #Write the key as directory
             key_      = write_key(key)
             directory = write_directory([*_dir, key_])

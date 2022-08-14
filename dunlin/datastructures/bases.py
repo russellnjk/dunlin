@@ -1,30 +1,43 @@
 import numpy  as np
 import pandas as pd
 from abc    import ABC, abstractmethod
-from typing import Any, Optional, Union, ItemsView, KeysView, ValuesView, Iterable
+from typing import (Any, Callable, Optional, Union, 
+                    ItemsView, KeysView, ValuesView, Iterable
+                    )
 
 
 import dunlin.utils             as ut
 import dunlin.standardfile.dunl as sfd
 from dunlin.utils.typing import Dflike, Num
 
-
-class _AItem(ABC, ut.FrozenObject):
-    '''
-    Base class for non-tabular datastructures.
+class GenericItem(ABC, ut.FrozenObject):
+    '''For most items.
     
-    Contains:
-        1. `namespace` : Names used by the stored values not including reserved 
-        words. Needs to be implemented in the subclass. If the subclass does not 
-        implement this, the default is a blank tuple.
+    Attributes:
+        1. `name`: All items in models will have `name` attributes corresponding 
+        SIds in SBML while obeying this package's conventions. Names should be 
+        unique so that each object can be referred to unambiguously. This is 
+        ensured by the `ext_namespace` argument in the constructor; when the 
+        constructor `__init__` is called, an error will occur if the `name` 
+        argument is already in `ext_namespace`.
+        
+        2. `namespace`: Many items refer to other items in a model. For example, 
+        a rate law might involve several parameters and molecular concentrations. 
+        To keep track of this, each `GenericItem` has a namespace attribute which 
+        tells the developer what other items are being referred to. The 
+        `__contains__` dunder method accepts a string and checks if that string 
+        is inside namespace.
+        
+        However, not all items require such tracking. In such cases, the `namespace` 
+        attribute should be left as an empy tuple. If the item requires some other 
+        behaviour, the dunder method can be overridden. However, a different 
+        attribute other than `namespace` should be used so as to avoid confusion.
     
     Export methods:
         1. `to_data` : Returns a dict/list that can be used to re-instantiate 
         the object not including the `name` argument.
-        2. `to_dunl` : Return dunl code that can be parsed and used to 
-        re-instantiate the object not including the `name` argument.
-        
     '''
+    
     @staticmethod
     def format_primitive(x: Union[str, int, float]):
         if ut.isstrlike(x):
@@ -36,33 +49,26 @@ class _AItem(ABC, ut.FrozenObject):
             return int_value
         else:
             return float_value
-    
-    def __init__(self, ext_namespace: set, name: set, new_name: Optional[str]=None
-                 ) -> None:
+        
+    def __init__(self, ext_namespace, name, /, **data):
+        for k, v in data.items():
+            setattr(self, k, v)
+        
         if not hasattr(self, 'namespace'):
             self.namespace = ()
         
-        ut.check_valid_name(name)
+        if not ut.is_valid_name(name):
+            msg = f'Invalid name {name} provided when instantiating {type(self).__name__} object.'
+            raise ValueError(msg)
         
-        if new_name is None:
-            new_name = name
-            
-        self.name = new_name
         
-        if new_name in ext_namespace:
-            raise NameError(f'Redefinition of {new_name}.')
+        if name in ext_namespace:
+            raise NameError(f'Redefinition of {name}.')
         else:
             #Update the namespace
-            ext_namespace.add(new_name)
+            ext_namespace.add(name)
         
-    def __contains__(self, name: str):
-        return name in self.namespace
-        
-    def __getitem__(self, key: str):
-        return getattr(self, key)
-    
-    def get(self, key: str, default: Any=None):
-        return getattr(self, key, default)
+        self.name = name
     
     def __str__(self):
         return self.to_dunl()
@@ -70,11 +76,65 @@ class _AItem(ABC, ut.FrozenObject):
     def __repr__(self):
         return f'{type(self).__name__} {self.name}({str(self)})'
     
+    def __contains__(self, name: str):
+        return name in self.namespace
+    
     @abstractmethod
     def to_data(self) -> Union[list, dict]:
         ...
+
+class GenericDict(ut.FrozenObject):
+    '''
+    Attributes:
+        1.`_data`: Stores data in dictionary form. Used with the `__getitem__`, 
+        '__iter__', `__contains__`, `keys`,  `values` and `items` methods to 
+        duck-type the object as frozen dictionary.
+        2. `itype`: The `type` of the objects to be stored as values. During 
+        instantiation, the values of the `_data` will be created by calling the 
+        `__init__` of `itype`.
         
-class _ADict(ut.FrozenObject, ABC):
+    '''
+    
+    _data: dict 
+    itype: type
+    
+    def __init__(self, ext_namespace, mapping: dict, *args):
+        _data = {}
+        for name, kwargs in mapping.items():
+            if hasattr(kwargs, 'items'):
+                item = self.itype(ext_namespace, *args, name, **kwargs)
+            else:
+                item = self.itype(ext_namespace, *args, name, *kwargs)
+            _data[name] = item
+          
+        self._data = _data
+    
+    def __getitem__(self, key):
+        return self._data[key]
+    
+    def __iter__(self):
+        return iter(self._data)
+    
+    def __contains__(self, key):
+        return key in self._data
+    
+    def keys(self):
+        return self._data.keys()
+    
+    def values(self):
+        return self._data.values()
+    
+    def items(self):
+        return self._data.items()
+    
+    def to_data(self) -> dict:
+        dct = {k: v.to_data() for k,v in self.items()}
+        return dct
+    
+    def to_dunl(self) -> str:
+        return sfd.write_dict(self.to_data())
+    
+class NamespaceDict(ut.FrozenObject, ABC):
     '''
     Base class for containers for subclasess of _AItem.
     
@@ -196,14 +256,14 @@ class _ADict(ut.FrozenObject, ABC):
     def to_dunl(self, indent_type='\t', **ignored) -> str:
         return sfd.write_dict(self.to_data())
 
-class _BDict(ABC, ut.FrozenObject):
+class TabularDict(ABC, ut.FrozenObject):
     '''
     Base class for containers for tabular data.
     
     
     
     '''
-    itype   : str
+    is_numeric: bool = True
     
     @staticmethod
     def mapping2df(mapping: Dflike):
@@ -224,8 +284,11 @@ class _BDict(ABC, ut.FrozenObject):
     
         return df
 
-    def __init__(self, name: str, mapping: Dflike, 
-                 ext_namespace: set, n_format: callable = sfd.format_num
+    def __init__(self, 
+                 ext_namespace: set, 
+                 name: str, 
+                 mapping: Union[dict, pd.DataFrame], 
+                 n_format: Callable = sfd.format_num
                  ) -> None:
         #Convert to df
         df = self.mapping2df(mapping)
@@ -250,7 +313,6 @@ class _BDict(ABC, ut.FrozenObject):
         
         #Save attributes
         self.name     = name
-        self.names    = names
         self._df      = df
         self.n_format = n_format
     
@@ -266,6 +328,10 @@ class _BDict(ABC, ut.FrozenObject):
     ###########################################################################
     #Access/Modification
     ###########################################################################
+    @property
+    def names(self) -> tuple:
+        return tuple(self._df.columns)
+    
     @property
     def df(self) -> pd.DataFrame:
         return self._df
@@ -304,6 +370,9 @@ class _BDict(ABC, ut.FrozenObject):
     def __len__(self):
         return len(self.names)
     
+    def __getitem__(self, key):
+        return self._df[key]
+    
     ###########################################################################
     #Export
     ###########################################################################
@@ -311,53 +380,12 @@ class _BDict(ABC, ut.FrozenObject):
         return self._df.to_dict()
     
     def to_dunl(self) -> str:
-        df          = self._df
-        n_format    = self.n_format
+        df = self._df
+        if self.is_numeric:
+            n_format = self.n_format
+            
+            return sfd.write_numeric_df(df, n_format)
         
-        return sfd.write_numeric_df(df, n_format)
-    
-class _CItem(ABC, ut.FrozenObject):
-    '''For generic dict-like objects that don't require namespace checking.
-    '''
-    def __init__(self, **data):
-        for k, v in data.items():
-            setattr(self, k, v)
+        else:
+            return sfd.write_non_numeric_df(df)
 
-    @abstractmethod
-    def to_data(self) -> Union[list, dict]:
-        ...
-
-class _CDict(ABC, ut.FrozenObject):
-    itype: type
-    def __init__(self, mapping: dict):
-        _data = {}
-        for name, dct in mapping.items():
-            item        = self.itype(name, **dct)
-            _data[name] = item
-          
-        self._data = _data
-    
-    def __getitem__(self, key):
-        return self._data[key]
-    
-    def __iter__(self):
-        return iter(self._data)
-    
-    def keys(self):
-        return self._data.keys()
-    
-    def values(self):
-        return self._data.values()
-    
-    def items(self):
-        return self._data.items()
-    
-    def to_data(self) -> dict:
-        dct = {k: v.to_data() for k,v in self.items()}
-
-        return dct
-    
-    def to_dunl(self) -> str:
-        return sfd.write_dict(self.to_data())
-        
-    

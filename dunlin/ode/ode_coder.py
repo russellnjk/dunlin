@@ -399,7 +399,7 @@ def make_rhsextra_code(model_data):
 def exs2code(model_data):
     #Set up caches
     extras = model_data['extra']
-    code   = '\t#Extra\n' #+ extras.to_py()
+    code   = '\t#Extra\n' 
     
     for name, ex in extras.items():
         code += f'\t{ex.name} = __{ex.func_name}({ex.signature})\n'

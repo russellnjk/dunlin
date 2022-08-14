@@ -1,7 +1,7 @@
 import addpath
 import dunlin                            as dn
 import dunlin.utils                      as ut
-import dunlin.standardfile.dunl.readdunl as rdn
+import dunlin.standardfile.dunl          as sfd
 import dunlin.comp                       as cmp
 from dunlin.datastructures.ode import ODEModelData
 from data import *
@@ -9,8 +9,11 @@ from data import *
 
 ref       = 'm0'
 flattened = cmp.flatten_ode(all_data, ref)
-md0       = ODEModelData(**flattened)
+mdata     = ODEModelData(**flattened)
 
-d = md0.to_data()
+d = mdata.to_data()
+d.pop('ref')
 
-assert set(flattened.keys()) == set(d.keys())
+dunl = sfd.write_dunl_code({ref: mdata})
+a    = sfd.read_dunl_code(dunl)
+assert a[ref] == d
