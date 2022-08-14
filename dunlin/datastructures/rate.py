@@ -5,6 +5,18 @@ import dunlin.standardfile.dunl.writedunl as wd
 from dunlin.datastructures.bases import NamespaceDict, GenericItem
 
 class Rate(GenericItem):
+    @staticmethod
+    def format_primitive(x: Union[str, int, float]):
+        if ut.isstrlike(x):
+            return x.strip()
+        
+        float_value = float(x)
+        int_value   = int(x)
+        if float_value == int_value:
+            return int_value
+        else:
+            return float_value
+        
     ###########################################################################
     #Constructor
     ###########################################################################

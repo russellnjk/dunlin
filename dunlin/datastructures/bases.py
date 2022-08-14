@@ -38,18 +38,7 @@ class GenericItem(ABC, ut.FrozenObject):
         the object not including the `name` argument.
     '''
     
-    @staticmethod
-    def format_primitive(x: Union[str, int, float]):
-        if ut.isstrlike(x):
-            return x.strip()
-        
-        float_value = float(x)
-        int_value   = int(x)
-        if float_value == int_value:
-            return int_value
-        else:
-            return float_value
-        
+    
     def __init__(self, ext_namespace, name, /, **data):
         for k, v in data.items():
             setattr(self, k, v)
