@@ -53,7 +53,7 @@ def compare_cycle(ax0, ax1, title, skip):
 def compare_media(ax, skip, title, colors, markers):
     
     label   = lambda ref, variable, scenario: scenario[0]
-    plot_args = {'marker'   : markers, 'linestyle': '',  'color'     : colors, 
+    plot_args = {'marker'   : markers, 'linestyle': '-',  'color'     : colors, 
                  'thin'     : pp.thin, 'label'    : label,
                  'xlabel': 'λ (1/min)',
                  'ylabel': '$ϕ_R$',

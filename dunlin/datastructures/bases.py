@@ -37,7 +37,17 @@ class GenericItem(ABC, ut.FrozenObject):
         1. `to_data` : Returns a dict/list that can be used to re-instantiate 
         the object not including the `name` argument.
     '''
-    
+    @staticmethod
+    def format_primitive(x: Union[str, int, float]):
+        if ut.isstrlike(x):
+            return x.strip()
+        
+        float_value = float(x)
+        int_value   = int(x)
+        if float_value == int_value:
+            return int_value
+        else:
+            return float_value
     
     def __init__(self, ext_namespace, name, /, **data):
         for k, v in data.items():
@@ -60,10 +70,10 @@ class GenericItem(ABC, ut.FrozenObject):
         self.name = name
     
     def __str__(self):
-        return self.to_dunl()
+        return f'{type(self).__name__}({repr(self.name)})'
     
     def __repr__(self):
-        return f'{type(self).__name__} {self.name}({str(self)})'
+        return str(self)
     
     def __contains__(self, name: str):
         return name in self.namespace
@@ -89,15 +99,43 @@ class GenericDict(ut.FrozenObject):
     
     def __init__(self, ext_namespace, mapping: dict, *args):
         _data = {}
-        for name, kwargs in mapping.items():
-            if hasattr(kwargs, 'items'):
-                item = self.itype(ext_namespace, *args, name, **kwargs)
-            else:
-                item = self.itype(ext_namespace, *args, name, *kwargs)
-            _data[name] = item
+        
+        if mapping:
+            for name, kwargs in mapping.items():
+                if hasattr(kwargs, 'items'):
+                    try:
+                        item = self.itype(ext_namespace, *args, name, **kwargs)
+                    except Exception as e:
+                        self._raise(e, name)
+                
+                elif ut.islistlike(kwargs):
+                    try:
+                        item = self.itype(ext_namespace, *args, name, *kwargs)
+                    except Exception as e:
+                        self._raise(e, name)
+                
+                else:
+                    try:
+                        item = self.itype(ext_namespace, *args, name, kwargs)
+                    except Exception as e:
+                        self._raise(e, name)
+                    
+                _data[name] = item
           
         self._data = _data
     
+    def _raise(self, e, name):
+        if not e.args:
+            raise e
+            
+        msg = e.args[0]
+        msg = f'Error when parsing item "{name}"\n{msg}'
+        
+        raise type(e)(msg)
+    
+    ###########################################################################
+    #Access
+    ###########################################################################
     def __getitem__(self, key):
         return self._data[key]
     
@@ -106,6 +144,9 @@ class GenericDict(ut.FrozenObject):
     
     def __contains__(self, key):
         return key in self._data
+    
+    def __len__(self):
+        return len(self._data)
     
     def keys(self):
         return self._data.keys()
@@ -116,90 +157,15 @@ class GenericDict(ut.FrozenObject):
     def items(self):
         return self._data.items()
     
+    ###########################################################################
+    #Export
+    ###########################################################################
     def to_data(self) -> dict:
         dct = {k: v.to_data() for k,v in self.items()}
         return dct
     
     def to_dunl(self) -> str:
         return sfd.write_dict(self.to_data())
-    
-class NamespaceDict(ut.FrozenObject, ABC):
-    '''
-    Base class for containers for subclasess of _AItem.
-    
-    It contains key-value pairs where the keys are strings and the values are  
-    of the type given by the `itype` argument in the constructor. To prevent 
-    unexpected changes in attributes, the object can be frozen at the end of 
-    instantiation by calling the `freeze` method. `itype` must be a subclass of 
-    _ADict for things to work properly.
-    
-    Contains:
-        1. `itype` : Only values of the type given by this attribute can be 
-        added.
-        2. `_data` : The underlying dictionary storing key-value pairs. This 
-        should not be accessed directly.
-        3. `namespace` : Names used by the stored values not including reserved 
-        words. Needs to be implemented in the subclass. If the subclass does not 
-        implement this, the default is a blank tuple.
-    
-    Access methods/properties:
-        `__getitem__`, `keys`, `values`, `items` work the same way as a regular 
-        dictionary.
-    
-    Export methods:
-        1. `to_data` : Returns a dict/list that can be used to re-instantiate 
-        the object not including the `name` argument.
-        2. `to_dunl` : Return dunl code that can be parsed and used to 
-        re-instantiate the object not including the `name` argument.
-        
-    '''
-    itype     : type
-    
-    ###########################################################################
-    #Constructor
-    ###########################################################################
-    def __init__(self, mapping: dict, ext_namespace: set, 
-                 callback: Optional[callable]=None, /, 
-                 **additional_args
-                 ) -> None:
-        super().__init__()
-        self._data = {}
-
-        if mapping is not None:
-            for name, args in mapping.items():
-                #Ensures the name is an allowed string
-                if ut.isdictlike(args):
-                    try:
-                        value = self.itype(ext_namespace, name, **args,  **additional_args)
-                    except Exception as e:
-                        self._raise(e, name)
-                elif ut.islistlike(args):
-                    try:
-                        value = self.itype(ext_namespace, name, *args,  **additional_args)
-                    except Exception as e:
-                        self._raise(e, name)
-                else:
-                    try:
-                        value = self.itype(ext_namespace, name, args,  **additional_args)
-                    except Exception as e:
-                        self._raise(e, name)
-
-                self._data[name] = value
-
-                if callback:
-                    if callable(callback):
-                        callback(name, value)
-                    else:
-                        [c(name, value) for c in callback]
-        
-        if not hasattr(self, 'namespace'):
-            self.namespace = ()
-    
-    def _raise(self, e, name):
-        msg = e.args[0]
-        msg = f'Error when parsing {name}\n{msg}'
-        
-        raise type(e)(msg)
     
     ###########################################################################
     #Representation
@@ -210,47 +176,24 @@ class NamespaceDict(ut.FrozenObject, ABC):
     def __repr__(self):
         return f'{type(self).__name__}{tuple(self.keys())}'
     
-    ###########################################################################
-    #Access
-    ###########################################################################
-    def __getitem__(self, key: str):
-        return self._data[key]
-    
-    def keys(self) -> KeysView:
-        return self._data.keys()
-    
-    def values(self) -> ValuesView:
-        return self._data.values()
-    
-    def items(self) -> ItemsView:
-        return self._data.items()
-    
-    def __iter__(self) -> Iterable:
-        return iter(self._data)
-    
-    def __contains__(self, item) -> bool:
-        return item in self._data
-    
-    def __len__(self) -> int:
-        return len(self._data)
+class NamespaceDict(GenericDict):
+    '''
+    Extends the GenericDict class with the addition of a namespace attribute.
+    '''
+    itype     : type
     
     ###########################################################################
-    #Export
+    #Constructor
     ###########################################################################
-    def to_data(self) -> dict:
-        dct = {k: v.to_data() for k,v in self.items()}
-
-        return dct
-    
-    def to_dunl(self, indent_type='\t', **ignored) -> str:
-        return sfd.write_dict(self.to_data())
+    def __init__(self, ext_namespace: set, mapping: dict, *args) -> None:
+        super().__init__(ext_namespace, mapping, *args)
+        
+        if not hasattr(self, 'namespace'):
+            self.namespace = ()
 
 class TabularDict(ABC, ut.FrozenObject):
     '''
     Base class for containers for tabular data.
-    
-    
-    
     '''
     is_numeric: bool = True
     

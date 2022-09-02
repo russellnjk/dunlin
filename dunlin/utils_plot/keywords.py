@@ -77,6 +77,7 @@ def recursive_get(dct, *keys):
 ###############################################################################
 #Parsing Flattened Args
 ###############################################################################
+#TODO: Deprecate this
 def replace(kwargs, key, default, _converter=None, **repl_args):
     value = kwargs.get(key, default)
     
@@ -90,6 +91,7 @@ def replace(kwargs, key, default, _converter=None, **repl_args):
     
     kwargs[key] = value
 
+#TODO: Deprecate this
 def call(kwargs, _skip=('label', 'color'), _converter=None, **repl):
     for key in kwargs:
         if key in _skip:
@@ -112,7 +114,7 @@ def substitute(kwargs, key, converter=None, sub_args=None):
     if callable(value):
         value = value(**sub_args)
     elif hasattr(value, 'format'):
-        value = str(value).format(**sub_args)
+        value = value.format(**sub_args)
         
     if converter:
         value = converter(value)

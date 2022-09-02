@@ -3,7 +3,9 @@ from typing import Union
 from .writedictlist import (write_dict, 
                             write_list, 
                             write_primitive, 
-                            write_key
+                            write_key,
+                            get_indent_type,
+                            set_indent_type
                             )
 import dunlin.standardfile.dunl.readdunl as rd
 
@@ -64,23 +66,31 @@ def merge(old: dict, new: dict) -> dict:
 ###############################################################################
 #Code Generation
 ###############################################################################
-def write_dunl_code(dct: dict, max_dir: int = 3, indent_type: str = '\t', 
+def write_dunl_code(dct: dict, max_dir: int = 3, 
                  multiline_dict: Union[bool, int]=True, _dir: list[str] = ()
                  ) -> str:
     #Use _dir to keep track of the current directory
+    indent_type = get_indent_type()
     
     #Check inputs
     if any([not i.isspace() for i in indent_type]):
         raise ValueError('Invalid indent_type')
     
+    #Split objects which are made of multiple sections
+    new_dct = {}
+    for key, value in dct.items():
+        if hasattr(value, 'to_dunl_dict'):
+            temp = value.to_dunl_dict()
+            new_dct.update(temp)
+        else:
+            new_dct[key] = value
+    
     #Set up code
     code = ''
     
     #Iterate and update
-    for key, value in dct.items():
-        if type(value) == dict or hasattr(value, 'to_dunl_dict'):
-            if hasattr(value, 'to_dunl_dict'):
-                value = value.to_dunl_dict()
+    for key, value in new_dct.items():
+        if type(value) == dict:
                 
             #Write the key as directory
             key_      = write_key(key)
@@ -91,7 +101,6 @@ def write_dunl_code(dct: dict, max_dir: int = 3, indent_type: str = '\t',
                 m     = max_dir if type(max_dir) == bool else max(0, max_dir - 1)
                 chunk = write_dunl_code(value, 
                                      max_dir=m, 
-                                     indent_type=indent_type, 
                                      multiline_dict=multiline_dict, 
                                      _dir=[*_dir, key_]
                                      )
@@ -100,7 +109,6 @@ def write_dunl_code(dct: dict, max_dir: int = 3, indent_type: str = '\t',
                     raise ValueError('Insufficient nesting')
                 
                 chunk = write_dict(value, 
-                                   indent_type=indent_type, 
                                    multiline_dict=multiline_dict
                                    )
             

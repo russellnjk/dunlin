@@ -1,6 +1,8 @@
+from abc import ABC, abstractmethod
+
 import dunlin.standardfile.dunl as sfd
 
-class ModelData(dict):
+class ModelData(dict, ABC):
     '''
     Base class for model data but packs methods for export into input dictionary 
     data. Imitates a normal dictionary but allows attribute-style access. 
@@ -30,7 +32,7 @@ class ModelData(dict):
     ###########################################################################
     #Export
     ###########################################################################
-    def to_data(self, keys) -> dict:
+    def _to_data(self, keys, recurse=True) -> dict:
         '''When implemented in the subclasses, should only export the core data. 
         '''
         dct = {}
@@ -41,15 +43,18 @@ class ModelData(dict):
                 
                 continue
             
-            if hasattr(v, 'to_data'):
+            if hasattr(v, 'to_data') and recurse:
                 dct[k] = v.to_data()
             else:
                 dct[k] = v
         
+        dct = {self['ref']: dct}
         return dct
     
+    @abstractmethod
+    def to_data(self, recurse=True) -> dict:
+        ...
+    
     def to_dunl_dict(self) -> str:
-        dct = self.to_data()
-        dct.pop('ref', None)
-        
+        dct = self.to_data(recurse=False)
         return dct

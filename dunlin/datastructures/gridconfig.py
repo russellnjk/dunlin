@@ -25,9 +25,14 @@ class GridConfig(GenericItem):
                 msg  = 'Could not unpack grid configuration. Expected: '
                 msg += 'step, <span0>, <span1>...'
                 raise ValueError(msg)
-            
-            spans = dict(zip(coordinate_components.axes, spans))
         
+            if len(spans) == coordinate_components.ndims:
+                spans = dict(zip(coordinate_components.axes, spans))
+            else:
+                msg  = f'Expected {coordinate_components.ndims} dimensions '
+                msg += f'but configuration for "{name}" is for {len(spans)} dimensions.'
+                raise ValueError(msg)
+                
         #Check step size
         if not isinstance(step, Number):
             msg = f'Expected step size to be a number. Received: {step}'
@@ -83,6 +88,10 @@ class GridConfig(GenericItem):
         self.freeze()
     
     @property
+    def ndims(self) -> int:
+        return len(self._config) - 1
+        
+    @property
     def children(self) -> list[str]:
         return self._children
     
@@ -103,7 +112,8 @@ class GridConfigDict(GenericDict):
                  ) -> None:
         super().__init__(ext_namespace, mapping,  coordinate_components)
         
-        keys = self.keys()
+        ndims = coordinate_components.ndims
+        keys  = self.keys()
         for item in self.values():
             if item.children:
                 for child in item.children:

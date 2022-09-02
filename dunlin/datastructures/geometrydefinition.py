@@ -38,7 +38,7 @@ class GeometryDefinition(GenericItem):
         #Implement the definition
         ndims = coordinate_components.ndims
         if definition == 'csg':
-            _args = self.define_csg(kwargs, ndims)
+            args  = {'node': self.define_csg(kwargs, ndims)}
         else:
             raise NotImplementedError(f'{definition} no implemented yet.')
         
@@ -48,7 +48,8 @@ class GeometryDefinition(GenericItem):
                          order=order, 
                          definition=definition, 
                          domain_type=domain_type,
-                         _args=_args
+                         _args=kwargs,
+                         **args
                          )
         
         #Freeze
@@ -60,8 +61,23 @@ class GeometryDefinition(GenericItem):
             msg  = 'Expected exactly one definition-specific argument: node. '
             msg += f'Received: {kwargs.keys()}'
             raise ValueError(msg)
+        
+        raw_node = kwargs['node']
+        
+        if type(raw_node) == str:
+            primitives = {2: ['square', 'circle'],
+                          3: ['cube', 'sphere', 'cylinder', 'cone']
+                          }
+            primitives = primitives[ndims]
+            if raw_node in primitives:
+                node = [raw_node]
+            else:
+                msg = f'No primitive {raw_node}.'
+                raise ValueError(msg)
             
-        node = cls.parse_node(kwargs['node'], ndims)
+        else:    
+            node = cls.parse_node(kwargs['node'], ndims)
+
         
         return node
         
@@ -86,7 +102,7 @@ class GeometryDefinition(GenericItem):
             #Check for errors in first item
             if i == 0: 
                 if item not in combined:
-                    msg  = 'Expected first element one of {combined}. '
+                    msg  = f'Expected first element to be one of {combined}. '
                     msg += f'Received {item}.'
                     raise ValueError(msg)
                 elif item == 'difference' and len(raw_node) != 3:
@@ -139,10 +155,7 @@ class GeometryDefinition(GenericItem):
                'order'       : self.order,
                }
         
-        if definition == 'csg':
-            dct['node'] = self._args
-        else:
-            raise NotImplementedError()
+        dct.update(self._args)
         
         return dct
     
@@ -165,7 +178,7 @@ class GeometryDefinitionDict(GenericDict):
             order = gdef.order
             
             if order in seen:
-                raise ValueError('Repeat of order {order} in geometry definition.')
+                raise ValueError(f'Repeat of order {order} in geometry definition.')
             
             seen.add(order)
             order2name[order] = name

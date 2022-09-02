@@ -62,11 +62,11 @@ class SSECalculator():
                             raise ValueError('Series for std. dev. must have unique index.')
                     else:
                         default_sd = np.percentile(series, 75)/20
-
+                    
                     gb = series.groupby(level=0)
                     y = gb.mean().values
                     t = np.array(list(gb.groups.keys()))
-                    s = gb.std()#.fillna(default_sd).values
+                    s = gb.std().fillna(default_sd).values
                     y_data.setdefault(scenario, {})[variable] = y
                     t_data.setdefault(scenario, {})[variable] = t
                     s_data.setdefault(scenario, {})[variable] = s
@@ -86,19 +86,23 @@ class SSECalculator():
                 else:
                     msg = f'Variable {variable} is not in  model.'
                     raise ValueError(msg)
-        
+                    
+        #Should not be required any more
+        # print(s_data)
+        # assert False
         #Fill missing sd or replace with default
-        for variable in ypoints:
-            ypoints[variable] = np.percentile(list(ypoints[variable]), 75)/20
+        # for variable in ypoints:
+        #     ypoints[variable] = np.percentile(list(ypoints[variable]), 75)/20
             
-        for scenario, dct in s_data.items():
-            for variable in dct:
-                default = ypoints[variable]
-                if const_sd:
-                    dct[variable] = default
-                else:
-                    dct[variable] = dct[variable].fillna(default).values
-        
+        # for scenario, dct in s_data.items():
+        #     for variable in dct:
+        #         default = ypoints[variable]
+        #         print(scenario, variable, default)
+        #         if const_sd:
+        #             dct[variable] = default
+        #         else:
+        #             dct[variable] = dct[variable].fillna(default).values
+                
         #Determine the tspan and indices
         for scenario, values in tpoints.items():
             tspan_ = np.unique(list(values))
@@ -116,7 +120,6 @@ class SSECalculator():
                     t_idx[scenario][variable] = idx
                 else:
                     t_idx[scenario][variable] = None
-        
 
         return tspan, y_data, s_data, t_data, t_idx
     
@@ -146,7 +149,8 @@ class SSECalculator():
     @njit
     def get_error(ym, yd, sd, idx):
         ym_ = ym if idx is None else ym[idx]
-        return np.sum(np.abs(ym_-yd)**2/sd**2)
+        # return np.sum(np.abs(ym_-yd)**2/sd**2)
+        return np.sum((ym_-yd)**2/sd)
     
     @staticmethod
     def sort_params(params, states):
@@ -160,7 +164,7 @@ class SSECalculator():
     ###########################################################################       
     def __init__(self, model, *dfs, const_sd=False):
         tspan, y_data, s_data, t_data, t_idx = self.parse_df(model, *dfs, const_sd=const_sd)
-        
+
         free_params  = model.optim_args['free_parameters'] 
         init         = model._states
         
@@ -210,12 +214,14 @@ class SSECalculator():
                 idx = t_idx[scenario][variable]
                 yd  = y_data[scenario][variable]
                 sd  = s_data[scenario][variable]
-                #print(variable, self.get_error(ym, yd, sd, idx) )
+                # print(yd[-5:])
+                # print(ym[idx][-5:])
+                # print(variable, scenario, self.get_error(ym, yd, sd, idx) )
+                
                 if combine:
                     SSE += self.get_error(ym, yd, sd, idx) 
                 else:
                     SSE[scenario] += self.get_error(ym, yd, sd, idx) 
-           
         return SSE
     
     ###########################################################################

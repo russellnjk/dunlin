@@ -19,7 +19,8 @@ class ExtraVariable(GenericItem):
             a = str(a_)
             
             #Check
-            ut.check_valid_name(a, allow_reserved=True)
+            if not ut.strisnum(a):
+                ut.check_valid_name(a, allow_reserved=True)
             
             #Add the string version to args
             args.append(a)
@@ -57,9 +58,9 @@ class ExtraDict(NamespaceDict):
     ###########################################################################
     #Constructor
     ###########################################################################
-    def __init__(self, extras: dict, ext_namespace: set) -> None:
+    def __init__(self, ext_namespace: set, extras: dict) -> None:
         #Make the dict
-        super().__init__(extras, ext_namespace)
+        super().__init__(ext_namespace, extras)
         
         #Cache the extra variables
         self.names = () if extras is None else tuple(extras.keys())

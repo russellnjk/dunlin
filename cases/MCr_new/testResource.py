@@ -33,20 +33,31 @@ def make_AX(model):
     return fig, AX_, AX
 
 model_filename = 'testResource.dunl'
+data_filename  = 'testData.dunl'
 
-loaded  = dn.load_file(model_filename)
+loaded  = dn.load_file(model_filename, data_filename)
 model   = loaded.parsed['Resource'] 
-dataset = loaded.parsed['ResourceData']
+dataset = loaded.parsed['GFP']
+dataset.dup('R', 'R_frac', no_fit=False)
+dataset.dup('H', 'H_frac', no_fit=True)
 
-runs = 0
+runs = 1
 
 if runs:
     curvefitters = dn.fit_model(model, dataset, runs, algo='simulated_annealing')
 else:
     curvefitters = []
-    
+
+
+colors    = {0: 'cobalt', 1: 'crimson'}
+line_args = {'color': colors}
+
 fig, AX_, AX = make_AX(model)
-dn.plot_curvefit(AX, curvefitters, dataset, model, plot_guess=True)
+dn.plot_curvefit(AX, curvefitters, dataset, model, plot_guess=True, 
+                 guess_line_args=line_args, 
+                 data_line_args=line_args, 
+                 posterior_line_args=line_args
+                 )
 AX_[0].legend()
 
 fig, AX = dn.figure(1, 1)

@@ -19,10 +19,10 @@ ext_namespace = ()
 C = FunctionDict
 
 #Test instantiation
-F0 = C(data0, set(ext_namespace))
+F0 = C(set(ext_namespace), data0)
 
 try:
-    F0 = C(data0, ext_namespace=set(ext_namespace + ('f0',)))
+    F0 = C(set(ext_namespace + ('f0',)), data0)
 except:
     assert True
 else:
@@ -47,16 +47,16 @@ ext_namespace = ('a', 'b', 'c', 'k0', 'k1', 'k2')
 C = ReactionDict
 
 #Test instantiation
-F0 = C(data0, ext_namespace=set(ext_namespace))
+F0 = C(set(ext_namespace), data0)
 try:
-    F0 = C(data0, ext_namespace=set(ext_namespace[1:]))
+    F0 = C(set(ext_namespace[1:]), data0)
 except:
     assert True
 else:
     assert False
 
 try:
-    F0 = C(data0, ext_namespace=set(ext_namespace + ('f0',)))
+    F0 = C(set(ext_namespace + ('f0',)), data0)
 except:
     assert True
 else:
@@ -80,48 +80,16 @@ data0 = {'f0': 1,
 ext_namespace = ('x', 'y')
 C = VariableDict
 
-F0 = C(data0, set(ext_namespace))
+F0 = C(set(ext_namespace), data0)
 try:
-    F0 = C(data0, ext_namespace=set(ext_namespace[1:]))
+    F0 = C(set(ext_namespace[1:]), data0)
 except:
     assert True
 else:
     assert False
 
 try:
-    F0 = C(data0, ext_namespace=set(ext_namespace + ('f0',)))
-except:
-    assert True
-else:
-    assert False
-    
-f0 = F0['f0']
-
-#Test export/roundtrip
-data1 = F0.to_data()
-dunl = F0.to_dunl()
-data2 = rdn.read_dunl_code(';A\n' + dunl)['A']
-assert data2 == data1 == data0
-
-##############################################################################
-#Test rate
-##############################################################################
-data0 = {'f0': '-k0*f0',
-         'f1': '-k1*f1'
-         }
-ext_namespace = ('f0', 'f1', 'k0', 'k1')
-C = RateDict
-
-F0 = C(data0, set(ext_namespace))
-try:
-    F0 = C(data0, ext_namespace=set(ext_namespace[1:]))
-except:
-    assert True
-else:
-    assert False
-
-try:
-    F0 = C(data0, ext_namespace=set(ext_namespace + (ut.diff('f0'),)))
+    F0 = C(set(ext_namespace + ('f0',)), data0)
 except:
     assert True
 else:
@@ -144,16 +112,48 @@ data0 = {'f0': '-k0*f0',
 ext_namespace = ('f0', 'f1', 'k0', 'k1')
 C = RateDict
 
-F0 = C(data0, set(ext_namespace))
+F0 = C(set(ext_namespace), data0)
 try:
-    F0 = C(data0, ext_namespace=set(ext_namespace[1:]))
+    F0 = C(set(ext_namespace[1:]),data0)
 except:
     assert True
 else:
     assert False
 
 try:
-    F0 = C(data0, ext_namespace=set(ext_namespace + (ut.diff('f0'),)))
+    F0 = C(set(ext_namespace + (ut.diff('f0'),)), data0)
+except:
+    assert True
+else:
+    assert False
+    
+f0 = F0['f0']
+
+#Test export/roundtrip
+data1 = F0.to_data()
+dunl = F0.to_dunl()
+data2 = rdn.read_dunl_code(';A\n' + dunl)['A']
+assert data2 == data1 == data0
+
+##############################################################################
+#Test rate
+##############################################################################
+data0 = {'f0': '-k0*f0',
+         'f1': '-k1*f1'
+         }
+ext_namespace = ('f0', 'f1', 'k0', 'k1')
+C = RateDict
+
+F0 = C(set(ext_namespace), data0)
+try:
+    F0 = C(set(ext_namespace[1:]), data0)
+except:
+    assert True
+else:
+    assert False
+
+try:
+    F0 = C(set(ext_namespace + (ut.diff('f0'),)), data0)
 except:
     assert True
 else:
@@ -176,16 +176,16 @@ data0 = {'f0': ['index', 'x0', -1],
 ext_namespace = ('x0', 'x1')
 C = ExtraDict
 
-F0 = C(data0, set(ext_namespace))
+F0 = C(set(ext_namespace), data0)
 try:
-    F0 = C(data0, ext_namespace=set(ext_namespace[1:]))
+    F0 = C(set(ext_namespace[1:]), data0)
 except:
     assert True
 else:
     assert False
 
 try:
-    F0 = C(data0, ext_namespace=set(ext_namespace + ('f0',)))
+    F0 = C(set(ext_namespace + ('f0',)), data0)
 except:
     assert True
 else:
@@ -217,16 +217,16 @@ data0 = {'f0': {'trigger'    : 'time > 10',
 ext_namespace = ('x0', 'x1')
 C = EventDict
 
-F0 = C(data0, set(ext_namespace))
+F0 = C(set(ext_namespace), data0)
 try:
-    F0 = C(data0, ext_namespace=set(ext_namespace[1:]))
+    F0 = C(set(ext_namespace[1:]), data0)
 except:
     assert True
 else:
     assert False
 
 try:
-    F0 = C(data0, ext_namespace=set(ext_namespace + ('f0',)))
+    F0 = C(set(ext_namespace + ('f0',)), data0)
 except:
     assert True
 else:

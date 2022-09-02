@@ -139,28 +139,28 @@ class RegularGrid(BaseGrid):
         return dict(name=self.name, step=self.step, spans=self.spans)
   
 class BasicGrid(RegularGrid):
-    @classmethod
-    def make_neighbours(cls, point, step, spans):
-        neighbours = {}
-        point      = tuple(point)
+    # @classmethod
+    # def make_neighbours(cls, point, step, spans):
+    #     neighbours = {}
+    #     point      = tuple(point)
         
-        for axis in range(len(point)):
-            plus  = point[:axis] + (point[axis] + step,) + point[axis+1:]
-            minus = point[:axis] + (point[axis] - step,) + point[axis+1:]
+    #     for axis in range(len(point)):
+    #         plus  = point[:axis] + (point[axis] + step,) + point[axis+1:]
+    #         minus = point[:axis] + (point[axis] - step,) + point[axis+1:]
             
-            if cls._in_spans(plus, spans):
-                neighbours[axis + 1] = plus
-            if cls._in_spans(minus, spans):
-                neighbours[-(axis + 1)] = minus
+    #         if cls._in_spans(plus, spans):
+    #             neighbours[axis + 1] = plus
+    #         if cls._in_spans(minus, spans):
+    #             neighbours[-(axis + 1)] = minus
         
-        return neighbours
+    #     return neighbours
     
-    @staticmethod
-    def _in_spans(point, spans):
-        for coordinate, span in zip(point, spans):
-            if coordinate < span[0] or coordinate > span[1]:
-                return False
-        return True
+    # @staticmethod
+    # def _in_spans(point, spans):
+    #     for coordinate, span in zip(point, spans):
+    #         if coordinate < span[0] or coordinate > span[1]:
+    #             return False
+    #     return True
     
     @staticmethod
     def _check_span(span):
@@ -187,26 +187,53 @@ class BasicGrid(RegularGrid):
         for span in spans:
             self._check_span(span)
             
-            start = span[0]//step * step
-            stop  = span[1]//step * step
+            start = int(span[0]/step) * step
+            stop  = int(span[1]/step) * step
             inter = int((stop-start)/step) + 1
             axes.append(np.linspace(start, stop, inter))
         
-        grid = np.meshgrid(*axes)
-        grid = np.stack([a.flatten() for a in grid], axis=1)
-        
+        grid   = np.meshgrid(*axes)
+        shifts = {}
+        for i, axis in enumerate(axes, start=1):
+            plus  = {}
+            minus = {}
+            for ii in range(len(axis)):
+                value     = axis[ii]
+                
+                if ii == 0:
+                    plus[value] = axis[ii+1]
+                elif ii == len(axis) - 1:
+                    minus[value] = axis[ii-1]
+                else:
+                    plus[value]  = axis[ii+1]
+                    minus[value] = axis[ii-1]
+            
+            shifts[ i] = plus
+            shifts[-i] = minus
+           
+        points = np.stack([a.flatten() for a in grid], axis=1)
         graph  = {}
-        # shifts = self.make_shifts(ndims, step)
         
-        for point in grid:
+        for point in points:
             key        = tuple(point) 
-            graph[key] = self.make_neighbours(point, step, spans)
-        
-        self._points  = grid
-        self._graph = graph
-        self._ndims = ndims
-        self._spans = np.array(spans)
-        self._step  = step
+            neighbours = {}
+            
+            for shift, dct in shifts.items():
+                idx        = abs(shift) - 1
+                value      = key[idx]
+                if value in dct:
+                    next_value = dct[value]
+                    neighbour  = key[:idx] + (next_value, ) + key[idx+1:]
+                
+                    neighbours[shift] = neighbour
+                
+            graph[key] = neighbours
+                
+        self._points  = points
+        self._graph   = graph
+        self._ndims   = ndims
+        self._spans   = np.array(spans)
+        self._step    = step
     
 class NestedGrid(RegularGrid):
     @staticmethod
@@ -230,7 +257,7 @@ class NestedGrid(RegularGrid):
             raise ValueError(msg)
         
         pstep = parent.step
-        if any(cmax//pstep != cmax/pstep) or any(cmin//pstep != cmin/pstep):
+        if any(cmax/pstep != np.int64(cmax/pstep)) or any(cmin/pstep != np.int64(cmin/pstep)):
             msg  = 'Child corners do not fit parent grid.'
             msg += f'\nParent spans: {parent}\nChild spans: {child}'
             raise ValueError(msg)
@@ -288,11 +315,11 @@ class NestedGrid(RegularGrid):
                     graph[child_point] = dict(child_neighbours)
                 
         #Make the new grid
-        self._ndims = ndims
-        self._spans = parent.spans
-        self._graph = graph
-        self._points  = np.array(list(graph))
-        self._step  = parent.step 
+        self._ndims  = ndims
+        self._spans  = parent.spans
+        self._graph  = graph
+        self._points = np.array(list(graph))
+        self._step   = parent.step 
 
 ###############################################################################
 #Instantiation from Config Dicts

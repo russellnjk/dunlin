@@ -51,9 +51,9 @@ m3 = {'states'     : {'x0': {('c0', 0): 1, ('c1', 0): 2, ('c0', 1): 3, ('c1', 1)
                       ('c0', 1): np.linspace(0, 1000, 101),
                       ('c1', 1): np.linspace(0, 1000, 101)
                       },
-      'extra'     : {'init_x0': ['index', 'x0', '0'],
-                     'init_x1': ['index', 'x1', '0'],
-                     'init_x2': ['index', 'x2', '0'], 
+      'extra'     : {'init_x0': ['index', 'x0', 0],
+                     'init_x1': ['index', 'x1', 0],
+                     'init_x2': ['index', 'x2', 0], 
                      }
       }
 

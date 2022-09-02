@@ -151,7 +151,7 @@ class Curvefitter(opt.Optimizer):
         if len(array.shape) == 1:
             p_dict     = self.sse_calc.reconstruct(array)
             sim_result = sim.simulate_model(self.model, p0=p_dict)
-                    
+            
             return sim_result
         
         else:

@@ -1,28 +1,29 @@
-model = {'states': {'x0c': [0, 0],
-                    'x0e': [0, 0]
+model = {'states': {'x0c': {'c0': 0, 'c1': 0},
+                    'x0e': {'c0': 0, 'c1': 0}
                     },
-         'parameters': {'k_syn_x0c': [0.01, 0.05],
-                        'J_x0_x'   : [0.02, 0.02],
-                        'J_x0_y '  : [0.02, 0.02],
-                        'F_x0e_x'  : [0.01, 0.01],
-                        'F_x0e_y'  : [0,    0   ],
-                        'deg_x0e'  : [0.03, 0.03],
-                        'tr_x0'    : [0.01, 0.01]
+         'parameters': {'k_syn_x0c': {'c0': 0.01, 'c1': 0.05},
+                        'J_x0_x'   : {'c0': 0.02, 'c1': 0.02},
+                        'J_x0_y'   : {'c0': 0.02, 'c1': 0.02},
+                        'F_x0e_x'  : {'c0': 0.01, 'c1': 0.01},
+                        'F_x0e_y'  : {'c0': 0,    'c1': 0   },
+                        'deg_x0e'  : {'c0': 0.03, 'c1': 0.03},
+                        'k_tr_x0'  : {'c0': 0.01, 'c1': 0.01}
                         },
-         'reactions': {'tr_x0'  : ['x0c -> x0e', 'tr_x0*x0c', 'tr_x0*x0e'],
-                       'syn_x0c': ['    -> x0c', 'k_syn_x0c']
+         'reactions': {'tr_x0'  : ['x0c -> x0e', 'k_tr_x0*x0c', 'k_tr_x0*x0e'],
+                       'syn_x0c': ['-> x0c', 'k_syn_x0c']
                        },
-         'diffusion': {'dfn_x0c': ['x0c', 'J_x0_x', 'J_x0_y'],
-                       'dfn_x0e': ['x0e', 'J_x0_x', 'J_x0_y']
+         'diffusion': {'x0c': ['J_x0_x', 'J_x0_y'],
+                       'x0e': ['J_x0_x', 'J_x0_y']
                        },
-         'advection': {'adv_x0e': ['x0e', 'F_x0e_x', 'F_x0e_y'],
+         'advection': {'x0c': [0, 0],
+                       'x0e': ['F_x0e_x', 'F_x0e_y'],
                        },
          'compartments': {'c': {'domain_type': 'cytosolic',
                                 'contains'   : ['x0c'],
                                 'unit_size'  : 1
                                 },
                           'e': {'domain_type': 'extracellular',
-                                'contains'   : 'x0e',
+                                'contains'   : ['x0e'],
                                 'unit_size'  : 1
                                 }
                           }

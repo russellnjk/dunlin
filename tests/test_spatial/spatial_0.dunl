@@ -1,8 +1,9 @@
-;M1
+;M0
 ;;states
 H : [0, 0]
 A : [0, 0]
 B : [0, 0]
+C : [1, 1]
 
 ;;parameters
 k_synH   : [1,   1]
@@ -18,54 +19,64 @@ J_B_y : [0.1, 0.1]
 
 F_H_x : [0, 0]
 F_H_y : [0, 0]
-F_A_x : [1, 1]
-F_A_y : [1, 1]
-F_B_x : [1, 1]
-F_B_y : [1, 1]
+F_A_x : [0, 0]
+F_A_y : [0, 0]
+F_B_x : [0.05, 0.05]
+F_B_y : [0.05, 0.05]
 
 ;;reactions
 #Need to infer which reactions apply to bulk/boundary
 #name str: [eqn: str, fwd: num|str, rev: num|str]
-synH : [      -> H, k_synH]
-synB : [H + A -> B, k_synB*H*A, k_synH_A*B]
+synH : [      -> H, k_synH*C]
+synB : [H + A -> B, k_synB*H*A, k_synH_A*B*1]
+
+;;functions
+func0: [x, k, -x*k]
+
+;;variables
+vrb0: 'func0(k_synH, C)'
+vrb1: 1
+
+;;rates
+C: vrb0
 
 ;;diffusion
 #Must allow scalar and tensor values for each dimension
 #name str: [species: str, dim0: str|num|tensor|path, dim1: str|num|tensor|path, dim2: str|num|tensor|path]
-dfnH : [H, J_H_x, J_H_y]
-dfnA : [A, J_A_x, J_A_y]
-dfnB : [B, J_B_x, J_B_y]
+H : [J_H_x, J_H_y]
+A : [J_A_x, J_A_y]
+B : [J_B_x, J_B_y]
 
 ;;advection
 #Must allow scalar and tensor values for each dimension
 #name str: [species: str, dim0: str|num|tensor|path, dim1: str|num|tensor|path, dim2: str|num|tensor|path]
-advH : [H, F_H_x, F_H_y]
-advA : [A, F_A_x, F_A_y]
-advB : [A, F_A_x, F_A_y]
+H : [F_H_x, F_H_y]
+A : [F_A_x, F_A_y]
+B : [F_B_x, F_B_y]
 
 ;;compartments
 cytosol : [
 	domain_type: cytosolic,
-	contains   : [H],
+	contains   : [A, H, C],
 	unit_size  : 1
 	]
 
 medium : [
 	domain_type: extracellular,
-	contains   : [A, B],
+	contains   : [B],
 	unit_size  : 1
 	]
 	
-
-;Geo0
 ;;boundary_conditions
 #If a reaction is specified, a boundary_condition cannot be used
 #If neither a reaction nor boundary_condition is specified, assume a Neumann type boundary_condition with flux of zero
 #name str: [species: str, expr: str|num, boundary_type: str, coordinate: str|list]
 #boundary_type: Neumann, Dirichlet, Robin*
 #coordinate: str|[{x, y, z}, {min, max}]
-bcA : [A, 0, Neumann, extracellular]
+bcBx : [B, -0.05, Neumann, x]
+bcBy : [B, 0.1, Dirichlet, y]
 
+;Geo0
 ;;coordinate_components
 #For now assume only cartesian coordinates are allowed
 #name str: [bounds: [min, max], unit: str]
@@ -73,17 +84,11 @@ bcA : [A, 0, Neumann, extracellular]
 #If there is a need to add new kinds of coordinates, add more possible values for name
 x: [0, 10]
 y: [0, 10]
-z: [0, 10]
-
-;;units
-x: m
-y: m
-z: m
 
 ;;grid_config
-gr_main: [config: [0.04, [0, 10], [0, 10], [0, 10]], children: [gr_1]]
-gr_0   : [config: [0.01, [3, 7 ], [3, 7 ], [3, 7 ]]                  ]
-gr_1   : [config: [0.02, [2, 8 ], [2, 8 ], [2, 8 ]], children: [gr_0]]
+gr_main: [config: [2, [0, 10], [0, 10]], children: [gr_0]]
+gr_0   : [config: [1, [2, 8 ], [2, 8 ]], children: [gr_1]]
+gr_1   : [config: [0.5, [3, 7 ], [3, 7 ]]                 ]
 
 #SBML ListofDomainTypes
 ;;domain_types
@@ -96,8 +101,7 @@ extracellular : [
 	]
 cytosolic : [
 	domains: [
-		cytosol0: [[[5, 5]]
-			]
+		cytosol0: [[5, 5]]
 		]
 	]
 #no. of dimensions should be inferred from internal_points
@@ -112,17 +116,15 @@ cytosol0_medium0: [cytosol0, medium0]
 cell : [
 	definition : csg,
 	domain_type: cytosolic,
-	order      : 0,
-	node       : [
-		circle0 : circle
-		]
+	order      : 1,
+	node       : [circle, [translate, 5, 5]]
 	]
 
 field : [
 	definition : csg,
-	domain_type: cytosolic,
+	domain_type: extracellular,
 	order      : 0,
-	node       : [difference, [square, [scale, 5, 5], [translate, 5, 5]], [circle]]
+	node       : [square, [scale, 5, 4], [translate, 5, 5]]
 	]
 
 #More on node

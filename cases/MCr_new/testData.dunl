@@ -1,0 +1,6 @@
+;GFP
+dtype   : time_response_data
+no_fit : ['mu', 'syn_H', 'R', 'H', 'x']
+
+;;file_data
+curvefit_04Glu.csv : [header: 2, truncate : [0, 750]]

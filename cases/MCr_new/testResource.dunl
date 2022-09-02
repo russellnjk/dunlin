@@ -31,7 +31,7 @@ fM_con      : [0.1241]*2
 fM_var      : [19.4025]*2
 fU_con      : [4.5642]*2
 fU_var      : [0.0191]*2
-fH_con      : [0.0000]*2
+fH_con      : [0.0002]*2
 fH_var      : [6.4846]*2
 k_fR        : [3.1791e-05]*2
 n_fR        : [2.0000]*2
@@ -128,7 +128,7 @@ line_args : [
 method : BDF
 
 ;;tspan
-{{scenario}} : !linspace(0, 900, 61)
+{{scenario}} : !linspace, 0, 900, 61!
 	$$scenario: 0, 1
 
 ;;optim_args

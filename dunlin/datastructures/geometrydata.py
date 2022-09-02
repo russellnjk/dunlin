@@ -1,5 +1,4 @@
 import dunlin.utils             as ut
-import dunlin.standardfile.dunl as sfd
 from .coordinatecomponent import CoordinateComponentDict
 from .gridconfig          import GridConfigDict
 from .domaintype          import DomainTypeDict
@@ -15,6 +14,25 @@ class GeometryData(ModelData):
     ###########################################################################
     #Instantiation
     ###########################################################################
+    @classmethod
+    def from_all_data(cls, all_data, ref, **kwargs):
+        keys = ['coordinate_components',
+                'grid_config',
+                'domain_types',
+                'adjacent_domains',
+                'geometry_definitions',
+                'boundary_conditions',
+                'units'
+                ]
+        args = {}
+        temp = all_data[ref]
+        for key in keys:
+            if key in temp:
+                args[key] = temp[key]
+        
+        geometry_data = cls(ref, **args, **kwargs)
+        return geometry_data
+        
     def __init__(self, 
                  ref: str,
                  coordinate_components: dict,
@@ -44,10 +62,6 @@ class GeometryData(ModelData):
                              geometry_definitions  = gdefs,
                              )
         
-        if boundary_conditions:
-            bcs   = BoundaryConditionDict(namespace, dmnts, boundary_conditions)
-            geometry_data['boundary_conditions'] = bcs
-        
         if units:
             geometry_data['units'] = UnitsDict(namespace, units)
         
@@ -68,9 +82,8 @@ class GeometryData(ModelData):
         #Call the parent constructor
         super().__init__(geometry_data)
     
-    def to_data(self) -> dict:
-        keys = ['ref', 
-                'coordinate_components',
+    def to_data(self, recurse=True) -> dict:
+        keys = ['coordinate_components',
                 'grid_config',
                 'domain_types',
                 'adjacent_domains',
@@ -79,5 +92,5 @@ class GeometryData(ModelData):
                 'units'
                 ]
         
-        return super().to_data(keys)
+        return super()._to_data(keys, recurse)
     

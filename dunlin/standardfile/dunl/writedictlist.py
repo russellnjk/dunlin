@@ -8,9 +8,24 @@ import dunlin.standardfile.dunl.readprimitive as rpr
 from dunlin.utils.typing import Primitive
 
 ###############################################################################
+#Globals
+###############################################################################
+_globals = {'indent_type' : '\t'}
+
+def get_indent_type():
+    global _globals
+    return _globals['indent_type']
+
+def set_indent_type(indent_type: str='\t'):
+    global _globals
+    _globals['indent_type'] = indent_type
+    
+###############################################################################
 #Writing Containers
 ###############################################################################
-def write_dict(dct, indent_type='\t', multiline_dict=True, _top_level=True) -> str:
+def write_dict(dct, multiline_dict=True, _top_level=True) -> str:
+    indent_type = get_indent_type()
+    
     code = ''
     
     for key, value in dct.items():
@@ -24,7 +39,6 @@ def write_dict(dct, indent_type='\t', multiline_dict=True, _top_level=True) -> s
         #Convert the value
         if type(value) == dict:
             chunk  = write_dict(value, 
-                                indent_type=indent_type,
                                 multiline_dict=m,
                                 _top_level=False
                                 )

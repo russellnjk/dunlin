@@ -144,6 +144,7 @@ j{{i}}   : con{{i}}+var{{i}}
 	$$i: `pools`
 syn_{{i}} : synprot*j{{i}}
 	$$i: `pools`
+degg_g: degg_eff*g
 
 ;;rates
 s   : -uptake*x_in_aa_umol
@@ -200,7 +201,7 @@ method : BDF
 line_args : [
 	marker: None,
 	linestyle: -,
-	label : '{{scenario}}mM',
+	label : '{scenario}mM',
 	color : [
 		0 : cobalt, 
 		1 : coral, 

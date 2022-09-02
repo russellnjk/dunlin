@@ -21,10 +21,6 @@ def undot(x, ignore=lambda x: x[:2] == '__'):
 def dot(x):
     if isstrlike(x):
         return x.replace('__dot__', '.')
-        # def repl(x):
-        #     return x[0].replace('__dot__', '.')
-        
-        # return re.sub('[A-Za-z]__dot__[A-Za-z]', repl, x)
     else:
         return [dot(i) for i in x]
     
@@ -41,25 +37,16 @@ def issub(x):
         return False
 
 def diff(x):
-    if type(x) == str:
-        return 'd_' + x
-    else:
-        return [diff(i) for i in x]
-
+    return '_d_' + x
+    
 def undiff(x):
-    if type(x) == str:
-        return x.split('d_', 1)[1]
-    else:
-        return [undiff(i) for i in x]
-
+    return x.split('_d_', 1)[1]
+    
 def isdiff(x):
     if not isstrlike(x):
         raise TypeError(f'Expected a string. Received {type(x)}')
     
-    if len(x) < 2:
-        return False
-    else:
-        return x[:2] == 'd_'
+    return x[:3] == '_d_'
 
 def check_not_diff(x):
     if islistlike(x) or isdictlike(x):
@@ -69,6 +56,38 @@ def check_not_diff(x):
     if isdiff(x):
         raise NameError(f'{x} is a differential and is reserved.')
 
+def adv(x):
+    return '_adv_' + x
+
+def unadv(x):
+    return x.split('adv_', 1)[1]
+
+def isadv(x):
+    if not isstrlike(x):
+        raise TypeError(f'Expected a string. Received {type(x)}')
+    
+    return x[:5] == '_adv_'
+
+def check_not_adv(x):
+    if isadv(x):
+        raise NameError(f'{x} is an advection coefficient and is reserved.')
+
+def dfn(x):
+    return '_dfn_' + x
+
+def undfn(x):
+    return x.split('_adv_', 1)[1]
+
+def isdfn(x):
+    if not isstrlike(x):
+        raise TypeError(f'Expected a string. Received {type(x)}')
+    
+    return x[:5] == '_dfn_'
+
+def check_not_dfn(x):
+    if isdiff(x):
+        raise NameError(f'{x} is a diffusion coefficient and is reserved.')
+        
 def is_valid_name(x):
     try:
         check_valid_name(x)
@@ -76,32 +95,40 @@ def is_valid_name(x):
     except:
         return False
 
-reserved = ['states', 'parameters', 'time', 'posterior', 'context', 'priors', 
-            'objective', 'all',
-            'True', 'False'
+reserved = ['states', 
+            'parameters', 
+            'time', 
+            'posterior', 
+            'context', 
+            'priors', 
+            'objective', 
+            'all',
+            'True', 
+            'False'
             ]
 
 def check_valid_name(x, allow_reserved=False):
     if not x:
         raise NameError('Name cannot be blank.')
     
-    if type(x) != str:
+    elif type(x) != str:
         raise TypeError('Variable name must be a string.')
         
-    check_not_diff(x)
-    
-    if x in reserved and not allow_reserved:
+    elif x in reserved and not allow_reserved:
         raise NameError(f'Reserved namespace {x}')
     
-    if any([i.isspace() for i in x]):
+    elif any([i.isspace() for i in x]):
         raise NameError(f'Detected whitespace in name : {repr(x)}')
     
-    if x[0] == '_':
+    elif x[0] == '_':
         raise NameError('Name cannot start with an underscore.')
+        
+    elif strisnum(x[0]):
+        raise NameError('Name cannot start with a number.')
     
-    if '__' in x:
+    elif '__' in x:
         raise NameError('Name cannot contain double underscores.')
-    
+
 ###############################################################################
 #Other Type Checking/Conversion
 ###############################################################################
@@ -126,20 +153,6 @@ def str2num(x):
             return fx
     except:
         return fx
-    
-# def val2list(x):
-#     if isnum(x) or isstrlike(x):
-#         return [x]
-#     else:
-#         return list(x)
-
-# def val2dictoflist(x):
-#     if isnum(x) or isstrlike(x):
-#         return {0: x}
-#     elif islistlike(x):
-#         return dict(enumerate(x))
-#     else:
-#         return dict(x)  
 
 def isint(x):
     try:
@@ -221,6 +234,23 @@ def split_functionlike(x, allow_num=True):
     signature = ', '.join(args)
     return name, signature, args
 
+def add_index(mapping: dict, expr: str):
+
+
+    variables = '|'.join(mapping.keys())
+    pattern   = f'(^|\W)({variables})(\W|$)'
+
+    def repl(match):
+        var     = match[2]
+        idx     = mapping[var]
+        indexed = match[1] + var + f'[{idx}]' + match[3]
+        return indexed
+
+
+    result = re.sub(pattern, repl, expr)
+
+    return result
+
 ###############################################################################
 #Variable Extraction
 ###############################################################################
@@ -235,7 +265,7 @@ def get_namespace(eqn, allow_reserved=False, add_reserved=False):
             result.update(temp)
         return result
     else:
-        pattern   = '[a-zA-Z_][a-zA-Z0-9_.]*|[0-9]e[0-9]'
+        # pattern   = '[a-zA-Z_][a-zA-Z0-9_.]*|[0-9]e[0-9]'
         pattern   = '[a-zA-Z_][a-zA-Z0-9_.]*|[0-9]e-?[0-9]'
         found     = re.findall(pattern, eqn.strip()) 
         variables = set()

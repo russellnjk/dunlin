@@ -251,6 +251,7 @@ class ODEResult:
         parameter_names = model.parameter_names
         to_remove       = set(model.functions)
         namespace       = model.namespace.difference(to_remove)
+        namespace       = namespace | {ut.diff(x) for x in model.state_names}
         
         self.t               = t
         self.y               = dict(zip(state_names, y))
@@ -260,7 +261,7 @@ class ODEResult:
         self.extra           = model._extra
         self.dct             = model._dct
         self._args           = [t, y, p]
-        self.namespace       = namespace
+        self.namespace       = frozenset(namespace)
         self.extra_variables = model.extra
         
     ###########################################################################
@@ -309,7 +310,8 @@ class ODEResult:
     #Representation
     ###########################################################################
     def __str__(self):
-        return f'{type(self).__name__}{self.namespace}'
+        s = tuple(self.namespace)
+        return f'{type(self).__name__}{s}'
     
     def __repr__(self):
         return self.__str__()
@@ -318,7 +320,7 @@ class ODEResult:
 #SimResult Class
 ###############################################################################
 class ODESimResult:
-    _line_args = {}
+    _line_args = {'label': '{scenario}'}
     _bar_args  = {'width': 0.4, 'bottom': 0}
     
     ###########################################################################

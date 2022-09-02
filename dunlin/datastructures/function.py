@@ -51,9 +51,9 @@ class FunctionDict(NamespaceDict):
     ###########################################################################
     #Constructor
     ###########################################################################
-    def __init__(self, functions: dict, ext_namespace: set) -> None:
+    def __init__(self, ext_namespace: set, functions: dict) -> None:
         #Make the dict
-        super().__init__(functions, ext_namespace)
+        super().__init__(ext_namespace, functions)
         
         #Freeze
         self.freeze()

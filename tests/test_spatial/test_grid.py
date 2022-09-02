@@ -35,6 +35,15 @@ fig.tight_layout()
 grid0 = BasicGrid(1, [0, 6], [0, 6])
 grid0.plot(AX[0])
 
+#Ensure graph is correct even with small step sizes
+grid  = BasicGrid(0.04, [0, 6], [0, 6])
+graph = grid.graph
+for point, neighbours in graph.items():
+    for neighbour in neighbours.values():
+        if neighbour not in graph:
+            print(neighbour)
+            assert False
+
 grid1 = BasicGrid(0.5, [1, 3], [1, 3])
 grid1.plot(AX[1])
 
@@ -123,14 +132,14 @@ nested_grids = make_grids_from_config(grid_config)
 #Test 3: 3D Grids
 ###############################################################################
 grid_config = {'gr0'     : {'config': [0.5, [4, 5], [4, 5], [4, 5]]},
-               'gr1'     : {'config': [0.25, [1.5, 2.5], [1.5, 2.5], [1.5, 2.5]]},
-               'gr2'     : {'config': [0.5, [1, 3], [1, 3], [1, 3]], 
+                'gr1'     : {'config': [0.25, [1.5, 2.5], [1.5, 2.5], [1.5, 2.5]]},
+                'gr2'     : {'config': [0.5, [1, 3], [1, 3], [1, 3]], 
                             'children': ['gr1']
                             },
-               'gr_main' : {'config': [1, [0, 6], [0, 6], [0, 6]], 
+                'gr_main' : {'config': [1, [0, 6], [0, 6], [0, 6]], 
                             'children': ['gr0', 'gr2']
                             },
-               }
+                }
 
 
 

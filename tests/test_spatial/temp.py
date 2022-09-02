@@ -1,172 +1,390 @@
-import numpy as np
+import matplotlib.pyplot as plt
 
-def convert_to_quaternion(radians, x, y, z):
-    q0 = np.cos(radians/2)
-    q1 = np.sin(radians/2)*x
-    q2 = np.sin(radians/2)*y
-    q3 = np.sin(radians/2)*z
+import addpath
+import dunlin as dn
+import dunlin.utils as ut
+import dunlin.ode.ode_coder as odc
+from dunlin.datastructures.spatial import SpatialModelData
+from dunlin.spatial.geometrydefinition.stack import (ShapeStack,
+                                                     )
+plt.close('all')
+plt.ion()
+
+
+def map_domains_to_shape(shape_stack : ShapeStack, 
+                         spatial_data: SpatialModelData
+                         ):
+    domain_types = spatial_data['geometry']['domain_types']
+    shapes       = shape_stack.shapes[::-1]
+    domain2shape = {}
+    seen         = set() 
     
-    return np.array([q0, q1, q2, q3])
-
-def convert_from_quaternion(q0, q1, q2, q3):
-    radians = np.arccos(q0)*2
+    for dmnt_name, dmnt in domain_types.items():
+        for dmn_name, internal_points in dmnt.domains.items():
+            for i, shape in enumerate(shapes):
+                if all(shape.contains_points(internal_points)):
+                    if i in seen:
+                        msg = 'Multiple domains map to the {shape}.'
+                        raise ValueError(msg)
+                    else:
+                       domain2shape[dmn_name] = i
+                       break
+                       
+            if dmn_name not in domain2shape:
+                msg = f'Could not associate domain {dmn_name} with a shape.'
+                raise ValueError(msg)
     
-    x = q1/np.sin(radians/2)
-    y = q2/np.sin(radians/2)
-    z = q3/np.sin(radians/2)
+    return domain2shape
+
+def map_reactions_to_domain_types(spatial_data) -> tuple[dict, dict]:
+    reactions    = spatial_data['model']['reactions']
+    compartments = spatial_data['model']['compartments']
     
-    return np.array([radians, x, y, z])
-
-def rotate_quaternion(points, radians, x, y, z):
-    q0 = np.cos(radians/2)
-    q1 = np.sin(radians/2)*x
-    q2 = np.sin(radians/2)*y
-    q3 = np.sin(radians/2)*z
+    def check_compartment(rxn_name, state_lst):
+        if not state_lst:
+            return None
+        
+        curr_cpt      = compartments.locate_state(state_lst[0])
+        curr_cpt_name = curr_cpt.name
+        
+        for state in state_lst[1:]:
+            new_cpt_name = compartments.locate_state(state).name
+            
+            if new_cpt_name != curr_cpt_name:
+                r   = f'reaction "{rxn_name}"'
+                s   = f'{state_lst}'
+                msg = f'state {s} for {r} are in different compartments.'
+                raise ValueError(msg)    
+                
+        #Map to domain type
+        dmnt_name = curr_cpt.domain_type
+        
+        return dmnt_name
     
-    q0q0 = q0*q0
-    q0q1 = q0*q1
-    q0q2 = q0*q2
-    q0q3 = q0*q3
+    dmnt2rxn = {}
+    rxn2dmnt = {}
+    for rxn_name, rxn in reactions.items():
+        rcts  = rxn.reactants
+        prods = rxn.products
+        
+        #Extract domain_type from compartment
+        rcts_dmnt_name  = check_compartment(rxn_name, rcts)
+        prods_dmnt_name = check_compartment(rxn_name, prods)
+        
+        #Create domain_type pairs
+        #Rxns across domain types: dmnt0 are dmnt1 different
+        #Rxns within domain type: dmnt0 and dmnt1 are the same
+        if rcts_dmnt_name is None and prods_dmnt_name is None:
+            msg = 'Could not map reactants or products to a compartment.'
+            raise ValueError(msg)  
+        elif rcts_dmnt_name is None:
+            rxndmnt = prods_dmnt_name, prods_dmnt_name
+        elif prods_dmnt_name is None:
+            rxndmnt = rcts_dmnt_name, rcts_dmnt_name
+        else:
+            rxndmnt = rcts_dmnt_name, prods_dmnt_name
+        
+        rxn2dmnt[rxn_name] = rxndmnt
+        dmnt2rxn.setdefault(rxndmnt, []).append(rxn_name)
     
-    q1q1 = q1*q1
-    q1q2 = q1*q2
-    q1q3 = q1*q3
+    return dmnt2rxn, rxn2dmnt
+
+class SpatialMapping:
+    def __init__(self, spatial_data):
+        stk = ShapeStack.from_geometry_data(geometry_data)
+        
+        
+        cpts   = spatial_data.model.compartments
+        dmnt2x = {}
+        
+        for cpt_name, cpt in cpts.items():
+            pass
+            
+def check_compartment(rxn_name, state_lst, compartments):
+    if not state_lst:
+        return None
     
-    q2q2 = q2*q2
-    q2q3 = q2*q3
+    curr_cpt      = compartments.locate_state(state_lst[0])
+    curr_cpt_name = curr_cpt.name
     
-    q3q3 = q3*q3
+    for state in state_lst[1:]:
+        new_cpt_name = compartments.locate_state(state).name
+        
+        if new_cpt_name != curr_cpt_name:
+            r   = f'reaction "{rxn_name}"'
+            s   = f'{state_lst}'
+            msg = f'state {s} for {r} are in different compartments.'
+            raise ValueError(msg)    
     
-    M = np.array([[q0q0 + q1q1 - q2q2 - q3q3, 2*(q1q2 - q0q3), 2*(q1q3 + q0q2)],
-                  [2*(q1q2 + q0q3), q0q0 - q1q1 + q2q2 - q3q3, 2*(q2q3 - q0q1)],
-                  [2*(q1q3 - q0q2), 2*(q2q3 + q0q1), q0q0 - q1q1 - q2q2 + q3q3]
-                  ])
+    return curr_cpt.domain_type
+
+def map_domain_types(spatial_data):
+    cpts     = spatial_data['model']['compartments']
+    rts      = spatial_data['model']['rates']
+    rxns     = spatial_data['model']['reactions']
+    bcs      = spatial_data['geometry']['boundary_conditions']
     
-    new_points = M @ points.T
-    new_points = new_points.T
-    return new_points
-
-def rotate_quaternion2(points, radians, x, y, z):
-    q0 = np.cos(radians)/2
-    q1 = np.sin(radians/2)*x
-    q2 = np.sin(radians/2)*y
-    q3 = np.sin(radians/2)*z
+    dmnt2rt  = {}
+    dmnt2rxn = {} 
+    dmnt2bc  = {} 
+    dmnt2x   = {}
     
-    r00 = 1 - 2*(q2**2 + q3**2)
-    r01 = 2*(q1*q2 - q3*q0)
-    r02 = 2*(q1*q3 + q2*q0)
+    #Map xs, rts
+    for cpt_name, cpt in cpts.items():
+        dmnt = cpt.domain_type
+        xs   = cpt.namespace
+        
+        dmnt2x[dmnt] = list(xs)
+        
+        for x in xs:
+            if x in rts.states:
+                dmnt2rt.setdefault(dmnt, {})[x] = rts[x]
+        
+    #Map rxns
+    for rxn_name, rxn in rxns.items():
+        rcts  = rxn.reactants
+        prods = rxn.products
+        #Extract domain_type from compartment
+        rcts_dmnt_name  = check_compartment(rxn_name, rcts, cpts)
+        prods_dmnt_name = check_compartment(rxn_name, prods, cpts)
+        
+        #Create domain_type pairs
+        #Rxns across domain types: dmnt0 are dmnt1 different
+        #Rxns within domain type: dmnt0 and dmnt1 are the same
+        if rcts_dmnt_name is None and prods_dmnt_name is None:
+            r   = f'"{rxn_name}"'
+            msg = f'Could not map reactants/products of {r} to a compartment.'
+            raise ValueError(msg)  
+        elif rcts_dmnt_name is None:
+            rxndmnt = prods_dmnt_name, prods_dmnt_name
+        elif prods_dmnt_name is None:
+            rxndmnt = rcts_dmnt_name, rcts_dmnt_name
+        else:
+            rxndmnt = rcts_dmnt_name, prods_dmnt_name
+        
+        dmnt2rxn.setdefault(rxndmnt, []).append(rxn)
     
-    r10 = 2*(q1*q2 + q3*q0)
-    r11 = 1 - 2*(q1**2 + q3**2)
-    r12 = 2*(q2*q3 - q1*q0)
+    #Map bcs
+    for bc_name, bc in bcs.items():
+        dmnt = bc.domain_type
+        x    = bc.state
+        dmnt2bc.setdefault(dmnt, {})[x] = bc
+        
     
-    r20 = 2*(q1*q3 - q2*q0)
-    r21 = 2*(q2*q3 + q1*q0)
-    r22 = 1 - 2*(q1**2 + q2**2)
+    return dmnt2x, dmnt2rt, dmnt2rxn, dmnt2bc
+        
+
+def point2domain_type(point, shape_stack, geometry_data, cache):
+    if point in cache:
+        return cache[point]
     
-    # First row of the rotation matrix
-    r00 = 2 * (q0 * q0 + q1 * q1) - 1
-    r01 = 2 * (q1 * q2 - q0 * q3)
-    r02 = 2 * (q1 * q3 + q0 * q2)
-     
-    # Second row of the rotation matrix
-    r10 = 2 * (q1 * q2 + q0 * q3)
-    r11 = 2 * (q0 * q0 + q2 * q2) - 1
-    r12 = 2 * (q2 * q3 - q0 * q1)
-     
-    # Third row of the rotation matrix
-    r20 = 2 * (q1 * q3 - q0 * q2)
-    r21 = 2 * (q2 * q3 + q0 * q1)
-    r22 = 2 * (q0 * q0 + q3 * q3) - 1
+    shape      = shape_stack.get_shape(point)
     
-    mat = np.array([[r00, r01, r02],
-                    [r10, r11, r12],
-                    [r20, r21, r22]
-                    ])
+    if shape is None:
+        return None
     
-    new_points = mat @ points.T
-    new_points = new_points.T
-    return new_points
+    shape_name = shape.name
+    gdefs      = geometry_data['geometry_definitions']
+    dmnt       = gdefs[shape_name].domain_type
+        
+    return dmnt
 
-def quaternion_multiply(Q0,Q1):
-    """
-    Multiplies two quaternions.
+def index_states(dmnt2x, shape_stack, geometry_data, cache):
+    x_idx = {}
+    i     = 0
+    for point, neighbours in shape_stack.graph.items():
+        dmnt = point2domain_type(point, shape_stack, geometry_data, cache)
+        
+        if dmnt is None:
+            continue
 
-    Input
-    :param Q0: A 4 element array containing the first quaternion (q01,q11,q21,q31) 
-    :param Q1: A 4 element array containing the second quaternion (q02,q12,q22,q32) 
+        #Index the states
+        xs           = dmnt2x[dmnt]
+        x_idx[point] = dict(enumerate(xs, start=i))
+        
+        i += len(xs)
+    
+    return x_idx
 
-    Output
-    :return: A 4 element array containing the final quaternion (q03,q13,q23,q33) 
+def funcs2code(spatial_data):
+    funcs = spatial_data['model']['functions']
+    
+    if not funcs:
+        return ''
+    
+    #Set up boilerplate for vrbs/funcs
+    code = '\t#Functions\n'
+    for func in funcs.values():
+        definition = f'\t\tdef {func.name}({func.signature}):\n'
+        expr       = f'\t\t\treturn {func.expr}'
+        code      += f'{definition}{expr}\n'
 
-    """
-    # Extract the values from Q0
-    w0 = Q0[0]
-    x0 = Q0[1]
-    y0 = Q0[2]
-    z0 = Q0[3]
+    return code +'\n'
 
-    # Extract the values from Q1
-    w1 = Q1[0]
-    x1 = Q1[1]
-    y1 = Q1[2]
-    z1 = Q1[3]
+def vrbs2code(spatial_data):
+    vrbs  = spatial_data['model']['variables']
+    
+    if not vrbs:
+        return ''
 
-    # Computer the product of the two quaternions, term by term
-    Q0Q1_w = w0 * w1 - x0 * x1 - y0 * y1 - z0 * z1
-    Q0Q1_x = w0 * x1 + x0 * w1 + y0 * z1 - z0 * y1
-    Q0Q1_y = w0 * y1 - x0 * z1 + y0 * w1 + z0 * x1
-    Q0Q1_z = w0 * z1 + x0 * y1 - y0 * x1 + z0 * w1
+    code = '\t#Variables\n'
+    for vrb in vrbs.values():
+        code += f'\t{vrb.name} = {vrb.expr}\n'
+    
+    return code +'\n'
 
-    # Create a 4 element array containing the final quaternion
-    final_quaternion = np.array([Q0Q1_w, Q0Q1_x, Q0Q1_y, Q0Q1_z])
+def rxns2code(rxns: list):
+    if not rxns:
+        return {}, ''
+    
+    diffs = {}
+    code  = '\t#Reactions\n'
+    for rxn in rxns:
+        code += f'\t{rxn.name} = {rxn.rate}\n'
+        
+        for x, n in rxn.stoichiometry.items():
+            diffs.setdefault(x, '') 
+            diffs[x] += f'{n}*{rxn.name} '
+    
+    return diffs, code +'\n'
 
-    # Return a 4 element array containing the final quaternion (q02,q12,q22,q32) 
-    return final_quaternion
+def advs2code(x_idx, point, shift, neighbour, advs, diffs):
+    
+    xs    = x_idx[neighbour]
+    code  = ''
+    
+    for neighbour_idx, x_name in xs.items():
+        if x_name not in advs:
+            continue
+        
+        adv = advs[x_name]
+        
+        if shift > 0:
+            coeff   = adv[shift]
+            indexed = f'states[{neighbour_idx}]'
+            
+            
+        
+        
+        if shi
+        lhs     = ut.adv(f'{shift}_{x_name}') if shift > 0 else ut.adv(f'_{shift}_{x_name}')
+        expr    = f'\t{lhs} = {coeff}*{indexed}\n'
+        
+        code += expr
+        
+        diffs.setdefault(x_name, '') 
+        if shift > 0:
+            diffs[x_name] += f'-({lhs}) '
+        else:
+            diffs[x_name] += f'+({lhs}) '
+    
+    return diffs, code + '\n'
+
+def internals2code(x_idx, xs, rts, rxns, bcs):
+    diffs1 = odc._rts2code(rts)
     
 
+all_data = dn.read_dunl_file('spatial_0.dunl')
 
-points = [[0, 0, 0], [1, 0, 0], [0, 1, 0], [-1, 0, 0], [0, -1, 0]]
-points = np.array(points, dtype=np.float64)
-rotations = [[np.pi/2, 0, 0, 1]]
-new_points = points
-for r in rotations:
-    new_points = rotate_quaternion(new_points, *r)
+mref = 'M0'
+gref = 'Geo0'
+ref  = mref, gref
 
-assert all(np.isclose(points[0], new_points[0], atol=1e-12))
-assert all(np.isclose(points[1], new_points[4], atol=1e-12))
-assert all(np.isclose(points[2], new_points[1], atol=1e-12))
-assert all(np.isclose(points[3], new_points[2], atol=1e-12))
-assert all(np.isclose(points[4], new_points[3], atol=1e-12))
+spatial_data  = SpatialModelData.from_all_data(all_data, mref, gref)
+geometry_data = spatial_data['geometry'] 
 
-points = [[0, 0, 0], [1, 0, 0], [0, 1, 0], [-1, 0, 0], [0, -1, 0]]
-points = np.array(points, dtype=np.float64)
-rotations = [[np.pi/2, 0, 0, 1], [np.pi/2, 1, 0, 0]]
-new_points = points
-for r in rotations:
-    new_points = rotate_quaternion(new_points, *r)
+shape_stack = ShapeStack.from_geometry_data(geometry_data)
+main_grid   = shape_stack.grid
+shapes      = shape_stack.shapes
+gdata       = geometry_data
 
-print(new_points)
+dmnt2x, dmnt2rt, dmnt2rxn, dmnt2bc = map_domain_types(spatial_data)
+point2domain_type_cache = {}
 
-R0, R1 = rotations
-Q0 = convert_to_quaternion(*R0)
-Q1 = convert_to_quaternion(*R1)
-Q2 = quaternion_multiply(Q1, Q0)
-r2 = convert_from_quaternion(*Q2)
+x_idx = index_states(dmnt2x, shape_stack, geometry_data, point2domain_type_cache)
 
-rotations = [r2]
-for r in rotations:
-    new_points = rotate_quaternion(points, *r)
+all_diffs = {}
 
-print(new_points)
+funcs_code = funcs2code(spatial_data)
+vrbs_code  = vrbs2code(spatial_data)
 
 
-# a = b = np.pi/4
-# b_a = 0
-# B = np.array([1, 0, 0])/np.sin(b)
-# A = np.array([0, 0, 1])/np.sin(a)
-# B_A = np.array([0, -1, 0])
-# gamma = 2* np.arccos(np.cos(b)*np.cos(a) - np.sin(b)*np.sin(a)*b_a)
-# D     = np.sin(b)*np.cos(a)*B + np.sin(a)*np.cos(b)*A + np.sin(b)*np.sin(a)*B_A
+advs = spatial_data['model']['advection']
 
-# D_ = D/(2*np.sin(gamma/2))
+for point, neighbours in shape_stack.graph.items():
+    curr_dmnt = point2domain_type(point, shape_stack, gdata, point2domain_type_cache)
+    
+    if curr_dmnt is None:
+        continue
+    
+    section_code = f'\t#Point {point}\n{vrbs_code}'
+    
+    #Set up differentials
+    diffs = {}
+    
+    #Get internals
+    xs   = dmnt2x.get(curr_dmnt, [])
+    rts  = dmnt2rt.get(curr_dmnt, {})
+    rxns = dmnt2rxn.get((curr_dmnt, curr_dmnt), [])
+    bcs  = dmnt2bc.get(curr_dmnt, {})
+    
+    for x_name, rt in rts.items():
+        diffs[x_name] = rt.expr
+    
+    rxn_diffs, rxns_code = rxns2code(rxns)
+    
+    section_code += rxns_code
+    diffs.update(rxn_diffs)
+    
+    #Get transfers/boundary conditions
+    for shift, neighbour in neighbours.items():
+        next_dmnt = point2domain_type(neighbour, 
+                                      shape_stack, 
+                                      gdata, 
+                                      point2domain_type_cache
+                                      )
+        if not next_dmnt:
+            continue
+        
+        #Check if this edge is a boundary
+        is_boundary = curr_dmnt != next_dmnt
+        
+        if is_boundary:
+            #Priority: bc, transport rxn
+            pass
+        else:
+            #Advection
+            diffs, adv_code  = advs2code(x_idx, shift, neighbour, advs, diffs)
+            section_code    += adv_code
+            print(diffs)
+            print(section_code)
+            assert False
+            pass
+            
+            #Diffusion
+            
+            
+            
+        
+        
+        
+    
+    # for x_name in xs:
+    #     if x_name in bcs:
+    #         bc             = bcs[x_name]
+    #         condition_type = 'condition_type'
+    #         if condition_type == 'Neumann':
+    #             diffs[x_name] = str(bc.condition)
+    #         elif condition_type == 'Dirichlet':
+    #             diffs[x_name] = '0'
+    #         else:
+    #             msg = f'No code implementation for {condition_type}'
+    #             raise NotImplementedError(msg)
+        
+    # for shift, neighbour in neighbours.items():
+    #     pass
+    
+    all_diffs[point] = diffs
+    
+print(all_diffs[5, 5])
+        

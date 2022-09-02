@@ -5,18 +5,6 @@ import dunlin.standardfile.dunl.writedunl as wd
 from dunlin.datastructures.bases import NamespaceDict, GenericItem
 
 class Rate(GenericItem):
-    @staticmethod
-    def format_primitive(x: Union[str, int, float]):
-        if ut.isstrlike(x):
-            return x.strip()
-        
-        float_value = float(x)
-        int_value   = int(x)
-        if float_value == int_value:
-            return int_value
-        else:
-            return float_value
-        
     ###########################################################################
     #Constructor
     ###########################################################################
@@ -62,25 +50,26 @@ class Rate(GenericItem):
     def to_data(self) -> str:
         return self.expr_ori
     
-
 class RateDict(NamespaceDict):
     itype = Rate
     
     ###########################################################################
     #Constructor
     ###########################################################################
-    def __init__(self, rates: dict, ext_namespace: set) -> None:
+    def __init__(self, ext_namespace: set, rates: dict) -> None:
         namespace = set()
         
-        def callback(name, value):
-            namespace.update(value.namespace)
-
         #Make the dict
-        super().__init__(rates, ext_namespace, callback)
+        super().__init__(ext_namespace, rates)
+        
+        states = []
+        for rate_name, rate in self.items():
+            namespace.update(rate.namespace)
+            states.append(rate.state)
         
         #Save attributes
         self.namespace = tuple(namespace)
-        
+        self.states    = tuple(states)
         #Freeze
         self.freeze()
 

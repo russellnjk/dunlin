@@ -57,9 +57,9 @@ def write_numeric_df(df, n_format: Callable = format_num) -> str:
     code = ''
     for name, col in zip(columns, df.columns):
         array = df[col]
-        line  = name + ' '*(max_len_col-len(col) + 1) + ' : ['
+        line  = name + ' '*(max_len_col-len(col)) + ' : ['
         for subname, value in zip(indices, array):
-            lhs   = subname + ' '*(max_len_idx-len(idx) + 1)
+            lhs   = subname + ' '*(max_len_idx-len(idx))
             rhs   = n_format(value) + ', ' 
             line += lhs + ' : ' + rhs
         line  = line[:-2] + ']'
@@ -84,7 +84,7 @@ def write_numeric_df_no_index(df, n_format: callable = format_num) -> str:
     code = ''
     for name, col in zip(columns, df.columns):
         array = df[col]
-        line  = name + ' '*(max_len_col-len(col) + 1) + ' : ['
+        line  = name + ' '*(max_len_col-len(col)) + ' : ['
         for value in array:
             line += n_format(value) + ', '
         line  = line[:-2] + ']'
@@ -123,9 +123,9 @@ def write_non_numeric_df(df) -> str:
     code = ''
     for name, col in zip(columns, df.columns):
         array = df[col]
-        line  = name + ' '*(max_len_col-len(col) + 1) + ' : ['
+        line  = name + ' '*(max_len_col-len(col)) + ' : ['
         for subname, value in zip(indices, array):
-            lhs   = subname + ' '*(max_len_idx-len(idx) + 1)
+            lhs   = subname + ' '*(max_len_idx-len(idx))
             rhs   = str(value) + ', ' 
             line += lhs + ' : ' + rhs
         line  = line[:-2] + ']'
@@ -150,7 +150,7 @@ def write_non_numeric_df_no_index(df) -> str:
     code = ''
     for name, col in zip(columns, df.columns):
         array = df[col]
-        line  = name + ' '*(max_len_col-len(col) + 1) + ' : ['
+        line  = name + ' '*(max_len_col-len(col)) + ' : ['
         for value in array:
             line += str(value) + ', '
         line  = line[:-2] + ']'
@@ -161,7 +161,8 @@ def write_non_numeric_df_no_index(df) -> str:
 ###############################################################################
 #Custom Lists
 ###############################################################################
-def write_multiline_list(lst, indent_type='\t', indent_level=1) -> str:
+def write_multiline_list(lst, indent_level=1) -> str:
+    indent_type = wdl.get_indent_type()
     
     code = [indent_type*indent_level + wdl.write_primitive(x) for x in lst]
     code = '\n'.join(code)

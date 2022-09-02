@@ -39,14 +39,14 @@ class VariableDict(NamespaceDict):
     ###########################################################################
     #Constructor
     ###########################################################################
-    def __init__(self, variables: dict, ext_namespace: set) -> None:
+    def __init__(self, ext_namespace: set, variables: dict) -> None:
         namespace = set()
-        
-        def callback(name, value):
-            namespace.update(value.namespace)
 
         #Make the dict
-        super().__init__(variables, ext_namespace, callback)
+        super().__init__(ext_namespace, variables)
+        
+        for variable_name, variable in self.items():
+            namespace.update(variable.namespace)
         
         #Save attributes
         self.namespace = tuple(namespace)

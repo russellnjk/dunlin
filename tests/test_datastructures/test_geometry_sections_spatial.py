@@ -6,7 +6,6 @@ from dunlin.datastructures.coordinatecomponent import CoordinateComponentDict
 from dunlin.datastructures.gridconfig          import GridConfig,          GridConfigDict
 from dunlin.datastructures.domaintype          import DomainType,          DomainTypeDict
 from dunlin.datastructures.geometrydefinition  import GeometryDefinition,  GeometryDefinitionDict
-from dunlin.datastructures.boundarycondition   import BoundaryCondition,   BoundaryConditionDict
 from dunlin.datastructures.adjacentdomain      import AdjacentDomainsDict
  
 ###############################################################################
@@ -219,37 +218,6 @@ data1 = F0.to_data()
 dunl = F0.to_dunl()
 data2 = rdn.read_dunl_code(';A\n' + dunl)['A']
 assert data2 == data1 == data0 
-
-###############################################################################
-#Test BoundaryCondition
-###############################################################################
-data0 = {'bc0': ['x0', 0, 'Neumann', 'dmnt1'],
-         }
-
-C = BoundaryConditionDict
-
-#Test instantiation
-F0 = C(ext_namespace, dmnts, data0)
-
-data0_ = {'bc0': ['x0', 0, 'Neumann', 'dmnt1'],
-          'bc1': ['x0', 0, 'Neumann', 'dmnt2'],
-          }
-
-try:
-    F0 = C(ext_namespace, dmnts, data0_)
-except:
-    assert True
-else:
-    assert False
-    
-#Test access
-f0 = F0['bc0']
-
-#Test export/roundtrip
-data1 = F0.to_data()
-dunl = F0.to_dunl()
-data2 = rdn.read_dunl_code(';A\n' + dunl)['A']
-assert data2 == data1 == data0
 
 ###############################################################################
 #Test AdjacentDomains

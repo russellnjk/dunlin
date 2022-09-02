@@ -8,7 +8,7 @@ primitives = {'square': Square, 'circle': Circle,
               }    
 operators = ['union', 'intersection', 'difference']
 
-def parse_node(node):
+def parse_node(node, name=None):
     if type(node) == str:
         if node in primitives:
             new_shape = primitives[node]()
@@ -23,6 +23,7 @@ def parse_node(node):
             shapes       = [parse_node(s) for s in shapes_]
             new_shape    = Composite(op, *shapes)
             
+            new_shape.name = name
             return new_shape
         
         else:
@@ -37,6 +38,8 @@ def parse_node(node):
                     msg = 'Expected list, tuple or dict.'
                     msg = f'{msg} Received {type(transformation).__name__}'
                     raise TypeError(msg)
+            
+            new_shape.name = name
             return new_shape
         
     else:

@@ -1,9 +1,5 @@
-from typing import Optional
-
 import dunlin.utils                    as ut
 import dunlin.datastructures.exception as exc
-import dunlin.standardfile.dunl.writedunl as wd
-from dunlin.utils.typing         import Bnd, OStr
 from dunlin.datastructures.bases import NamespaceDict, GenericItem
 
 class Reaction(GenericItem):
@@ -32,9 +28,18 @@ class Reaction(GenericItem):
         else:
             prds_stoich = []
             
-        stoich      = dict(rcts_stoich + prds_stoich)
+        rcts = []
+        prds = []
+        stoich = {}
+        for species, coeff in rcts_stoich:
+            rcts.append(species)
+            stoich[species] = coeff
         
-        return stoich
+        for species, coeff in prds_stoich:
+            prds.append(species)
+            stoich[species] = coeff
+            
+        return stoich, rcts, prds
         
     @staticmethod
     def get_stoich(rct: str, invert_sign: bool =False) -> tuple[str, str]:
@@ -58,7 +63,7 @@ class Reaction(GenericItem):
             return x, f'+{n}'
     
     @staticmethod
-    def get_rxn_rate(fwd: str, rev: OStr) -> tuple[str, set]:
+    def get_rxn_rate(fwd: str, rev: str=None) -> tuple[str, set]:
         fwd = str(fwd)
         rev = None if rev is None else str(rev)
         try:
@@ -77,13 +82,16 @@ class Reaction(GenericItem):
     ###########################################################################
     #Constructor
     ###########################################################################
-    def __init__(self, ext_namespace: set, name: str, eqn: str, 
-                 fwd: str, rev: OStr = None, 
-                 bounds: Optional[Bnd]=None,
-                 compartment: OStr = None
-                 ):
+    def __init__(self, 
+                 ext_namespace: set, 
+                 name         : str, 
+                 eqn          : str, 
+                 fwd          : str, 
+                 rev          : str=None 
+                 ) -> None:
+        
         #An example eqn is a + 2*b -> c
-        stoich = self.eqn2stoich(eqn)
+        stoich, rcts, prds = self.eqn2stoich(eqn)
         
         #Parse the reaction rates
         rate, rxn_variables = self.get_rxn_rate(fwd, rev)
@@ -100,29 +108,22 @@ class Reaction(GenericItem):
             undefined = namespace.difference(ext_namespace)
             if undefined:
                 raise NameError(f'Undefined namespace: {undefined}.')
-
-        #Check bounds
-        if bounds is not None:
-            lb, ub = bounds
-            if lb > ub:
-                raise ValueError(f'Lower bound is more than upper bound: {bounds}')
-            
-            bounds = lb, ub
         
         #It is now safe to call the parent's init
-        super().__init__(ext_namespace, name)
-        
-        #Store attributes
-        self.eqn            = eqn
-        self._stoichiometry = stoich
-        self.rate           = rate
-        self.namespace      = tuple(namespace)
-        self.fwd_namespace  = tuple(fwd_namespace)
-        self.rev_namespace  = tuple(rev_namespace)
-        self.eqn_namespace  = tuple(eqn_namespace)
-        self.bounds         = bounds
-        self.fwd            = str(fwd)
-        self.rev            = None if rev is None else str(rev)
+        super().__init__(ext_namespace, 
+                         name, 
+                         eqn=eqn,
+                         _stoichiometry = stoich,
+                         rate           = rate,
+                         namespace      = tuple(namespace),
+                         fwd_namespace  = tuple(fwd_namespace),
+                         rev_namespace  = tuple(rev_namespace),
+                         eqn_namespace  = tuple(eqn_namespace),
+                         fwd            = str(fwd),
+                         rev            = None if rev is None else str(rev),  
+                         reactants      = tuple(rcts),
+                         products       = tuple(prds)
+                         )
         
         #Freeze
         self.freeze()
@@ -140,7 +141,7 @@ class Reaction(GenericItem):
     def to_data(self) -> dict:
         #Needs to be changed for export
         dct = {}
-        for attr in ['eqn', 'fwd', 'rev', 'bounds']:
+        for attr in ['eqn', 'fwd', 'rev']:
             value = getattr(self, attr)
             
             if value is not None:
@@ -159,17 +160,21 @@ class ReactionDict(NamespaceDict):
     ###########################################################################
     #Constructor
     ###########################################################################
-    def __init__(self, reactions: dict, ext_namespace: set):
+    def __init__(self, ext_namespace: set, reactions: dict) -> None:
         namespace     = set()
         
-        def callback(name, value):
-            namespace.update(value.namespace)
-
         #Make the dict
-        super().__init__(reactions, ext_namespace, callback)
+        super().__init__(ext_namespace, reactions)
+        
+        states = set()
+        
+        for rxn_name, rxn in self.items():
+            namespace.update(rxn.namespace)
+            states.update(list(rxn.stoichiometry))
         
         #Save attributes
         self.namespace = tuple(namespace)
+        self.states    = tuple(states)
         
         #Freeze
         self.freeze()

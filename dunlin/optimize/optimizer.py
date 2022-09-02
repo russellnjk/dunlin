@@ -104,7 +104,7 @@ class Optimizer:
                 self.nominal = pd.DataFrame([nominal])
             except:
                 raise DunlinOptimizationError.nominal()
-    
+        
     ###########################################################################
     #Optimization and Calculation
     ###########################################################################       
@@ -184,7 +184,7 @@ class Optimizer:
         return self.make_trace(result)
     
     @timer
-    def run_basinhopping(self, x0_nominal=False, **kwargs):
+    def run_basinhopping(self, x0_nominal=True, **kwargs):
         func             = lambda x: self.get_objective(x)
         bounds           = Bounds(self.sampled_parameters)
         x0, step         = self.get_x0step(x0_nominal)
@@ -213,7 +213,7 @@ class Optimizer:
         return self.make_trace(result)
     
     @timer
-    def run_dual_annealing(self, x0_nominal=False, **kwargs):
+    def run_dual_annealing(self, x0_nominal=True, **kwargs):
         func             = lambda x: self.get_objective(x)
         bounds           = Bounds(self.sampled_parameters)
         x0, step         = self.get_x0step(x0_nominal)
@@ -239,7 +239,7 @@ class Optimizer:
         return self.make_trace(result)
         
     @timer
-    def run_local_minimize(self, x0_nominal=False, **kwargs):
+    def run_local_minimize(self, x0_nominal=True, **kwargs):
         func     = lambda x: self.get_objective(x)
         bounds   = Bounds(self.sampled_parameters)
         x0, step = self.get_x0step(x0_nominal)
@@ -263,7 +263,7 @@ class Optimizer:
         return self.make_trace(result)
     
     @timer
-    def run_simulated_annealing(self, x0_nominal=False, **kwargs):
+    def run_simulated_annealing(self, x0_nominal=True, **kwargs):
         func     = self.get_objective 
         bounds   = Bounds(self.sampled_parameters)
         x0, step = self.get_x0step(x0_nominal)
@@ -385,11 +385,11 @@ class Optimizer:
         for sp in self.sampled_parameters:
             new_val          = sp.new_sample()
             nominal[sp.name] = new_val
-            
+        
         args = {'free_parameters' : self.free_parameters, 
-                'to_minimize' : self.neg_log_likelihood,
-                'settings'    : self.settings,    
-                'trace_args'  : self.trace_args,
-                'name'        : new_name
+                'to_minimize'     : self.neg_log_likelihood,
+                'settings'        : self.settings,    
+                'trace_args'      : self.trace_args,
+                'name'            : new_name
                 }
         return type(self)(nominal, **args)        

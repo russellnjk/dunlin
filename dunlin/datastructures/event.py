@@ -144,9 +144,9 @@ class EventDict(NamespaceDict):
     ###########################################################################
     #Constructor
     ###########################################################################
-    def __init__(self, events: dict, ext_namespace: set) -> None:
+    def __init__(self, ext_namespace: set, events: dict) -> None:
         #Make the dict
-        super().__init__(events, ext_namespace)
+        super().__init__(ext_namespace, events)
         
         #Freeze
         self.freeze()

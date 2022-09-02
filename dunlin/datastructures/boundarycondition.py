@@ -5,17 +5,25 @@ import dunlin.utils as ut
 from .bases               import GenericItem, GenericDict
 from .coordinatecomponent import CoordinateComponentDict
 from .domaintype          import DomainTypeDict
+from .stateparam          import StateDict
 
 class BoundaryCondition(GenericItem):
     def __init__(self,
                  ext_namespace: set(),
-                 domain_types: DomainTypeDict,
+                 coordinate_components: CoordinateComponentDict,
+                 states: StateDict,
                  name: str,
-                 species: str,
+                 state: str,
                  condition: Number,
                  condition_type: Literal['Neumann', 'Dirichlet', 'Robin'],
-                 domain_type: str
+                 axis: str=None,
+                 bound: Literal['min', 'max', None]=None
                  ) -> None:
+        
+        #Check the state
+        if state not in states.names:
+            msg = f'Found boundary conditions for unexpected state {state}.'
+            raise ValueError(msg)
         
         #Check condition_type
         allowed = ['Neumann', 'Dirichlet', 'Robin']
@@ -32,35 +40,48 @@ class BoundaryCondition(GenericItem):
                 msg  = f'Expected a number for boundary condition {name}. '
                 msg += 'Received condition of type {type(condition).__name__}.'
                 raise TypeError(msg)
-
-        #Check the domain_type
-        if domain_type not in domain_types:
-            msg = f'Unexpected domain_type in {name}: {domain_type}'
+        
+        #Check the axis
+        if axis not in coordinate_components.axes and axis is not None:
+            msg = f'Unexpected axis for boundary condition {name}: {axis}'
             raise ValueError(msg)
         
-        #Check species
-        if not ut.is_valid_name(species):
-            msg = f'Invalid species name {species} in {name}.'
+        #Check the bound
+        if bound not in ['min', 'max', None]:
+            a   = '"min", "max" or left unspecified(i.e. None)'
+            msg = f'The "bound" argument must be {a}.'
+            msg = f'{msg}. Received {bound} in boundary condition {name}.'
+            raise ValueError(msg)
+            
+        #Check state
+        if not ut.is_valid_name(state):
+            msg = f'Invalid state name {state} in {name}.'
             raise ValueError(msg)
         
         #Call the parent constructor            
         super().__init__(ext_namespace, 
                          name, 
-                         species=species,
-                         condition_type=condition_type,
-                         condition=condition,
-                         domain_type=domain_type
+                         state          = state,
+                         condition_type = condition_type,
+                         condition      = condition,
+                         axis           = axis,
+                         bound          = bound
                          )
         
         #Freeze
         self.freeze()
     
     def to_data(self) -> list:
-        lst = [self.species, 
+        lst = [self.state, 
                self.condition, 
                self.condition_type, 
-               self.domain_type
                ]
+        if self.axis is not None:
+            lst.append(self.axis)
+            
+        if self.bound is not None:
+            lst.append(self.bound)
+            
         return lst
     
 class BoundaryConditionDict(GenericDict):
@@ -68,21 +89,61 @@ class BoundaryConditionDict(GenericDict):
     
     def __init__(self,
                  ext_namespace: set,
-                 domain_types: DomainTypeDict,
+                 coordinate_components: CoordinateComponentDict,
+                 states: StateDict,
                  mapping: dict
                  ) -> None:
-        super().__init__(ext_namespace, mapping, domain_types)
+        super().__init__(ext_namespace, mapping, coordinate_components, states)
         
-        seen = set()
-        
+        seen   = {}
+        states = []
         for bc in self.values():
-            species     = bc.species
-            domain_type = bc.domain_type
-            temp        = species, domain_type
+            state = bc.state
+            axis  = bc.axis
+            bound = bc.bound
             
-            if temp in seen:
-                msg = f'Found multiple boundary conditions for {temp}.'
-                raise ValueError(msg)
+            msg = f'{bc.name} overlaps with one or more boundary conditions.'
             
-            seen.add(temp)
+            if axis is None:
+                if state in seen:
+                    raise ValueError(msg)
+                else:
+                    axes        = coordinate_components.axes
+                    seen[state] = {axis: {'min': bc, 'max': bc} for axis in axes}
+            
+            elif bound is None:
+                seen.setdefault(state, {})
+                if axis in seen[state]:
+                    raise ValueError(msg)
+                else:
+                    seen[state][axis] = {'min': bc, 'max': bc}
+            else:
+                seen.setdefault(state, {})
+                seen[state].setdefault(axis, [])
+                if bound in seen[state][axis]:
+                    raise ValueError(msg)
+                else:
+                    seen[state][axis][bound] = bc
+            
+            states.append(state)
+            
+        #For further processing or access
+        self.states = frozenset(states)
+        self.cache  = seen
+        self._axes  = dict(enumerate(coordinate_components.axes, start=1))
+        #Freeze
+        self.freeze()
+    
+    def find(self, state, axis, bnd):
+        '''
+        This function return None if the state cannot be found. If the state 
+        can be found, the corresponding boundary condition is returned.
+        '''
+        
+        axis_   = self._axes[axis] if ut.isnum(axis) else axis 
+        bc = self.cache.get(state, {}).get(axis_, {}).get(bnd, None)
+        
+        return bc
+        
+        
             

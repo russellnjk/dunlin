@@ -834,10 +834,6 @@ class TimeResponseData:
             if y not in self.namespace:
                 raise ValueError('Unexpected variable: "{variable}"')
             
-        #Prepare the sim args
-        ext_args  = line_args
-        self_args = self.dataset_args.get('line_args', {})
-        
         result      = {}
         #Iterate and plot
         for c, c_data in self.data.items():
@@ -845,22 +841,32 @@ class TimeResponseData:
                 continue
             
             #Get values
-            series = c_data[y]
-            gb     = series.groupby(level=0)
-            y_vals = gb.mean()
-            y_vals = y_vals.iloc[::thin].values
-            yerr   = None if series.index.nlevels == 1 else gb.std().iloc[::thin].values
             
             if x == 'time':
+                series = c_data[y]
+                gb     = series.groupby(level=0)
+                y_vals = gb.mean()
+                y_vals = y_vals.iloc[::thin].values
+                yerr   = None if series.index.nlevels == 1 else gb.std().iloc[::thin].values
+                
                 x_vals = np.array(list(gb.groups.keys()))
                 x_vals = x_vals[::thin]
                 xerr   = None
             else:
-                series = c_data[x]
-                gb     = series.groupby(level=0)
+                series0 = c_data[y]
+                series1 = c_data[x]
+                
+                series0, series1 = series0.align(series1, axis=0)
+                
+                gb     = series0.groupby(level=0)
+                y_vals = gb.mean()
+                y_vals = y_vals.iloc[::thin].values
+                yerr   = None if series0.index.nlevels == 1 else gb.std().iloc[::thin].values
+                
+                gb     = series1.groupby(level=0)
                 x_vals = gb.mean()
                 x_vals = x_vals[::thin].values
-                xerr   = None if series.index.nlevels == 1 else gb.std()[::thin].values
+                xerr   = None if series1.index.nlevels == 1 else gb.std()[::thin].values
             
             #Parse kwargs
             #Process the plotting args
@@ -874,7 +880,7 @@ class TimeResponseData:
                                             sub_args=sub_args, 
                                             converters=converters
                                             )
-            
+
             #Determine ax
             ax = upp.recursive_get(ax_dct, c)
             
