@@ -16,8 +16,34 @@ plt.close('all')
 plt.ion()
 plt.style.use('styles/paper_style_multi.mplstyle')
 
-def plot_exp(AX, skip0, skip1, trd0, trd1):
+def plot_exp_OD(AX, skip0, skip1, trd0, trd1):   
+    linestyle = '' 
+    marker    = 'o'
+    thin      = pp.thin
+    label     = lambda scenario, ref, variable: f'{int(scenario[-1])}mM'
     
+    for trd, ax1, skip in zip([trd0, trd1], AX, [skip0, skip1]):
+        plot_args1 = {'marker'   : marker,   
+                      'linestyle': linestyle, 
+                      'color'    : pp.ind_color, 
+                      'thin'     : thin,     
+                      'skip'     : skip,
+                      'xlabel'   : 'time (min)',
+                      'ylabel'   : '$OD_{600}$',
+                      'label'    : label,
+                      'title'    : '',
+                      **pp.errorcap,
+                      }
+
+        trd.plot_line(ax1, 'OD', **plot_args1)
+        
+        ax1.set_ylabel('$OD_{600}$')
+        ax1.set_xlim(0,  750)
+        ax1.set_ylim(0.0, 0.5)
+    
+    return
+
+def plot_exp_R(AX, skip0, skip1, trd0, trd1):   
     linestyle = '' 
     marker    = 'o'
     thin      = pp.thin
@@ -32,21 +58,39 @@ def plot_exp(AX, skip0, skip1, trd0, trd1):
                       'xlabel'   : 'time (min)',
                       'ylabel'   : '$ϕ_R$',
                       'label'    : label,
+                      'title'    : '',
                       **pp.errorcap,
                       }
 
-        trd.plot_line(ax1, 'R', title='', **plot_args1)
+        trd.plot_line(ax1, 'R', **plot_args1)
         
         ax1.set_ylabel('$ϕ_R$')
         ax1.set_xlim(0,  750)
-        ax1.set_ylim(0.0, 0.5)
-        ax1.set_title('$ϕ_R$')
-        
-    AX[0].legend()
+        ax1.set_ylim(0.0, 1.5)
     
     return
 
-def plot_model(AX, model_filename, 
+def setup_model(model, medium, data_filename, model_filename):
+    mapping = {(medium, 0) : 0, (medium, 1) : 1}
+    dataset = pp.trd1.reindex(['x', 'R', 'H', 'R_frac', 'H_frac', 'mu'], 
+                              mapping, 
+                              model=model,
+                              no_fit={'R_frac', 'H_frac', 'mu'}
+                              )
+    new_params   = get_new_params(data_filename, model_filename)
+    new_params   = pd.DataFrame(new_params)
+    
+    mul = 5
+    print('Multiplying fH_var by 5')
+    
+    new_params['fH_var'] = new_params['fH_var']*mul 
+    print(new_params['fH_var'])
+    
+    model.parameters = new_params
+    dataset.adjust_model_init(model, ['R', 'H', 'x'])
+    adjust_yield(dataset, model)
+
+def plot_model_OD(AX, model_filename, 
            data_filename0, data_filename1, 
            medium0, medium1, 
            skip0, skip1):
@@ -57,24 +101,38 @@ def plot_model(AX, model_filename,
     
     for i, (ax1, data_filename, medium) in enumerate(zipped):
         #Set up model
-        mapping = {(medium, 0) : 0, (medium, 1) : 1}
-        dataset = pp.trd1.reindex(['x', 'R', 'H', 'R_frac', 'H_frac', 'mu'], 
-                                  mapping, 
-                                  model=model,
-                                  no_fit={'R_frac', 'H_frac', 'mu'}
-                                  )
-        new_params   = get_new_params(data_filename, model_filename)
-        new_params   = pd.DataFrame(new_params)
+        setup_model(model, medium, data_filename, model_filename)
         
-        mul = 5
-        print('Multiplying fH_var by 5')
+        #Simulate
+        sr = model.simulate()
         
-        new_params['fH_var'] = new_params['fH_var']*mul 
-        print(new_params['fH_var'])
+        #Plot
+        plot_args1 = {'color'    : pp.ind_colors,
+                      'xlabel'   : 'time (min)',
+                      'ylabel'   : '$OD_{600}$',
+                      'title'    : '',
+                      }
+
+        sr.plot_line(ax1, 'x', **plot_args1)
         
-        model.parameters = new_params
-        dataset.adjust_model_init(model, ['R', 'H', 'x'])
-        adjust_yield(dataset, model)
+        ax1.set_ylabel('$OD_{600}$')
+        ax1.set_xlim(0,  750)
+        ax1.set_ylim(0.0, 1.5)
+        
+    return model
+
+def plot_model_R(AX, model_filename, 
+           data_filename0, data_filename1, 
+           medium0, medium1, 
+           skip0, skip1):
+    
+    loaded = dn.load_file(model_filename)
+    model  = loaded.parsed['Resource']
+    zipped = zip(AX, [data_filename0, data_filename1], [medium0, medium1])
+    
+    for i, (ax1, data_filename, medium) in enumerate(zipped):
+        #Set up model
+        setup_model(model, medium, data_filename, model_filename)
         
         #Simulate
         sr = model.simulate()
@@ -83,14 +141,14 @@ def plot_model(AX, model_filename,
         plot_args1 = {'color'    : pp.ind_colors,
                       'xlabel'   : 'time (min)',
                       'ylabel'   : '$ϕ_R$',
+                      'title'    : '',
                       }
 
-        sr.plot_line(ax1, 'R', title='', **plot_args1)
+        sr.plot_line(ax1, 'R', **plot_args1)
         
         ax1.set_ylabel('$ϕ_R$')
         ax1.set_xlim(0,  750)
         ax1.set_ylim(0.0, 0.5)
-        ax1.set_title('$ϕ_R$')
         
     return model
 
@@ -184,44 +242,67 @@ def ttest(medium, trd):
     # print(R1)
     
 if __name__ == '__main__':
-    matplotlib.rc('legend', fontsize=12)
+    matplotlib.rc('legend', fontsize=10)
     matplotlib.rc('xtick', labelsize=12)
     matplotlib.rc('ytick', labelsize=12)
 
     layout = []
-    for ii in [0, 4]:
+    for ii in [0, 5]:
         for i in [2, 15]:
-            layout.append([ii, ii+3, i, i+10])
+            layout.append([ii, ii+4, i, i+10])
     
     
     for i in [2, 15]:
-        layout.append([9, 11, i, i+10])
+        layout.append([12, 15, i, i+10])
 
     title   = ''
-    fig, AX = dn.gridspec(11, 25, 
-                          layout,
+    fig, AX = dn.gridspec(18, 2, 
+                          [[0, 5, 0, 1],
+                           [0, 5, 1, 2],
+                           [7, 12, 0, 1],
+                           [7, 12, 1, 2],
+                           [15, 18, 0, 1],
+                           [15, 18, 1, 2],
+                           ],
                           figsize=(8, 7), 
-                          top=0.915, bottom=0.08, 
-                          left=0.04, right=0.995,
-                          wspace=1, hspace=1,
+                          top=0.945, bottom=0.083, 
+                          left=0.082, right=0.995,
+                          wspace=0.4, hspace=1,
                           title=title
                           )
     
-    args = dict(size=20, fontweight='bold')
-    # AX[0].text(0.25, 1.25, 'Experiment', transform=AX[0].transAxes, **args)
-    # AX[1].text(0.25, 1.25, 'Prediction', transform=AX[1].transAxes, **args)
-    
-    args = dict(size=12, ha='center', va='center', rotation=90)
-    AX[0].text(-0.27, 0.5, '0.4% Glu', transform=AX[0].transAxes, **args)
-    AX[2].text(-0.27, 0.5, '0.4% Glu + 0.2% CA', transform=AX[2].transAxes, **args)
-    
+    ###########################################################################
     #Plot exp data
     trd0  = pp.trd1
     trd1  = pp.trd1
     skip0 = pp.g4
     skip1 = pp.base
     
-    plot_exp(AX[0:4:2], skip0, skip1, trd0, trd1)
+    plot_exp_OD(AX[0:2], skip0, skip1, trd0, trd1)
+    AX[0].legend(loc='upper left', title='IPTG')
+    
+    #Plot model predictions
+    model_filename   = 'curvefit_G6.dunl'
+    data_filename0   = 'curvefit_04Glu.csv'
+    data_filename1   = 'curvefit_04Glu02CA.csv'
+    medium0          = '0.4Glu'
+    medium1          = '0.4Glu+0.2CA'
+    
+    model = plot_model_OD(AX[0:2], model_filename, 
+                          data_filename0, data_filename1, 
+                          medium0, medium1, 
+                          skip0, skip1
+                          )
+    
+    
+    ###########################################################################
+    #Plot exp data
+    trd0  = pp.trd1
+    trd1  = pp.trd1
+    skip0 = pp.g4
+    skip1 = pp.base
+    
+    plot_exp_R(AX[2:4], skip0, skip1, trd0, trd1)
     
     #Stat analysis
     ttest('0.4Glu+0.2CA', pp.trd1)
@@ -235,14 +316,14 @@ if __name__ == '__main__':
     medium0          = '0.4Glu'
     medium1          = '0.4Glu+0.2CA'
     
-    model = plot_model(AX[1:4:2], model_filename, 
+    model = plot_model_R(AX[2:4], model_filename, 
                        data_filename0, data_filename1, 
                        medium0, medium1, 
                        skip0, skip1
                        )
+    AX[0].set_title('0.4% Glu')
+    AX[1].set_title('0.4% Glu + 0.2% CA')
     
-
-  
     ###########################################################################
     matplotlib.rc('xtick', labelsize=14)
     matplotlib.rc('ytick', labelsize=14)

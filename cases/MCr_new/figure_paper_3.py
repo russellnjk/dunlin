@@ -53,7 +53,7 @@ def get_new_params(data_filename, model_filename):
     
     return new_params
 
-def make_prez_AX(AX_, model, dataset, model_filename, data_filename):
+def make_prez_AX(AX_, model, dataset, model_filename, data_filename, thin=5):
         
     AX = {}
     AX['x']      = AX_[0]
@@ -66,24 +66,29 @@ def make_prez_AX(AX_, model, dataset, model_filename, data_filename):
     AX['R_frac'].set_ylim(0, 0.3)
     AX['H_frac'].set_ylim(0, 0.3)
     
-    AX[('mu', 'R_frac')].set_xlim(0, 0.025)
+    AX[('mu', 'R_frac')].set_xlim(0, 0.02)
     AX[('mu', 'R_frac')].set_ylim(0, 0.3)
     
+    
+    thin = {'x': 5, 'R_frac': 5, 'H_frac': 5, ('mu', 'R_frac'): thin}
     sr = dn.simulate_model(model)
     dn.plot_line(AX, sr, ylabel='', xlabel='')
-    dn.plot_line(AX, dataset, label='_nolabel', thin=5, ylabel='', xlabel='')
+    
+    for key in AX:
+        
+        dn.plot_line({key: AX[key]}, dataset, label='_nolabel', thin=thin[key], ylabel='', xlabel='')
     
     for ax in AX_:
         ax.set_title('')
         
     return 
 
-def protocol0(model_filename, data_filename):
+def protocol0(model_filename, data_filename, medium):
     loaded = dn.load_file(model_filename)
     model  = loaded.parsed['Resource']
     print(model_filename, data_filename)
     
-    medium  = '0.4Glu'
+    # medium  = '0.4Glu'
     mapping = {(medium, 0) : 0, (medium, 1) : 1}
     dataset = pp.trd0.reindex(['x', 'R', 'H', 'R_frac', 'H_frac', 'mu'], 
                               mapping, 
@@ -143,18 +148,18 @@ if __name__ == '__main__':
     AX_ = AX[1:]
     model_filename   = 'curvefit_G6.dunl'
     data_filename    = 'curvefit_04Glu.csv'
-    model, dataset_plot = protocol0(model_filename, data_filename)
+    model, dataset_plot = protocol0(model_filename, data_filename, '0.4Glu')
     make_prez_AX(AX_[0:4], model, dataset_plot, model_filename, data_filename)
     
     model_filename   = 'curvefit_G6.dunl'
     data_filename    = 'curvefit_04Gly.csv'
-    model, dataset_plot = protocol0(model_filename, data_filename)
+    model, dataset_plot = protocol0(model_filename, data_filename,  '0.4Gly')
     make_prez_AX(AX_[4:8], model, dataset_plot, model_filename, data_filename)
     
     model_filename   = 'curvefit_G6.dunl'
     data_filename    = 'curvefit_04Glu02CA.csv'
-    model, dataset_plot = protocol0(model_filename, data_filename)
-    make_prez_AX(AX_[8:12], model, dataset_plot, model_filename, data_filename)
+    model, dataset_plot = protocol0(model_filename, data_filename,  '0.4Glu+0.2CA')
+    make_prez_AX(AX_[8:12], model, dataset_plot, model_filename, data_filename, thin=1)
     
     AX_[0].set_title('x', pad=10)
     AX_[1].set_title('$ϕ_R$', pad=10)
