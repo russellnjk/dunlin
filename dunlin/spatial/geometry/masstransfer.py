@@ -11,7 +11,7 @@ def make_code(spatial_data, _use_numba=True):
     stack = make_stack(spatial_data)
     
     voxel2dmnt = map_voxel_domain_type(stack, spatial_data)
-    
+    dmnt2x     = map_compartments_to_domain_types(spatial_data)
     
     x_code, x2idx      = make_x_code(spatial_data, stack)
     p_code             = make_p_code(spatial_data)
@@ -25,6 +25,7 @@ def make_code(spatial_data, _use_numba=True):
                                                                    tr_rxns, 
                                                                    x2idx, 
                                                                    voxel2dmnt,
+                                                                   dmnt2x 
                                                                    )
     diffs_code = make_differentials_code(spatial_data, tr_rxns)
     bc_code    = make_boundary_condition_code(spatial_data, stack, voxel2dmnt)
@@ -175,6 +176,7 @@ def make_bulk_mass_transfer_code(spatial_data,
                                  tr_rxns, 
                                  x2idx, 
                                  voxel2dmnt,
+                                 dmnt2x
                                  ):
     #Extract geometry-related intermediates
     ndims    = stack.ndims
@@ -205,49 +207,52 @@ def make_bulk_mass_transfer_code(spatial_data,
         start, stop   = x2idx[x]
         
         for voxel, (voxel_num, neighbours) in e_voxels.items():
-            size = sizes[voxel]
+            size       = sizes[voxel]
+            voxel_dmnt = voxel2dmnt[voxel]['domain_type']
+            
+            if x not in dmnt2x[voxel_dmnt]:
+                continue
             
             for shift in shifts:
                 if shift not in neighbours:
                     continue
                 
                 for neighbour in neighbours[shift]:
+                    neighbour_dmnt = voxel2dmnt[neighbour]['domain_type']
                     neighbour_num  = e_voxels[neighbour][0]
                     neighbour_size = sizes[neighbour]
                     
-                    #Advection (Only once per shift)
-                    if x in advs:
-                        chunk = make_advection(advs, 
-                                               x, 
-                                               voxel_num, 
-                                               neighbour_num, 
-                                               shift, 
-                                               size,
-                                               neighbour_size,
-                                               ndims
-                                               )
-                    
-                        adv_dct[x][voxel_num] += chunk + ' '
-                    
-                    #Diffusion
-                    if x in dfns:
-                        chunk = make_diffusion(dfns, 
-                                               x, 
-                                               voxel_num, 
-                                               neighbour_num, 
-                                               shift, 
-                                               size, 
-                                               neighbour_size
-                                               )
-                    
-                        dfn_dct[x][voxel_num] += chunk + ' '
+                    if voxel_dmnt == neighbour_dmnt:
+                        #Advection
+                        if x in advs:
+                            chunk = make_advection(advs, 
+                                                   x, 
+                                                   voxel_num, 
+                                                   neighbour_num, 
+                                                   shift, 
+                                                   size,
+                                                   neighbour_size,
+                                                   ndims
+                                                   )
+                        
+                            adv_dct[x][voxel_num] += chunk + ' '
+                        
+                        #Diffusion
+                        if x in dfns:
+                            chunk = make_diffusion(dfns, 
+                                                   x, 
+                                                   voxel_num, 
+                                                   neighbour_num, 
+                                                   shift, 
+                                                   size, 
+                                                   neighbour_size,
+                                                   ndims
+                                                   )
+                        
+                            dfn_dct[x][voxel_num] += chunk + ' '
                     
                     #Transfer reactions
-                    voxel_dmnt     = voxel2dmnt[voxel]['domain_type']
-                    neighbour_dmnt = voxel2dmnt[neighbour]['domain_type']
-                    
-                    if voxel_dmnt != neighbour_dmnt:
-
+                    else:
                         key = (voxel_dmnt, neighbour_dmnt)
                         if key in tr_rxns:
                             tr_rxns_lst = tr_rxns[key]
@@ -268,9 +273,6 @@ def make_bulk_mass_transfer_code(spatial_data,
                     
                         tr_rxn_dct[x][voxel_num] += chunk + ' '
             
-            # print(adv_dct['H'])
-            # if voxel == (3, 1):
-            #     assert False
         #Convert to code by joining chunks
         adv_code    = '\t#Advection\n'
         dfn_code    = '\t#Diffusion\n'
@@ -284,7 +286,7 @@ def make_bulk_mass_transfer_code(spatial_data,
         dfn_code += f'\t{lhs} = __np.array([\n'
         dfn_lst = dfn_dct[x]
         
-        lhs          = f'__tr_{x}'
+        lhs          = f'_tr_{x}'
         tr_rxn_code +=  f'\t{lhs} = __np.array([\n'
         tr_rxn_lst   = tr_rxn_dct[x]
         
@@ -315,15 +317,16 @@ def make_bulk_mass_transfer_code(spatial_data,
     
     return adv_code, dfn_code, tr_rxn_code
 
-def make_diffusion(dfns, x, voxel_num, neighbour_num, shift, size, neighbour_size):
-    dist           = size + neighbour_size
+def make_diffusion(dfns, x, voxel_num, neighbour_num, shift, size, neighbour_size, ndims):
+    dist           = (size + neighbour_size)/2
+    area           = min(size, neighbour_size)**(ndims-1)
     conc           = f'{x}[{voxel_num}]' 
     neighbour_conc = f'{x}[{neighbour_num}]' 
     
     conc_diff = f'({neighbour_conc} - {conc})'
     conc_grad = f'{conc_diff}/{dist}' 
     coeff     = dfns[x][abs(shift)]
-    chunk     = f'+{coeff}*{conc_grad}'
+    chunk     = f'+{coeff}*{conc_grad}*{area}'
     
     return chunk
 
@@ -332,11 +335,11 @@ def make_advection(advs, x, voxel_num, neighbour_num, shift, size, neighbour_siz
     if shift > 0:
         adv_sign = '-' if shift > 0 else '+'
         conc     = f'{x}[{voxel_num}]' 
-        area     = size**(ndims-1)
+        area     = min(size, neighbour_size)**(ndims-1)
     else:
         adv_sign = '+'
         conc     = f'{x}[{neighbour_num}]'
-        area     = neighbour_size**(ndims-1)
+        area     = min(size, neighbour_size)**(ndims-1)
     
     #Advection
     velocity = advs[x][abs(shift)]
@@ -514,8 +517,7 @@ def check_compartment(rxn_name, state_lst, compartments):
             msg = f'state {s} for {r} are in different compartments.'
             raise ValueError(msg)    
     
-    return curr_cpt.domain_type
-            
+    return curr_cpt.domain_type            
 
 def map_voxel_domain_type(shape_stack, spatial_data):
     geometry_data = spatial_data['geometry']
@@ -524,6 +526,7 @@ def map_voxel_domain_type(shape_stack, spatial_data):
     voxel2dmnt    = {}
     ndims         = shape_stack.ndims
     shifts        = [i for i in range(-ndims, ndims+1) if i != 0]
+    
     
     for voxel_num, (voxel, neighbours) in enumerate(voxels.items()):
         #Extract shape name

@@ -141,15 +141,15 @@ class ShapeStack:
         result    = []
         
         for shape_name, voxels in self.shape2voxel.items():
-            sub_args    = {'name':shape_name}
-            patch_args_ = upp.process_kwargs(patch_args, 
-                                            [shape_name], 
-                                            default,
-                                            sub_args, 
-                                            converters
-                                            )
-            
             for point in voxels:
+                sub_args    = {'name':shape_name, 'voxel': point}
+                patch_args_ = upp.process_kwargs(patch_args, 
+                                                [shape_name, point], 
+                                                default,
+                                                sub_args, 
+                                                converters
+                                                )
+                
                 if self.ndims == 3:
                     pass
                 else:
