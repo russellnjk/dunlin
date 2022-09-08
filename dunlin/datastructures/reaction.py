@@ -104,11 +104,11 @@ class Reaction(GenericItem):
         
         namespace = set.union(fwd_namespace, rev_namespace, eqn_namespace)
         
-        if ext_namespace is not None:
+        if ext_namespace:
             undefined = namespace.difference(ext_namespace)
             if undefined:
                 raise NameError(f'Undefined namespace: {undefined}.')
-        
+            
         #It is now safe to call the parent's init
         super().__init__(ext_namespace, 
                          name, 

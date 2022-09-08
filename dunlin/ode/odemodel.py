@@ -471,6 +471,12 @@ class ODESimResult:
         else:
             x, y = 'time', variable
         
+        #Set user line_args
+        if line_args:
+            line_args = {**self.sim_args.get('line_args', {}), **line_args}
+        else: 
+            line_args = self.sim_args.get('line_args', {})
+            
         result      = {}
         #Iterate and plot
         for c, ir in self.intresults.items():
@@ -478,7 +484,6 @@ class ODESimResult:
                 continue
             
             #Process the plotting args
-            line_args  = line_args if line_args else self.sim_args.get('line_args')
             keys       = [c, variable]
             sub_args   = dict(scenario=c, variable=variable, ref=self.ref)
             converters = {'color': upp.get_color}

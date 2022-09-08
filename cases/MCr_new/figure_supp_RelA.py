@@ -31,20 +31,12 @@ def get_new_params(data_filename, model_filename):
 def make_prez_AX(AX_, model, dataset, model_filename, data_filename):
         
     AX = {}
-    AX['g']           = AX_[0]
-    # AX['syng_eff']    = AX_[1]
-    # AX['degg_g']  = AX_[2]
+    AX['Rel'] = AX_[0]
+    AX['g']   = AX_[1]
     
-    # AX['x'].set_ylim(0, 1.5)
-    # AX['R_frac'].set_ylim(0, 0.3)
-    # AX['H_frac'].set_ylim(0, 0.3)
-    
-    # AX[('mu', 'R_frac')].set_xlim(0, 0.025)
-    # AX[('mu', 'R_frac')].set_ylim(0, 0.3)
     
     sr = dn.simulate_model(model)
     dn.plot_line(AX, sr, ylabel='', xlabel='')
-    dn.plot_line(AX, dataset, label='_nolabel', thin=5, ylabel='', xlabel='')
     
     for ax in AX_:
         ax.set_title('')
@@ -78,50 +70,50 @@ if __name__ == '__main__':
     matplotlib.rc('axes', labelsize=14, titlesize=14, titlepad=20)
     matplotlib.rc('xtick', labelsize=12)
     matplotlib.rc('ytick', labelsize=12)
-
-
-    path = 'figures/CF.png'
-    save = True 
     
     layout = []
-    for i in range(0, 1):
+    for i in range(0, 2):
         for ii in range(3):
             layout.append([i, i+1, ii, ii+1])
     
     title   = ''
-    fig, AX = dn.gridspec(1, 3, 
+    fig, AX = dn.gridspec(2, 3, 
                           layout,
-                          figsize=(8, 2.8), 
-                          top=0.82, bottom=0.185, 
-                          left=0.11, right=0.99,
-                          wspace=0.4, hspace=0.8,
+                          figsize=(8, 5), 
+                          top=0.91, bottom=0.15, 
+                          left=0.06, right=0.99,
+                          wspace=0.3, hspace=0.5,
                           title=title
                           )
     
     model_filename   = 'curvefit_G6.dunl'
     data_filename    = 'curvefit_04Glu.csv'
     model, dataset_plot = protocol0(model_filename, data_filename)
-    make_prez_AX(AX[0:1], model, dataset_plot, model_filename, data_filename)
+    make_prez_AX(AX[0::3], model, dataset_plot, model_filename, data_filename)
     
     model_filename   = 'curvefit_G6.dunl'
     data_filename    = 'curvefit_04Gly.csv'
     model, dataset_plot = protocol0(model_filename, data_filename)
-    make_prez_AX(AX[1:2], model, dataset_plot, model_filename, data_filename)
+    make_prez_AX(AX[1::3], model, dataset_plot, model_filename, data_filename)
     
     model_filename   = 'curvefit_G6.dunl'
     data_filename    = 'curvefit_04Glu02CA.csv'
     model, dataset_plot = protocol0(model_filename, data_filename)
-    make_prez_AX(AX[2:3], model, dataset_plot, model_filename, data_filename)
+    make_prez_AX(AX[2::3], model, dataset_plot, model_filename, data_filename)
     
-    AX[0].set_title('0.2% Gly', pad=20)
-    AX[1].set_title('0.4% Glu', pad=20)
+    AX[0].set_title('0.4% Glu', pad=20)
+    AX[1].set_title('0.4% Gly', pad=20)
     AX[2].set_title('0.4% Glu + 0.2% CA', pad=20)
-    AX[0].set_xlabel('time (min)')
-    AX[1].set_xlabel('time (min)')
-    AX[2].set_xlabel('time (min)')
-    AX[0].set_ylabel('Simulated (p)ppGpp conc. \n(Arbitrary units)')
+    AX[3].set_xlabel('time (min)')
+    AX[4].set_xlabel('time (min)')
+    AX[5].set_xlabel('time (min)')
+    AX[0].set_ylabel('RelA')
+    AX[3].set_ylabel('(p)ppGpp')
     AX[0].legend(title='IPTG')
     
-    # AX[0].text(0, -0.38, 'Note: IPTG conc. is in mM', size=12, transform=AX[0].transAxes)
+    for i, ax in zip('ABCDEF', AX):
+        ax.text(-0.2, 1.1, i, size=20, transform=ax.transAxes, fontweight='bold')
+    
+    AX[0].text(0, -1.98, 'Note: Concentrations in arbitrary units.', size=12, transform=AX[0].transAxes)
     
     fig.savefig('figures/RelA.png', dpi=1200)

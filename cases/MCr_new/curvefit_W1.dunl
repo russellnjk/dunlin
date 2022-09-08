@@ -1,0 +1,234 @@
+#yield = change in aa of x / change in umol S
+# x is always in grams
+# 
+
+
+;Resource
+#Adapted from the matlab file in the supp. material
+#Additional states added for external substrate and biomass
+#States have been renamed so all proteins are capitalized
+
+;;states
+x  : [0.1]*2
+s  : [1000]*2
+si : [0]*2
+p  : [0]*2
+
+mQ : [0]*2
+mT : [0]*2
+mM : [0]*2
+mR : [0]*2
+mH : [0]*2
+
+RmQ : [0]*2
+RmT : [0]*2
+RmM : [0]*2
+RmR : [0]*2
+RmH : [0]*2
+
+Q : [0.4]*2
+T : [0]*2
+M : [0]*2
+R : [0.115]*2
+H : [0.03]*2
+
+;;events
+init : [
+	trigger : time == 0,
+	assign :[
+		M  = M0,
+		T  = 1-R-H-Q-M,
+		mQ = Q,
+		mT = T,
+		mM = M,
+		mR = R,
+		mH = H
+		]
+	]
+
+;;parameters
+# v_uptake    : [418.03]*2
+# k_uptake    : [1.26e+03]*2
+# v_biosyn    : [15.56]*2
+# k_biosyn    : [0.02]*2
+# Yield       : [12.18]*2
+# w_Q         : [1.00]*2
+# w_E         : [2.14]*2
+# w_R         : [0.19]*2
+# w_H         : [0.71]*2
+# k_mE        : [1.46]*2
+# k_mR        : [8.84e-03]*2
+# k_mH        : [1.80e-03]*2
+# n_q         : [4.00]*2
+# k_Q         : [0.25]*2
+# deg_m       : [0.10]*2
+# ind         : [0.00, 1.00]
+# bind_R      : [9.90e+04]*2
+# unbind_R    : [16.51]*2
+# v_max       : [1.58e+03]*2
+# k_p         : [863.53]*2
+# aa_per_H    : [227.00]*2
+# M0          : [0.015]*2
+# k_fH        : [330]*2
+# n_fH        : [1]*2
+
+#After fitting to 04Glu
+v_uptake    : [15.6289]*2
+k_uptake    : [1.5619e+03]*2
+v_biosyn    : [18.9928]*2
+k_biosyn    : [0.2015]*2
+Yield       : [9.7929]*2
+w_Q         : [1.0000]*2
+w_E         : [0.1470]*2
+w_R         : [0.0945]*2
+w_H         : [0.9874]*2
+k_mE        : [0.0204]*2
+k_mR        : [3.0342e-03]*2
+k_mH        : [0.5910]*2
+n_q         : [4.0000]*2
+k_Q         : [1.6333e+05]*2
+deg_m       : [0.1000]*2
+ind         : [0.0000, 1.0000]
+bind_R      : [4.4547e+04]*2
+unbind_R    : [2.6080]*2
+v_max       : [1.5800e+03]*2
+k_p         : [985.8378]*2
+aa_per_H    : [227.0000]*2
+M0          : [0.0157]*2
+k_fH        : [41.0254]*2
+n_fH        : [1.0000]*2
+
+;;variables
+#Physiology and conversion factors
+aa_per_cell      : 1.0e8 
+aa_per_R         : 7549.0
+aa_per_prot      : 300.0
+umol_aa_per_cell : aa_per_cell/6e17
+
+
+n{{i}} : {{i}}/7459
+	$$i: R, RmQ, RmR, RmH, RmT, RmM
+n{{i}} : {{i}}/300
+	$$i: Q, T, M
+
+#Fractions
+R_frac : R + RmR + RmH + RmT + RmM + RmQ
+H_frac : H
+
+#Conversion between cell mass and aa
+x2aa_umol    : 1/110*1e6
+x_in_aa_umol : x*x2aa_umol
+
+#Fluxes
+uptake : nT*v_uptake*s /(k_uptake + s)
+biosyn : nM*v_biosyn*si/(k_biosyn + si)
+
+#Translation and growth
+k_synprot : v_max/k_p
+gamma   : v_max*p/(k_synprot + p)
+activeR : nRmQ + nRmR + nRmH + nRmT + nRmM
+synprot : activeR*gamma
+mu      : synprot
+A       : mu/(v_max/aa_per_R * R_frac)
+
+#Ribosome binding
+binding_{{i}} : bind_R*nR*m{{i}} -unbind_R*Rm{{i}}
+	$$i: Q, T, M, R, H
+eff_binding: +binding_Q +binding_T +binding_M +binding_R +binding_H
+
+termination_{{i}} : gamma/{{ii}}*Rm{{i}}
+	$$i: Q,           T,           M,           R,        H
+	$$ii: aa_per_prot, aa_per_prot, aa_per_prot, aa_per_R, aa_per_prot
+eff_termination: +termination_Q +termination_T +termination_M +termination_R +termination_H
+
+#Translation for each pool
+syn_{{i}} : gamma*nRm{{i}}
+	$$i: Q,           T,        M,              R,               H
+
+;;rates
+#Biomass and substrates
+x  : mu*x
+s  :                      -uptake*x_in_aa_umol
+si : -mu*si -biosyn       +uptake
+p  : -mu*p  +biosyn*Yield -synprot
+
+#mRNA
+mQ : w_Q*p/(k_mE + p)/(1 + (Q/k_Q)**n_q) -binding_Q -deg_m*mQ -mu*mQ
+
+m{{i}} : w_{{ii}}*p/({{iii}} + p) -binding_{{i}} -deg_m*m{{i}} -mu*m{{i}}
+	$$i:  T, M, R, H
+	$$ii: E, E, R, H*ind*k_fH**n_fH/(k_fH**n_fH+s**n_fH)
+	$$iii: k_mE, k_mE, k_mR, k_mE
+
+
+#Ribosome-mRNA polysome
+Rm{{i}} : +binding_{{i}}-termination_{{i}}-mu*Rm{{i}}
+	$$i: Q,           T,              M,              R,               H
+
+#Proteins
+{{i}} : syn_{{i}} -mu*{{i}}
+	$$i: Q, T, M, H
+R : syn_R -mu*R -eff_binding +eff_termination
+
+;;int_args
+# method: RK45
+method : BDF
+
+;;tspan
+0 : !linspace, 0, 900, 61!
+1 : !linspace, 0, 900, 61!
+
+;;sim_args
+line_args : [
+	marker : None,
+	linestyle : -,
+	label : scenario,
+	color : [
+		0 : coral, 
+		1 : cobalt,
+		]
+	]
+
+;;data_args;dataset
+line_args : [
+	color : [
+		0 : cobalt, 
+		1 : coral, 
+		],
+	capsize : 5
+	]
+	
+;;optim_args
+free_params:[
+	v_uptake : [bounds : [1e1,  1e3 ],  scale : log10],
+	k_uptake : [bounds : [1e0,  2e3 ],  scale : log10],
+	v_biosyn : [bounds : [1e1,  1e4 ],  scale : log10],
+	k_biosyn : [bounds : [1e-2, 1e1 ],  scale : log10],
+	k_p      : [bounds : [1e1,  1e3 ],  scale : lin  ],
+	w_E      : [bounds : [1e-2, 1e2 ],  scale : log10],
+	w_R      : [bounds : [1e-2, 1e2 ],  scale : log10],
+	w_H      : [bounds : [1e-3, 1e0 ],  scale : log10],
+	k_mE     : [bounds : [1e-3, 1e1 ],  scale : log10],
+	k_mR     : [bounds : [1e-3, 1e1 ],  scale : log10],
+	k_mH     : [bounds : [1e-3, 1e1 ],  scale : log10],
+	k_Q      : [bounds : [1e-3, 1e6 ],  scale : log10],
+	k_fH     : [bounds : [1e1, 1e4 ],  scale : log10],
+	bind_R   : [bounds : [1e1,  1e5 ],  scale : log10],
+	unbind_R : [bounds : [1e-3, 1e2 ],  scale : log10],
+	M0       : [bounds : [1e-2, 3e-1],  scale : lin  ],
+	]
+# #For predicting new scenarios
+# free_params:[
+	# v_uptake : [bounds : [1e1,  1e3 ], scale : log10],
+	# k_uptake : [bounds : [1e0,  2e3 ], scale : log10],
+	# v_biosyn : [bounds : [1e1,  1e4 ], scale : log10],
+	# k_biosyn : [bounds : [1e-2, 1e1 ], scale : log10],
+	# w_E      : [bounds : [1e-2, 1e2 ], scale : log10],
+	# k_mE     : [bounds : [1e-3, 1e1 ], scale : log10],
+	# k_fH     : [bounds : [1e1, 1e4 ],  scale : log10],
+	# ]
+settings : [
+	disp  : True,
+	niter : 10000
+	]
+

@@ -5,14 +5,22 @@ import dunlin.standardfile.dunl.readshorthand as rsh
 import dunlin.standardfile.dunl.delim         as dm
 
 def read_element(element, interpolators=None):
-    interpolated = interpolate(element, interpolators)
-    substituted  = rsh.read_shorthand(interpolated)
-    result       = {} 
-    
-    for s in substituted:
-        data   = rst.read_string(s)
-        result = {**result, **data} 
-
+    try:
+        interpolated = interpolate(element, interpolators)
+        substituted  = rsh.read_shorthand(interpolated)
+        result       = {} 
+        
+        for s in substituted:
+            data   = rst.read_string(s)
+            result = {**result, **data} 
+            
+    except Exception as e:
+        arg   = e.args[0]
+        arg   = f'Error trying to parse element:\n{element}\n{arg}'
+        error = type(e)(arg)
+        
+        raise error
+        
     return result
 
 ###############################################################################

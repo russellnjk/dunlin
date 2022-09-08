@@ -95,13 +95,12 @@ def protocol0(model_filename, data_filename, medium):
                               model=model,
                               no_fit={'R_frac', 'H_frac', 'mu'}
                               )
-    
     new_params = get_new_params(data_filename, model_filename)
     
     model.parameters = new_params
     dataset.adjust_model_init(model, ['R', 'H', 'x'])
     adjust_yield(dataset, model)
-    
+
     return model, dataset
     
 
@@ -111,11 +110,6 @@ if __name__ == '__main__':
     matplotlib.rc('xtick', labelsize=12)
     matplotlib.rc('ytick', labelsize=12)
 
-
-    path = 'figures/CF.png'
-    save = True 
-    
-    
     model_pic = [0, 2, 0, 4]
     layout = [model_pic]
     for i in range(2, 5):
@@ -126,10 +120,10 @@ if __name__ == '__main__':
     title   = ''
     fig, AX = dn.gridspec(5, 4, 
                           layout,
-                          figsize=(8, 9.5), 
-                          top=0.99, bottom=0.055, 
-                          left=0.05, right=0.99,
-                          wspace=0.4, hspace=0.8,
+                          figsize=(8, 9.6), 
+                          top=0.999, bottom=0.052, 
+                          left=0.056, right=0.984,
+                          wspace=0.45, hspace=0.8,
                           title=title
                           )
     
@@ -172,7 +166,6 @@ if __name__ == '__main__':
     i = 0
     for ax in AX[1:]:
         i += 1
-        ax.text(0.05, 1.1, i, size=18, transform=ax.transAxes, fontweight='bold')
         
         if i < 4:
             ax.set_xlabel('time (min)')
@@ -182,7 +175,7 @@ if __name__ == '__main__':
         if i == 4:
             i = 0
     
-    for i, ax in zip('BCDE', AX[1::4]):
+    for i, ax in zip('BCDEFGHIJKLMNOPQRSTU', AX[1::]):
         ax.text(-0.28, 1.1, i, size=20, transform=ax.transAxes, fontweight='bold')
     
     AX[1].text(0, 1.4, 'Note: Time is in minutes, λ is in 1/minute and IPTG conc. is in mM', size=11, transform=AX[1].transAxes)

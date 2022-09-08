@@ -833,7 +833,13 @@ class TimeResponseData:
             
             if y not in self.namespace:
                 raise ValueError('Unexpected variable: "{variable}"')
-            
+        
+        #Set user line_args
+        if line_args:
+            line_args = {**self.dataset_args.get('line_args', {}), **line_args}
+        else: 
+            line_args = self.dataset_args.get('line_args', {})
+        
         result      = {}
         #Iterate and plot
         for c, c_data in self.data.items():
@@ -870,7 +876,6 @@ class TimeResponseData:
             
             #Parse kwargs
             #Process the plotting args
-            line_args  = line_args if line_args else self.dataset_args.get('line_args')
             keys       = [c, variable]
             sub_args   = dict(scenario=c, variable=variable, ref=self.ref)
             converters = {'color': upp.get_color}

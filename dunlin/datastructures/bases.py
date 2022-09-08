@@ -97,7 +97,7 @@ class GenericDict(ut.FrozenObject):
     _data: dict 
     itype: type
     
-    def __init__(self, ext_namespace, mapping: dict, *args):
+    def __init__(self, ext_namespace: set, mapping: dict, *args):
         _data = {}
         
         if mapping:
@@ -123,13 +123,14 @@ class GenericDict(ut.FrozenObject):
                 _data[name] = item
           
         self._data = _data
-    
+        
     def _raise(self, e, name):
         if not e.args:
             raise e
             
         msg = e.args[0]
-        msg = f'Error when parsing item "{name}"\n{msg}'
+        n   = self.itype.__name__
+        msg = f'Error when parsing {n} "{name}"\n{msg}'
         
         raise type(e)(msg)
     
