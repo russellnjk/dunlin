@@ -4,15 +4,8 @@ import dunlin.standardfile.dunl as sfd
     
 class ModelData(ABC):
     '''
-    Base class for model data. The `_attrs` attribute controls what other attributes 
-    the subclasses can have and what values they take.
-    
-    The keys are the names of the expected attributes while the values are 
-    iterables that can contain:
-        1. Literal values e.g. None, 1.2, "a"
-        2. Types e.g. int, str
-        3. The builtin function `callable` which allows any callable item
-    
+    Base class for model data but packs methods for export into input dictionary 
+    data. 
     '''
     
     _attrs: dict[str, type]
@@ -45,20 +38,13 @@ class ModelData(ABC):
             raise e
         
         for t in allowed:
-            if isinstance(t, type): 
+            if type(t) == type: 
                 if isinstance(value, t):
                     super().__setattr__(attr, value)
                     return
-            
-            if hasattr(t, '__eq__'):
-                if t == value:
-                    super().__setattr__(attr, value)
-                    return
-                
-            if t is callable:
-                if callable(value):
-                    super().__setattr__(attr, value)
-                    return
+            elif t == value:
+                super().__setattr__(attr, value)
+                return
         
         msg = f'Expected one of {allowed}. Received a {type(value)}.'
         raise ValueError(msg)
@@ -84,9 +70,9 @@ class ModelData(ABC):
     def to_data(self) -> dict:
         ...
     
-    # @abstractmethod
-    # def to_dunl(self) -> str:
-    #     ...
+    @abstractmethod
+    def to_dunl(self) -> str:
+        ...
         
         # dct  = {}
         # _dct = self.__dict__

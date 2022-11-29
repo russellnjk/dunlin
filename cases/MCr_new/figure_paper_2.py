@@ -24,7 +24,7 @@ def compare_cycle(ax0, ax1, title, skip):
                      marker= 'o', 
                      linewidth= 1.5, 
                      color=pp.ind_color, 
-                     linestyle='None',
+                     linestyle='-',
                      label=label, 
                      thin=pp.thin,
                      **pp.errorcap
@@ -53,7 +53,19 @@ def compare_cycle(ax0, ax1, title, skip):
 def compare_media(ax, skip, title, colors, markers):
     
     label   = lambda ref, variable, scenario: scenario[0]
+    
     plot_args = {'marker'   : markers, 'linestyle': '-',  'color'     : colors, 
+                 'thin'     : pp.thin, 'label'    : '_nolabel',
+                 'xlabel': 'λ (1/min)',
+                 'ylabel': '$ϕ_R$',
+                 'variable' : ('mu', 'R'),
+                 'alpha'    : 0.3,
+                 'capsize'  : 0, 'elinewidth': 0, 'capthick': 0
+                 }
+    
+    pp.trd0.plot_line(ax, title=title, skip=skip, **plot_args)
+    
+    plot_args = {'marker'   : markers, 'linestyle': '',  'color'     : colors, 
                  'thin'     : pp.thin, 'label'    : label,
                  'xlabel': 'λ (1/min)',
                  'ylabel': '$ϕ_R$',
@@ -62,6 +74,7 @@ def compare_media(ax, skip, title, colors, markers):
                  }
     
     pp.trd0.plot_line(ax, title=title, skip=skip, **plot_args)
+    
     ax.set_xlim(0, 0.02)
     ax.set_ylim(0, 0.30)
     
@@ -137,14 +150,14 @@ if __name__ == '__main__':
     compare_media(ax, skip, title, colors, markers)
     
     ###########################################################################
-    skip = pp.y2
+    skip = pp.g4c2
     ax   = AX[2], AX[4]
-    title = '0.2% Gly'
+    title = '0.4% Glu+0.2%CA'
     compare_cycle(*ax, title, skip)
     
-    skip = pp.g4c2
+    skip = pp.y2
     ax   = AX[3], AX[5]
-    title = '0.4% Glu+0.2%CA'
+    title = '0.2% Gly'
     compare_cycle(*ax, title, skip)
     
     ###########################################################################
@@ -172,4 +185,4 @@ if __name__ == '__main__':
     ttest('0.4Glu+0.2CA', pp.trd0)
     
     ###########################################################################
-    # fig.savefig('figures/2.png', dpi=1200)
+    fig.savefig('figures/2.png', dpi=1200)

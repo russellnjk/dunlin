@@ -1,7 +1,6 @@
 from typing import Sequence
 
 import dunlin.utils                       as ut
-import dunlin.standardfile.dunl.writedunl as wd
 from dunlin.datastructures.bases import NamespaceDict, GenericItem
 from dunlin.utils.typing         import ODict
 

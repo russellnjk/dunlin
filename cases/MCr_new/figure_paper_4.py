@@ -240,7 +240,23 @@ def ttest(medium, trd):
     print('p value', medium, '{:.3e}'.format(p))
     # print(R0)
     # print(R1)
+
+def plot_inset(iax, trd, medium):
+    final_R = {}
+    for i in [0, 1]:
+        series = trd.get('R', (medium, i)).groupby(level=1).last()
+        
+        final_R[(medium, i)] = series
     
+    final_R = pd.DataFrame(final_R)
+    mean    = final_R.mean(axis=0).unstack()
+    sd      = final_R.std(axis=0).unstack()
+    
+    color = [dn.get_color(pp.ind_colors[i]) for i in (0, 1)]
+    mean.plot.bar(ax=iax, yerr=sd, color=color, capsize=5, rot=0, width=0.4)
+    iax.legend().remove()
+    iax.get_xaxis().set_ticks([])
+        
 if __name__ == '__main__':
     matplotlib.rc('legend', fontsize=10)
     matplotlib.rc('xtick', labelsize=12)
@@ -336,4 +352,16 @@ if __name__ == '__main__':
     for i, ax in zip('ABCDEF', AX):
         ax.text(-0.2, 1.1, i, size=20, transform=ax.transAxes, fontweight='bold')
     
+    ###########################################################################
+    trd    = pp.trd1
+    iax    = AX[2].inset_axes([0.6, 0.5, 0.35, 0.45])
+    medium = '0.4Glu'
+    plot_inset(iax, trd, medium)
+    
+    trd    = pp.trd1
+    iax    = AX[3].inset_axes([0.6, 0.5, 0.35, 0.45])
+    medium = '0.4Glu+0.2CA'
+    plot_inset(iax, trd, medium)
+    
+    ###########################################################################
     fig.savefig('figures/4.png', dpi=1200)

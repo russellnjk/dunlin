@@ -14,6 +14,19 @@ from .stateparam import StateDict, ParameterDict
 from .modeldata  import ModelData
 
 class ODEModelData(ModelData):
+    _attrs = {'ref'        : (str,),
+              'states'     : (StateDict, None),
+              'parameters' : (ParameterDict, None),
+              'functions'  : (FunctionDict, None),
+              'variables'  : (VariableDict, None),
+              'reactions'  : (ReactionDict, None),
+              'rates'      : (RateDict, None),
+              'events'     : (EventDict, None),
+              'extra'      : (ExtraDict, callable, None),
+              'units'      : (UnitsDict, None),
+              'namespace'  : (frozenset,)
+              }
+    
     @classmethod
     def from_all_data(cls, all_data, ref, **kwargs):
         keys = ['ref',
@@ -50,55 +63,60 @@ class ODEModelData(ModelData):
                  rates: dict = None, 
                  events: dict = None, 
                  extra: Union[dict, callable] = None,
-                 units: dict = None,
-                 **kwargs
+                 units: dict = None
                  ) -> None:
         
         #Set up the data structures
         namespace = set()
         
-        model_data = {'ref'       : ref,
-                      'states'    : StateDict(namespace, states), 
-                      'parameters': ParameterDict(namespace, parameters), 
-                      
-                      }
+        self.ref        = ref
+        self.states     = StateDict(namespace, states)
+        self.parameters = ParameterDict(namespace, parameters)
         
-        #Process optionals
-        model_data['functions'] = FunctionDict(namespace, functions)
-        model_data['variables'] = VariableDict(namespace, variables)
-        model_data['reactions'] = ReactionDict(namespace, reactions)
-        model_data['rates']     = RateDict(namespace, rates)
-        model_data['events']    = EventDict(namespace, events)
+        if functions:
+            self.functions = FunctionDict(namespace, functions)
+        
+        if variables:
+            self.variables = VariableDict(namespace, variables)
+        
+        if reactions:
+            self.reactions = ReactionDict(namespace, reactions)
+            
+        if rates:
+            self.rates = RateDict(namespace, rates)
+        
+        if events:
+            self.events = EventDict(namespace, events)
         
         if units:
-            model_data['units'] = UnitsDict(namespace, units)
+            self.units = UnitsDict(namespace, units)
         
-        #Extra needs to be processed differently because it can be a 
-        #user supplied function
-        if extra is None:
-            pass
-        elif callable(extra):
-            if hasattr(extra, 'names'):
-                model_data['extra'] = extra
-                repeated = namespace.intersection(extra.names)
-                if repeated:
-                    msg = f'Redefinition of {repeated}.'
+        if extra:
+            #Extra needs to be processed differently because it can be a 
+            #user supplied function
+            if callable(extra):
+                if hasattr(extra, 'names'):
+                    repeated = namespace.intersection(extra.names)
+                    if repeated:
+                        msg = f'Redefinition of {repeated}.'
+                        raise NameError(msg)
+                    else:
+                        namespace.update(extra.names)
+                        self.extra = extra
                 else:
-                    namespace.update(extra.names)
+                    msg = '''Custom extra function missing the "names" attribute. This 
+                    attribute should be the names of the variables 
+                    returned by the function and allows them to accessed after 
+                    simulation.
+                    '''
+                    msg = msg.replace('\n', ' ').replace('\t', ' ').replace('  ', ' ')
+                    raise ValueError(msg)
             else:
-                msg = '''Custom extra function missing the "names" attribute. This 
-                attribute should be the names of the variables 
-                returned by the function and allows them to accessed after 
-                simulation.
-                '''
-                msg = msg.replace('\n', ' ').replace('\t', ' ').replace('  ', ' ')
-                raise ValueError(msg)
-        else:
-            model_data['extra'] = ExtraDict(namespace, extra)
+                self.extra = ExtraDict(namespace, extra)
         
         #Check no overlap between rates and reactions
-        rate_xs  = set(model_data['rates'].states)
-        rxn_xs   = model_data['reactions'].states
+        rate_xs  = set(self.rates.states)
+        rxn_xs   = self.reactions.states
         repeated = rate_xs.intersection(rxn_xs)
         
         if repeated:
@@ -106,14 +124,9 @@ class ODEModelData(ModelData):
             raise ValueError(msg)
         
         #Freeze the namespace and add it into model_data
-        model_data['namespace'] = frozenset(namespace)
+        self.namespace = frozenset(namespace)
         
-        #Add in the remaining arguments as-is
-        model_data.update(kwargs)
-        
-        super().__init__(model_data)
-    
-    def to_data(self, recurse=True, _extend=None) -> dict:
+    def to_data(self, recurse=True) -> dict:
         keys = ['states', 
                 'parameters', 
                 'functions', 
@@ -123,9 +136,23 @@ class ODEModelData(ModelData):
                 'events',
                 'units'
                 ]
-        if _extend:
-            keys = keys + list(_extend)
+        
+        data = {}
+        for key in keys:
+            value = getattr(self, key, None)
             
-        return super()._to_data(keys, recurse)
+            if value is None:
+                continue
+            elif recurse and hasattr(value, 'to_data'):
+                data[key] = value.to_data()
+            else:
+                data[key] = value
+                
+        return data
    
-    
+    def to_dunl_dict(self) -> dict:
+        data = self.to_data(recurse=False)
+        data = {self.ref: data}
+        
+        return data
+        

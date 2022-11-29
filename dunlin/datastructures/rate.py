@@ -1,7 +1,6 @@
 from typing import Union
 
 import dunlin.utils                       as ut
-import dunlin.standardfile.dunl.writedunl as wd
 from dunlin.datastructures.bases import NamespaceDict, GenericItem
 
 class Rate(GenericItem):

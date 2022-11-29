@@ -2,7 +2,7 @@ from datetime import datetime
 
 import addpath
 import dunlin as dn
-from dunlin.standardfile.dunl.writedictlist import *
+from dunlin.standardfile.dunl.writecode import *
 
 ###############################################################################
 #Check if string needs quotes
@@ -82,6 +82,20 @@ r = write_list(a)
 assert r == '[[0, 1], [0, 1], [0, 1]]'
 
 ###############################################################################
+#Check write_key
+###############################################################################
+a = ['a','b']
+r = write_key(a)
+assert r == '[a, b]'
+
+###############################################################################
+#Check write_directory
+###############################################################################
+a = ['a','b']
+r = write_directory(a)
+assert r == ';a;b'
+
+###############################################################################
 #Check write_dict 
 ###############################################################################
 #No nesting
@@ -104,64 +118,82 @@ assert r == 'a : 0, b : [1 : 2, 3 : [4 : 5], 6 : 7], c : 5'
 
 a = {'a': 0, 'b': {1: 2, 3: 4}, 'c': 5}
 r = write_dict(a, multiline_dict=True)
-s = '''
-a : 0
-b : [
-	1 : 2,
-	3 : 4
-	],
-c : 5
-'''
+s = 'a : 0\nb : [\n\t1 : 2,\n\t3 : 4\n\t]\nc : 5'
+
 #Uses tab (\t) instead of spaces to indent
-assert r == s.strip()
+assert r.strip() == s
 
 a = {'a': 0, 'b': {1: 2, 3: {4: 5}, 6: 7}, 'c': 5}
 r = write_dict(a, multiline_dict=True)
-s = '''
-a : 0
-b : [
-	1 : 2,
-	3 : [
-		4 : 5
-		],
-	6 : 7
-	],
-c : 5
-'''
+s = 'a : 0\nb : [\n\t1 : 2,\n\t3 : [\n\t\t4 : 5\n\t\t],\n\t6 : 7\n\t]\nc : 5'
+
 #Uses tab (\t) instead of spaces to indent
-assert r == s.strip()
+assert r.strip() == s
 
 #Nested with single-line list
 a = {'a' : [0, 1, 2], 'b': [0, 1, 2]}
 r = write_dict(a, multiline_dict=True)
-s = '''
-a : [0, 1, 2]
-b : [0, 1, 2]
-'''
+s = 'a : [0, 1, 2]\nb : [0, 1, 2]'
+
 #Uses tab (\t) instead of spaces to indent
-assert r == s.strip()
+assert r.strip() == s
 
 #Nested with single-line list
 a = {'a' : [0, 1, 2], 'b': [0, 1, [2, 3, 4]]}
 r = write_dict(a, multiline_dict=True)
-s = '''
-a : [0, 1, 2]
-b : [0, 1, [2, 3, 4]]
-'''
+s = 'a : [0, 1, 2]\nb : [0, 1, [2, 3, 4]]'
+
 #Uses tab (\t) instead of spaces to indent
-assert r == s.strip()
+assert r.strip() == s
 
 ###############################################################################
 #Check write_dict with nested list
 ###############################################################################
 a = [{'a': 1}, {'a': 1}]
 r = write_list(a)
-assert r == '[[a : 1], [a : 1]]'
+assert r.strip() == '[[a : 1], [a : 1]]'
 
 a = [{'a': 1, 'b': 2}, {'a': 1}]
 r = write_list(a)
-assert r == '[[a : 1, b : 2], [a : 1]]'
+assert r.strip() == '[[a : 1, b : 2], [a : 1]]'
 
 a = {'a': [[0, 1], {'a': 1}]}
 r = write_dict(a)
-assert r == 'a : [[0, 1], [a : 1]]'
+assert r.strip() == 'a : [[0, 1], [a : 1]]'
+
+
+###############################################################################
+#Check write_dunl_code
+###############################################################################
+#Write dunl_code
+a = {'a': {0: 1}, 'b': {2: 3, 4: {5: 6}}, 'c': {7: 8, 9: 10}}
+r = write_dunl_code(a)
+r = r.strip().replace(' ', '')
+assert r == ';a\n0:1\n\n;b\n2:3\n\n;b;4\n5:6\n\n;c\n7:8\n9:10'
+
+a = {'a': {0: ['a', 'b', True]}, 'b': {2: 3, 4: {5: 6}}}
+r = write_dunl_code(a)
+r = r.strip().replace(' ', '')
+assert r == ';a\n0:[a,b,True]\n\n;b\n2:3\n\n;b;4\n5:6'
+
+a = {'a': {0: ['a', 'b', [True, False]]}, 'b': {2: 3, 4: {5: 6}}}
+r = write_dunl_code(a)
+r = r.strip().replace(' ', '')
+assert r == ';a\n0:[a,b,[True,False]]\n\n;b\n2:3\n\n;b;4\n5:6'
+
+class Custom:
+    def to_dunl(self, x=True):
+        if x:
+            return '[b: 3, c: 4]'
+        else:
+            return '[\n\tb: 3,\n\tc: 4\n\t]'
+
+a = {'a': Custom()}
+r = write_dunl_code(a)
+r = r.strip().replace(' ', '')
+assert r == ';a\n[b:3,c:4]'
+
+r = write_dunl_code(a, x=False)
+r = r.strip().replace(' ', '')
+assert r == ';a\n[\n\tb:3,\n\tc:4\n\t]'
+# print(r)

@@ -4,8 +4,8 @@ from datetime import datetime
 
 import addpath
 import dunlin as dn
-from dunlin.standardfile.dunl.writedunl import *
-from dunlin.standardfile.dunl.readdunl import read_dunl_code
+from dunlin.standardfile.dunl.writefile import *
+from dunlin.standardfile.dunl.readdunl  import read_dunl_code
 
 ###############################################################################
 #Frontend Conversion of Data to dunl code

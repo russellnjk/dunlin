@@ -9,8 +9,9 @@ from data import *
 ref       = 'm0'
 mdata     = ODEModelData.from_all_data(all_data, ref)
 
-d = mdata.to_data()
+d0 = mdata.to_data()
+d1 = mdata.to_dunl_dict()
 
-dunl = sfd.write_dunl_code({mdata['ref']: mdata})
+dunl = sfd.write_dunl_code(d1)
 a    = sfd.read_dunl_code(dunl)
-assert a[ref] == d[ref]
+assert a[ref] == d0

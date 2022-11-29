@@ -6,12 +6,14 @@ from .readstring    import read_string
 from .readprimitive import read_primitive, ismath
 
 #Writing
-from .writedunl     import write_dunl_file, write_dunl_code
-from .writedictlist import (write_dict, 
+from .writefile     import write_dunl_file, write_dunl_code
+from .writecode     import (write_dunl_code,
+                            write_dict,
                             write_list, 
                             write_primitive, 
                             write_key,
-                            Primitive
+                            write_directory,
+                            Primitive,
                             )
 from .writecustom   import (write_numeric_df, 
                             write_numeric_df_no_index,

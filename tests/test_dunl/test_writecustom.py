@@ -8,7 +8,7 @@ from dunlin.standardfile.dunl.writecustom import *
 from dunlin.standardfile.dunl.readdunl import read_dunl_code
 
 ###############################################################################
-#Check DataFrame Formatting
+#Check write_numeric_df_no_index
 ###############################################################################
 vector = np.linspace(0, 99, 100)
 arr    = np.reshape(vector, [10, 10])
@@ -19,6 +19,9 @@ s = read_dunl_code(';A\n' + r)['A']
 s = pd.DataFrame(s)
 assert all(s == df)
 
+###############################################################################
+#Check write_numeric_df 
+###############################################################################
 #Test write_numeric_df
 index  = list('abcdefghij')
 df     = pd.DataFrame(arr, columns=list('abcdefghij'), index=index)
