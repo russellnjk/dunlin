@@ -67,6 +67,7 @@ geometry = {'coordinate_components': {'x': [-10, 10],
             'geometry_definitions': geometry_definitions
             }
 
-all_data = {'M0': model, 'Geo0': geometry}
+model['geometry'] = geometry
+all_data = {'M0': model}
 
     

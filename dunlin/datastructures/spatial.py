@@ -1,119 +1,162 @@
+import pandas as pd
+from typing import Union
+
+import dunlin.comp as cmp
+from .spatialreaction    import SpatialReactionDict
 from .boundarycondition import BoundaryConditionDict
-from .compartment  import CompartmentDict
-from .masstransfer import AdvectionDict, DiffusionDict
+from .compartment       import CompartmentDict
+from .masstransfer      import AdvectionDict, DiffusionDict
 
+from .coordinatecomponent import CoordinateComponentDict
+from .gridconfig          import GridConfigDict
+from .domaintype          import DomainTypeDict
+from .adjacentdomain      import AdjacentDomainsDict
+from .geometrydefinition  import GeometryDefinitionDict
 
-from .modeldata  import ModelData
-
-
-from .ode import ODEModelData
+from .modeldata    import ModelData
+from .ode          import ODEModelData
 from .geometrydata import GeometryData
 
-class SpatialModelData(ModelData):
-    @classmethod
-    def from_all_data(cls, all_data, mref, gref, **kwargs):
-        model_data    = ODEModelData.from_all_data(all_data, mref)
-        geometry_data = GeometryData.from_all_data(all_data, gref)
+class SpatialModelData(ODEModelData):
+    def _init_geometry(self,
+                       coordinate_components: dict,
+                       grid_config: dict,
+                       domain_types: dict,
+                       adjacent_domains: dict,
+                       geometry_definitions: dict
+                       ):
         
+        namespace = self.namespace
         
-        keys = ['compartments', 'advection', 'diffusion', 'boundary_conditions']
-        temp = all_data[mref]
+        ccds  = CoordinateComponentDict(coordinate_components)
+        gcfg  = GridConfigDict(namespace, ccds, grid_config)
+        dmnts = DomainTypeDict(namespace, ccds, domain_types)
+        admns = AdjacentDomainsDict(namespace, ccds, dmnts, adjacent_domains)
+        gdefs = GeometryDefinitionDict(namespace, ccds, dmnts, geometry_definitions)
         
-        for key in keys:
-            if key in temp:
-                model_data[key] = temp[key]
+        self.coordinate_components = ccds
+        self.grid_config           = gcfg
+        self.domain_types          = dmnts
+        self.geometry_definitions  = gdefs
+        self.adjacent_domains      = admns        
+    
+    def _init_masstransfer(self,
+                           compartments: dict,
+                           advection: dict = None,
+                           diffusion: dict = None,
+                           boundary_conditions: dict = None
+                           ):
+        namespace = self.namespace
         
-        spatial_data  = cls(model_data, geometry_data, **kwargs)
-        
-        return spatial_data
-        
-    def __init__(self,
-                 model_data    : ODEModelData,   
-                 geometry_data : GeometryData,
-                 **kwargs
-                 ) -> None:
-        
-        #Check no overlaps in namespaces
-        model_namespace    = model_data['namespace']
-        geometry_namespace = geometry_data['namespace']
-        
-        repeated = model_namespace.intersection(geometry_namespace)
-        if repeated:
-            msg = f'Redefinition of {repeated} when combining model data and geometry data.'
-            raise ValueError(msg)
-
-        namespace = set(model_namespace | geometry_namespace)
-        
-        #Extend the model with spatial-based items
-        for key in ['compartments', 'advection', 'diffusion']:
-            if key not in model_data:
-                msg = f'Model data is missing {key} information.'
-                raise ValueError(msg)
-                
         compartments = CompartmentDict(namespace, 
-                                       model_data['states'], 
-                                       geometry_data['domain_types'],
-                                       model_data['compartments']
+                                       self.states, 
+                                       self.domain_types,
+                                       compartments
                                        )
         advection    = AdvectionDict(namespace, 
-                                     geometry_data['coordinate_components'], 
-                                     model_data['rates'],
-                                     model_data['states'], 
-                                     model_data['parameters'], 
-                                     model_data['advection']
+                                     self.coordinate_components, 
+                                     self.rates,
+                                     self.states, 
+                                     self.parameters, 
+                                     advection
                                      )
         diffusion    = DiffusionDict(namespace, 
-                                     geometry_data['coordinate_components'], 
-                                     model_data['rates'],
-                                     model_data['states'], 
-                                     model_data['parameters'], 
-                                     model_data['diffusion']
+                                     self.coordinate_components, 
+                                     self.rates,
+                                     self.states, 
+                                     self.parameters, 
+                                     diffusion
                                      )
         
-        model_data['compartments'] = compartments
-        model_data['advection']    = advection
-        model_data['diffusion']    = diffusion
         
-        if 'boundary_conditions' in model_data:
-            ccds  = geometry_data['coordinate_components']
-            bcs   = BoundaryConditionDict(namespace, 
-                                          ccds, 
-                                          model_data['states'],
-                                          model_data['boundary_conditions']
-                                          )
-            
-            model_data['boundary_conditions'] = bcs
+        self.compartments = compartments
+        self.advection    = advection
+        self.diffusion    = diffusion
         
+        #Boundary conditions
+        self.boundary_conditions = BoundaryConditionDict(namespace, 
+                                                         self.coordinate_components, 
+                                                         self.states,
+                                                         boundary_conditions
+                                                         )
         
-            
-        #Mep the reactions to the compartments
-        model_data['reaction_compartments'] = None
+       
+    def __init__(self,
+                 ref: str, 
+                 states: Union[dict, pd.DataFrame], 
+                 parameters: Union[dict, pd.DataFrame], 
+                 compartments: dict,
+                 geometry: dict,
+                 functions: dict = None, 
+                 variables: dict = None, 
+                 reactions: dict = None, 
+                 rates: dict = None, 
+                 events: dict = None, 
+                 extras: Union[dict, callable] = None,
+                 units: dict = None,
+                 advection: dict = None,
+                 diffusion: dict = None,
+                 boundary_conditions: dict = None
+                 ) -> None:
         
-        #Extract the ref
-        ref = model_data['ref'], geometry_data['ref']
-        
-        super().__init__(ref       = ref,
-                         model     = model_data, 
-                         geometry  = geometry_data, 
-                         namespace = namespace,
+        #Call parent constructor
+        super().__init__(ref,
+                         states,
+                         parameters,
+                         functions,
+                         variables,
+                         reactions,
+                         rates,
+                         events,
+                         extras,
+                         units,
+                         _reactions=SpatialReactionDict
                          )
         
-        self.update(kwargs)
-
+        #Unfreeze to allow modification
+        self.unfreeze()
+        self.namespace = set(self.namespace)
+        
+        #Create geometry data structures
+        self._init_geometry(**geometry)
+        
+        #Extend the model with spatial-based items
+        self._init_masstransfer(compartments, advection, diffusion, boundary_conditions)
+            
+        #Map the reactions to the compartments
+        self.reaction_compartments = None
+        
+        #Freeze
+        self.namespace = frozenset(self.namespace)
+        self.freeze()
+        
     def to_data(self, recurse=True) -> dict:
-        #Extract model information and export 
-        _extend  = ['compartments', 'advection', 'diffusion']
-        model    = self['model'].to_data(recurse, _extend=_extend)
-        geometry = self['geometry'].to_data(recurse)
-
-        #Merge    
-        mref, gref = self['ref']
-        dct = {mref : model[mref],
-               gref : geometry[gref]
-               }
-        return dct
-   
-
-
+        keys = ['states', 
+                'parameters', 
+                'functions',
+                'variables',
+                'reactions',
+                'rates',
+                'events',
+                'units',
+                'advection',
+                'diffusion',
+                'boundary_conditions'
+                ]
+        data0 = self._to_data(keys, recurse)
+        
+        keys = ['coordinate_components',
+                'grid_config',
+                'domain_types',
+                'adjacent_domains',
+                'geometry_definitions',
+                ]
+        
+        data1 = self._to_data(keys, recurse)
+        
+        data0[self.ref]['geometry'] = data1[self.ref]
+        
+        return data0
+    
         
         

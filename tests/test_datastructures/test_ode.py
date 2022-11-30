@@ -14,4 +14,5 @@ d1 = mdata.to_dunl_dict()
 
 dunl = sfd.write_dunl_code(d1)
 a    = sfd.read_dunl_code(dunl)
-assert a[ref] == d0
+assert a == d0
+

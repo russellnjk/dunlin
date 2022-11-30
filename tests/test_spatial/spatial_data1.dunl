@@ -81,9 +81,9 @@ z: [bounds: [0, 10], unit: m]
 #SBML ListofDomainTypes
 ;;;domain_types
 #SBML DomainType
-#id or name: [spatialDimensions : int, SpatialSymbolReference: Parameter, unit: UniSIdRef]
-dmntype0: [ndim: 3, variable: vrb0 , unit: m]
-dmntype1: [ndim: 2, variable: vrb0 , unit: m]
+#id or name: [spatialDimensions : int]
+dmntype0: [ndim: 3]
+dmntype1: [ndim: 2]
 
 ;;;domains
 #id or name: [domainType: DomainType, ListofInteriorPoints: [InteriorPoint...]]

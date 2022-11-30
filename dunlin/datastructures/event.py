@@ -1,5 +1,4 @@
 import re
-from typing import Sequence
 
 import dunlin.utils                       as ut
 import dunlin.datastructures.exception    as exc

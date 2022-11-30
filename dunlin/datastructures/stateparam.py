@@ -4,7 +4,8 @@ from typing import Union
 from dunlin.datastructures.bases import TabularDict
 
 class StateDict(TabularDict):
-    itype = 'states' 
+    itype        = 'states' 
+    can_be_empty = False
     
     def __init__(self,  
                  ext_namespace: set,
@@ -13,7 +14,8 @@ class StateDict(TabularDict):
         super().__init__(ext_namespace, 'states', mapping)
         
 class ParameterDict(TabularDict):
-    itype = 'parameters'
+    itype        = 'parameters'
+    can_be_empty = False
     
     def __init__(self, 
                  ext_namespace: set,

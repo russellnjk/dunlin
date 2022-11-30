@@ -11,27 +11,28 @@ from .modeldata  import ModelData
 class GeometryData(ModelData):
     '''Represents geometry for spatial modeling. 
     '''
+
     ###########################################################################
     #Instantiation
     ###########################################################################
-    @classmethod
-    def from_all_data(cls, all_data, ref, **kwargs):
-        keys = ['coordinate_components',
-                'grid_config',
-                'domain_types',
-                'adjacent_domains',
-                'geometry_definitions',
-                'boundary_conditions',
-                'units'
-                ]
-        args = {}
-        temp = all_data[ref]
-        for key in keys:
-            if key in temp:
-                args[key] = temp[key]
+    # @classmethod
+    # def from_all_data(cls, all_data, ref, **kwargs):
+    #     keys = ['coordinate_components',
+    #             'grid_config',
+    #             'domain_types',
+    #             'adjacent_domains',
+    #             'geometry_definitions',
+    #             'boundary_conditions',
+    #             'units'
+    #             ]
+    #     args = {}
+    #     temp = all_data[ref]
+    #     for key in keys:
+    #         if key in temp:
+    #             args[key] = temp[key]
         
-        geometry_data = cls(ref, **args, **kwargs)
-        return geometry_data
+    #     geometry_data = cls(ref, **args, **kwargs)
+    #     return geometry_data
         
     def __init__(self, 
                  ref: str,
@@ -41,7 +42,6 @@ class GeometryData(ModelData):
                  adjacent_domains: dict,
                  geometry_definitions: dict,
                  boundary_conditions: dict=None,
-                 units: dict=None,
                  **kwargs
                  ):
         
@@ -54,34 +54,31 @@ class GeometryData(ModelData):
         admns = AdjacentDomainsDict(namespace, ccds, dmnts, adjacent_domains)
         gdefs = GeometryDefinitionDict(namespace, ccds, dmnts, geometry_definitions)
         
-        geometry_data = dict(ref                   = ref,
-                             coordinate_components = ccds,
-                             grid_config           = gcfg,
-                             domain_types          = dmnts,
-                             adjacent_domains      = admns,
-                             geometry_definitions  = gdefs,
-                             )
+        self.ref                   = ref
+        self.coordinate_components = ccds
+        self.grid_config           = gcfg
+        self.domain_types          = dmnts
+        self.geometry_definitions  = gdefs
         
-        if units:
-            geometry_data['units'] = UnitsDict(namespace, units)
+        if adjacent_domains:
+            self.adjacent_domains = admns
+        else:
+            self.adjacent_domains = None
         
-        #Freeze the namespace
-        geometry_data['namespace'] = frozenset(namespace)
+        #Freeze the namespace and save it
+        self.namespace = frozenset(namespace)
         
-        #Map in the namespaces that correspond to regions in space
+        #Collate region_types
         mapping = {}
         mapping.update(dict.fromkeys(gcfg,  'grid_config'))
         mapping.update(dict.fromkeys(dmnts, 'domain_types'))
         mapping.update(dict.fromkeys(gdefs, 'geometry_definitions'))
         
-        geometry_data['region_types'] = mapping
+        self.region_types = mapping
         
-        #Add in the remaining kwargs as-is
-        geometry_data.update(**kwargs)
+        #Freeze the attributes
+        self.freeze()
         
-        #Call the parent constructor
-        super().__init__(geometry_data)
-    
     def to_data(self, recurse=True) -> dict:
         keys = ['coordinate_components',
                 'grid_config',
@@ -89,8 +86,6 @@ class GeometryData(ModelData):
                 'adjacent_domains',
                 'geometry_definitions',
                 'boundary_conditions',
-                'units'
                 ]
+        return self._to_data(keys, recurse)
         
-        return super()._to_data(keys, recurse)
-    

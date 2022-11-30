@@ -84,6 +84,11 @@ class GenericItem(ABC, ut.FrozenObject):
 
 class GenericDict(ut.FrozenObject):
     '''
+    Allows dict-like access and iteration but bans modification. Also enforces 
+    that all items inside it are of the the type specified by the `itype` 
+    attribute. Finally, it contains methods for export into regular Python 
+    dictionaries and dunl code.
+    
     Attributes:
         1.`_data`: Stores data in dictionary form. Used with the `__getitem__`, 
         '__iter__', `__contains__`, `keys`,  `values` and `items` methods to 
@@ -179,7 +184,10 @@ class GenericDict(ut.FrozenObject):
     
 class NamespaceDict(GenericDict):
     '''
-    Extends the GenericDict class with the addition of a namespace attribute.
+    Extends the GenericDict class with the addition of a `namespace` attribute. 
+    This attribute is used to keep track of namespaces to prevent overlaps. 
+    The user can set their own `namespace` but an empty one will be created 
+    otherwise. The contents of `namespace` depend on the user's needs.
     '''
     itype     : type
     
@@ -194,12 +202,13 @@ class NamespaceDict(GenericDict):
 
 class TabularDict(ABC, ut.FrozenObject):
     '''
-    Base class for containers for tabular data.
+    Base class for containers for tabular data. 
     '''
-    is_numeric: bool = True
+    is_numeric   : bool  = True
+    can_be_empty : bool = True
     
     @staticmethod
-    def mapping2df(mapping: Dflike):
+    def mapping2df(mapping: Dflike, ):
         #Convert to df
         if type(mapping) == pd.DataFrame:
             df = mapping
@@ -211,6 +220,8 @@ class TabularDict(ABC, ut.FrozenObject):
                 df = pd.DataFrame(temp)
             except:
                 df = pd.DataFrame(pd.Series(temp)).T
+        elif not mapping:
+            df = pd.DataFrame()
         else:
             msg = f"Expected a DataFrame, Series or dict. Received {type(mapping)}"
             raise TypeError(msg)
@@ -226,7 +237,7 @@ class TabularDict(ABC, ut.FrozenObject):
         #Convert to df
         df = self.mapping2df(mapping)
         
-        if 0 in df.shape:
+        if 0 in df.shape and not self.can_be_empty:
             msg  = 'Error in parsing {name}. '
             msg += 'The resulting DataFrame had shape {df.shape}. '
             msg += '{name} must have at least one column and one row.'
