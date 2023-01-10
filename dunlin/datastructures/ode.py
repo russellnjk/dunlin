@@ -29,7 +29,7 @@ class ODEModelData(ModelData):
                  reactions: dict = None, 
                  rates: dict = None, 
                  events: dict = None, 
-                 extras: Union[dict, callable] = None,
+                 extra: dict = None,
                  units: dict = None,
                  _reactions: type = ReactionDict,
                  **kwargs
@@ -48,7 +48,7 @@ class ODEModelData(ModelData):
         self.reactions  = _reactions(namespace, reactions)
         self.rates      = RateDict(namespace, rates)
         self.events     = EventDict(namespace, events)
-        self.extras     = ExtraDict(namespace, extras)
+        self.extra      = ExtraDict(namespace, extra)
         self.units      = UnitsDict(namespace, units)
          
         #Check no overlap between rates and reactions
@@ -75,6 +75,7 @@ class ODEModelData(ModelData):
                 'reactions',
                 'rates',
                 'events',
+                'extra',
                 'units'
                 ]
         

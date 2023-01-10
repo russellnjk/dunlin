@@ -1,53 +1,30 @@
 import addpath
-import dunlin                            as dn
-import dunlin.utils                      as ut
-import dunlin.standardfile.dunl          as sfd
-from dunlin.datastructures.modeldata_backup import ModelData
+import dunlin                        as dn
+import dunlin.utils                  as ut
+import dunlin.standardfile.dunl      as sfd
+from dunlin.datastructures.modeldata import ModelData
 from data import *
 
 class TestClass(ModelData):
-    _attrs = {'name'   : [str],
-              'string' : [str, None],
-              'number' : [int, 1.5]
-              }
+    def __init__(self, ref, a, b):
+        self.ref = ref
+        self.a   = a
+        self.b   = b
     
-#Test assignment
-tc0 = TestClass()
+    def to_data(self, recurse=False) -> dict:
+        data = {self.ref: {'a': self.a,
+                           'b': self.b
+                           }
+                }
+        data = self._to_data(keys=['a', 'b'], recurse=recurse)
+        return data
 
-tc0.name = 'A'
-assert tc0.name == 'A'
+tc0 = TestClass('x', 0, 1)
 
-tc0.string = None
-assert tc0.string == None
+d0 = tc0.to_data()
+d1 = tc0.to_dunl_dict()
 
-tc0.number = 3
-assert tc0.number == 3
-
-tc0.number = 1.5
-assert tc0.number == 1.5
-
-try:
-    tc0.string = 3
-except:
-    assert True
-else:
-    assert False
-
-try:
-    tc0.b= 3
-except:
-    assert True
-else:
-    assert False
-    
-#Test export to Python
-dct = tc0.to_data()
-
-assert dct == {'name': 'A', 'string': None, 'number': 1.5}
-
-# print(dct)
-
-#Test export to dunl
-dunl = sfd.write_dunl_code({tc0.name: tc0})
+dunl = sfd.write_dunl_code(d1)
 a    = sfd.read_dunl_code(dunl)
-# assert a[ref] == d[ref]
+assert a == d0
+ 

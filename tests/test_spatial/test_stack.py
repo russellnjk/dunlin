@@ -13,10 +13,10 @@ plt.ion()
 #Test 1: Adding Shapes
 ###############################################################################
 grid_config = {'gr0'     : {'config': [0.5, [4, 5], [4, 5]]},
-               'gr1'    : {'config': [0.25, [1.5, 2.5], [1.5, 2.5]]},
-               'gr2'    : {'config': [0.5, [1, 3], [1, 3]], 
-                           'children': ['gr1']
-                           },
+               'gr1'     : {'config': [0.25, [1.5, 2.5], [1.5, 2.5]]},
+               'gr2'     : {'config': [0.5, [1, 3], [1, 3]], 
+                            'children': ['gr1']
+                            },
                'gr_main' : {'config': [1, [0, 6], [0, 6]], 
                             'children': ['gr0', 'gr2']
                             },
@@ -65,7 +65,10 @@ stk.plot_voxels(AX[0],
 voxels = stk.voxels
 assert (1.5, 5.5) not in voxels
 assert len(voxels) + 14 == len(grid.voxels)
-assert voxels[1.5, 3.5] == {1: [(1.5, 3.5)], -2: [(0.5, 2.5)]}
+assert voxels[1.5, 3.5] == {1: [(2.5, 3.5)], 
+                            -1: [(0.5, 3.5)], 
+                            -2: [(1.25, 2.75), (1.75, 2.75)]
+                            }
 assert voxels[1.25, 2.25] == {-2: [(1.25, 1.75)], 
                               -1: [(0.5, 2.5)],
                               1: [(1.625, 2.125), (1.625, 2.375)],
@@ -79,11 +82,9 @@ from dunlin.datastructures.spatial        import SpatialModelData
 
 all_data = dn.read_dunl_file('spatial_0.dunl')
 
-mref = 'M0'
-gref = 'Geo0'
-ref  = mref, gref
+ref = 'M0'
 
-spatial_data = SpatialModelData.from_all_data(all_data, mref, gref)
+spatial_data = SpatialModelData.from_all_data(all_data, ref)
 
 stk = ShapeStack.from_spatial_data(spatial_data)
 

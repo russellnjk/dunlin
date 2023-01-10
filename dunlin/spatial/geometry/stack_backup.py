@@ -87,6 +87,7 @@ class ShapeStack:
             voxel2shape[voxel_center] = shape_name
             shape2voxel.setdefault(shape_name, set()).add(voxel_center)
             
+        
         self.grid        = grid
         self.shapes      = shapes
         self.voxel2shape = voxel2shape

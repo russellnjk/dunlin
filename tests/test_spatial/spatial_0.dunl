@@ -76,8 +76,8 @@ medium : [
 bcBx : [B, -0.05, Neumann, x]
 bcBy : [B, 0.1, Dirichlet, y]
 
-;Geo0
-;;coordinate_components
+;;geometry
+;;;coordinate_components
 #For now assume only cartesian coordinates are allowed
 #name str: [bounds: [min, max], unit: str]
 #name: {x, y, z}
@@ -85,13 +85,13 @@ bcBy : [B, 0.1, Dirichlet, y]
 x: [0, 10]
 y: [0, 10]
 
-;;grid_config
+;;;grid_config
 gr_main: [config: [2, [0, 10], [0, 10]], children: [gr_0]]
 gr_0   : [config: [1, [2, 8 ], [2, 8 ]], children: [gr_1]]
 gr_1   : [config: [0.5, [3, 7 ], [3, 7 ]]                 ]
 
 #SBML ListofDomainTypes
-;;domain_types
+;;;domain_types
 #SBML DomainType
 #id or name: [spatialDimensions : int, SpatialSymbolReference: Parameter, domains: [domain str: internal_points list]]
 extracellular : [
@@ -107,12 +107,12 @@ cytosolic : [
 #no. of dimensions should be inferred from internal_points
 #units should be inferred from coordinate_components
 
-;;adjacent_domains
+;;;adjacent_domains
 #name str: [domain0 str, domain1 str]
 cytosol0_medium0: [cytosol0, medium0]
 
 #SBML GeometryDefinition
-;;geometry_definitions
+;;;geometry_definitions
 cell : [
 	definition : csg,
 	domain_type: cytosolic,

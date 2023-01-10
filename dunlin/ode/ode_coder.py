@@ -25,10 +25,11 @@ def make_ode(model_data: dict) -> tuple[callable, callable, callable]:
         rhsevents = {}
     
     if 'extra' in model_data:
-        if callable(model_data['extra']):
-            rhsextra = model_data['extra']
-        else:
-            rhsextra = make_rhsextra(model_data)
+        rhsextra = make_rhsextra(model_data)
+        # if callable(model_data['extra']):
+        #     rhsextra = model_data['extra']
+        # else:
+        #     rhsextra = make_rhsextra(model_data)
         
     else:
         rhsextra = None

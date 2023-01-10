@@ -15,7 +15,7 @@ from .geometrydefinition  import GeometryDefinitionDict
 
 from .modeldata    import ModelData
 from .ode          import ODEModelData
-from .geometrydata import GeometryData
+# from .geometrydata import GeometryData
 
 class SpatialModelData(ODEModelData):
     def _init_geometry(self,
@@ -38,7 +38,9 @@ class SpatialModelData(ODEModelData):
         self.grid_config           = gcfg
         self.domain_types          = dmnts
         self.geometry_definitions  = gdefs
-        self.adjacent_domains      = admns        
+        self.adjacent_domains      = admns     
+        
+        
     
     def _init_masstransfer(self,
                            compartments: dict,
