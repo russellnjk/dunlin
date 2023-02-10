@@ -7,6 +7,21 @@ from .extra     import ExtraVariable, ExtraDict
 from .event     import Event,         EventDict 
 
 from .stateparam import StateDict, ParameterDict
+
 from .ode import ODEModelData
 
-#TODO create classes for SpatialModel
+#For SpatialModel
+from .spatialreaction     import SpatialReaction,    SpatialReactionDict
+from .boundarycondition   import BoundaryCondition,  BoundaryConditionDict
+from .compartment         import Compartment,        CompartmentDict
+from .masstransfer        import Advection,          AdvectionDict
+from .masstransfer        import Diffusion,          DiffusionDict
+from .gridconfig          import GridConfig,         GridConfigDict
+from .domaintype          import DomainType,         DomainTypeDict
+from .geometrydefinition  import GeometryDefinition, GeometryDefinitionDict
+
+from .adjacentdomain      import AdjacentDomainDict
+from .coordinatecomponent import CoordinateComponentDict
+
+
+from .spatial import SpatialModelData

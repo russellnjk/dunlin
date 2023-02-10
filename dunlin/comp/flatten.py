@@ -1,7 +1,9 @@
 from typing import Sequence
 
-def flatten(all_data: dict, required_fields: dict[str, callable], 
-            parent_ref: str, hierarchy: Sequence = ()
+def flatten(all_data        : dict, 
+            required_fields : dict[str, callable], 
+            parent_ref      : str, 
+            hierarchy       : Sequence = ()
             ) -> dict:
    
     parent_data = all_data[parent_ref]
@@ -42,8 +44,11 @@ def flatten(all_data: dict, required_fields: dict[str, callable],
     
     return flattened
         
-def delete_rename(child_name: str, child_data: dict, rename: callable, 
-                  delete: Sequence, required_fields: dict[str, callable]
+def delete_rename(child_name      : str, 
+                  child_data      : dict, 
+                  rename          : callable, 
+                  delete          : Sequence, 
+                  required_fields : dict[str, callable]
                   ) -> dict:
     #Check that delete and rename are mutually exclusive
     overlap = set(delete).intersection(rename)

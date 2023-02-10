@@ -60,7 +60,6 @@ class GenericItem(ABC, ut.FrozenObject):
             msg = f'Invalid name {name} provided when instantiating {type(self).__name__} object.'
             raise ValueError(msg)
         
-        
         if name in ext_namespace:
             raise NameError(f'Redefinition of {name}.')
         else:
@@ -77,6 +76,12 @@ class GenericItem(ABC, ut.FrozenObject):
     
     def __contains__(self, name: str):
         return name in self.namespace
+    
+    def __getitem__(self, key):
+        return getattr(self, key)
+    
+    def get(self, key, default=None):
+        return getattr(self, key, default)
     
     @abstractmethod
     def to_data(self) -> Union[list, dict]:
@@ -145,6 +150,9 @@ class GenericDict(ut.FrozenObject):
     def __getitem__(self, key):
         return self._data[key]
     
+    def get(self, key, default=None):
+        return self._data.get(key, default)
+    
     def __iter__(self):
         return iter(self._data)
     
@@ -194,7 +202,11 @@ class NamespaceDict(GenericDict):
     ###########################################################################
     #Constructor
     ###########################################################################
-    def __init__(self, ext_namespace: set, mapping: dict, *args) -> None:
+    def __init__(self, 
+                 ext_namespace: set, 
+                 mapping      : dict, 
+                 *args
+                 ) -> None:
         super().__init__(ext_namespace, mapping, *args)
         
         if not hasattr(self, 'namespace'):

@@ -31,7 +31,6 @@ class ODEModelData(ModelData):
                  events: dict = None, 
                  extra: dict = None,
                  units: dict = None,
-                 _reactions: type = ReactionDict,
                  **kwargs
                  ) -> None:
         
@@ -45,7 +44,7 @@ class ODEModelData(ModelData):
         self.parameters = ParameterDict(namespace, parameters)
         self.functions  = FunctionDict(namespace, functions)
         self.variables  = VariableDict(namespace, variables)
-        self.reactions  = _reactions(namespace, reactions)
+        self.reactions  = ReactionDict(namespace, reactions)
         self.rates      = RateDict(namespace, rates)
         self.events     = EventDict(namespace, events)
         self.extra      = ExtraDict(namespace, extra)

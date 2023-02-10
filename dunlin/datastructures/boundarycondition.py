@@ -14,7 +14,7 @@ class BoundaryCondition(GenericItem):
                  states: StateDict,
                  name: str,
                  state: str,
-                 condition: Number,
+                 condition: Union[Number, str],
                  condition_type: Literal['Neumann', 'Dirichlet', 'Robin'],
                  axis: str=None,
                  bound: Literal['min', 'max', None]=None
@@ -134,15 +134,23 @@ class BoundaryConditionDict(GenericDict):
         #Freeze
         self.freeze()
     
-    def find(self, state, axis, bnd):
+    def find(self, state, axis, bnd=None):
         '''
-        This function return None if the state cannot be found. If the state 
+        This function returns None if the state cannot be found. If the state 
         can be found, the corresponding boundary condition is returned.
         '''
+        if ut.isnum(axis):
+            if bnd is not None:
+                msg = 'bnd argument must be None when axis argument is a number.'
+                raise ValueError(msg)
+            else:
+                axis_ = self._axes[abs(axis)]
+                bnd   = 'max' if axis > 0 else 'min'
+        else:
+            axis_ = axis 
         
-        axis_   = self._axes[axis] if ut.isnum(axis) else axis 
-        bc = self.cache.get(state, {}).get(axis_, {}).get(bnd, None)
-        
+        bc  = self.cache.get(state, {}).get(axis_, {}).get(bnd, None)
+            
         return bc
         
         

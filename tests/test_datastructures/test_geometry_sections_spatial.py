@@ -48,8 +48,8 @@ ext_namespace = set()
 #Test GridConfig
 ###############################################################################
 data0 = {'gr_main': {'config' : [0.02, [0, 10], [0, 10], [0, 10]], 'children': ['gr0']},
-          'gr0'   : {'config' : [0.01, [4, 6], [4, 6],   [4, 6]]}
-          }
+         'gr0'    : {'config' : [0.01, [4, 6],  [4, 6],  [4, 6]]}
+         }
 
 C = GridConfigDict
 
@@ -67,7 +67,7 @@ else:
     assert False
 
 data0_ = {'gr_main': {'config' : [0.02, [0, 10], [0, 10], [0, 10]], 'children': ['gg']},
-          'gr0'    : {'config' : [0.01, [4, 6], [4, 6],   [4, 6]]}
+          'gr0'    : {'config' : [0.01, [4, 6],  [4, 6],  [4, 6]]}
           }
 try:
     F0 = C(set(), ccd, data0_)
@@ -88,13 +88,9 @@ assert data2 == data1 == data0
 ###############################################################################
 #Test DomainType
 ###############################################################################
-data0 = {'dmnt0': {'ndims': 3,
-                   'domains': {'dmn0': [[2, 2, 2]]
-                                }
-                    },
-          'dmnt1': {'ndims': 3,
-                    'domains': {'dmn1': [[5, 5, 5]]
-                                }
+data0 = {'dmnt0': {'dmn0': [2, 2, 2]
+                   },
+          'dmnt1': {'dmn1': [5, 5, 5]
                     }
           }
 
@@ -103,13 +99,9 @@ C = DomainTypeDict
 #Test instantiation
 F0 = C(ext_namespace, ccd, data0)
 
-data0_ = {'dmnt0': {'ndims': 3,
-                    'domains': {'dmn0': [[2, 2, ]]
-                                }
+data0_ = {'dmnt0': {'dmn0': [[2, 2, ]]
                     },
-          'dmnt1': {'ndims': 3,
-                    'domains': {'dmn0': [[2, 2, 2]]
-                                }
+          'dmnt1': {'dmn0': [[2, 2, 2]]
                     }
           }
 try:
@@ -119,13 +111,9 @@ except:
 else:
     assert False
 
-data0_ = {'dmnt0': {'ndims': 3,
-                    'domains': {'dmn0': [[2, 2, 2]]
-                                }
+data0_ = {'dmnt0': {'dmn0': [[2, 2, 2]]
                     },
-          'dmnt1': {'ndims': 3,
-                    'domains': {'dmn0': [[5, 5, 5]]
-                                }
+          'dmnt1': {'dmn0': [[5, 5, 5]]
                     }
           }
 try:

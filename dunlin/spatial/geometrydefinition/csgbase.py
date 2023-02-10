@@ -164,7 +164,12 @@ class Primitive(CSGObject):
         s = f'{s}({a})'
         
         return s
+    
+    def __contains__(self, point):
+        result = self.contains_points((point,))
         
+        return result[0]
+    
     def contains_points(self, points, _rtol=None):
         center      = self._center
         axes        = self._axes

@@ -95,6 +95,10 @@ class GridConfig(GenericItem):
     def children(self) -> list[str]:
         return self._children
     
+    @property
+    def config(self) -> dict:
+        return self._config
+    
     def to_data(self) -> dict:
         dct = {'config': self._config}
         

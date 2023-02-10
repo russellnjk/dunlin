@@ -5,12 +5,20 @@ from .bases               import GenericItem, GenericDict
 from .coordinatecomponent import CoordinateComponentDict
 
 class DomainType(GenericItem):
+    '''
+    Differences with SBML Spatial:
+        1. Does not accept a parameter for number of dimensions i.e. 
+        spatialDimensions. The number of dimensions is inferred from the internal 
+        point. 
+        2. Only one internal point is accepted. This avoids unecessary checking.
+        3. Does not implement SpatialSymbolReference. This is not something that 
+        should change with time so as to avoid unecessary complexity.
+    '''
     def __init__(self,
                  ext_namespace: set, 
                  coordinate_components: CoordinateComponentDict,
                  name: str,
-                 domains: dict[str, list],
-                 ndims: int=None
+                 **domains: dict[str, list],
                  ) -> None:
         
         #Check name
@@ -18,21 +26,13 @@ class DomainType(GenericItem):
             msg = f'Invalid name provieded for {type(self).__name__}: {name}'
             raise ValueError(msg)
         
-        #Check ndims
-        ndims = coordinate_components.ndims if ndims is None else ndims
-        if not ut.isint(ndims):
-            msg  = 'ndims must be a positive integer. '
-            msg += f'Received {ndims}'
-            raise ValueError(msg)
-        elif ndims > 3 or ndims < 1:
-            msg  = 'ndims must be between 1 and 3 inclusive. '
-            msg += f'Received {ndims}'
-            raise ValueError(msg)
+        #Infer ndims
+        ndims = coordinate_components.ndims
         
         #Check domains
         spans    = list(coordinate_components.spans.values())
         _domains = {}
-        for domain_name, internal_points in domains.items():
+        for domain_name, internal_point in domains.items():
             if not ut.is_valid_name(domain_name):
                 msg  = 'Invalid domain name provieded for '
                 msg += f'{type(self).__name__}: {domain_name}'
@@ -40,19 +40,18 @@ class DomainType(GenericItem):
             
             _domains[domain_name] = []
             
-            for point in internal_points:
-                if len(point) != coordinate_components.ndims:
-                    msg  = f'Expected an internal point with {ndims} coordinates.'
-                    msg += f' Received {point}'
+            if len(internal_point) != coordinate_components.ndims:
+                msg  = f'Expected an internal point with {ndims} coordinates.'
+                msg += f' Received {internal_point}'
+                raise ValueError(msg)
+            
+            for i, span in zip(internal_point, spans):
+                if i <= span[0] or i >= span[1]:
+                    msg  = 'Internal point must be lie inside coordinate components.'
+                    msg += ' Spans: {spans}. Received {internal_point}'
                     raise ValueError(msg)
                 
-                for i, span in zip(point, spans):
-                    if i <= span[0] or i >= span[1]:
-                        msg  = 'Internal point must be lie inside coordinate components.'
-                        msg += ' Spans: {spans}. Received {point}'
-                        raise ValueError(msg)
-                
-            _domains[domain_name].append(tuple(point))
+            _domains[domain_name] = tuple(internal_point)
         
         #Call the parent constructor
         super().__init__(ext_namespace, name, _domains=_domains, ndims=ndims)
@@ -65,10 +64,9 @@ class DomainType(GenericItem):
         return self._domains
 
     def to_data(self) -> dict:
-        domains = {k: [list(i) for i in v] for k, v in self._domains.items()}
-        ndims   = self.ndims
+        d = {k: list(v) for k, v in self.domains.items()}
         
-        return {'ndims': ndims, 'domains': domains}
+        return d
     
     def keys(self) -> KeysView:
         return self._domains.keys()

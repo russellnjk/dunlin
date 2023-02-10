@@ -18,7 +18,7 @@ class MassTransfer(GenericItem):
                  species              : str,
                  *parameter_names    
                  ) -> None:
-        
+       
         #Check arguments correspond to state/param names
         if species not in states:
             msg = f'State {species} is not in model states.'
@@ -76,7 +76,9 @@ class MassTransfer(GenericItem):
         if type(axis) == str:
             return self._coefficients[axis]
         else:
-            axis = self._axis_num[axis]
+            #Use absolute values as mass transfer does not vary with axis direction
+            axis = abs(axis)
+            axis = self._axis_num[abs(axis)]
             return self._coefficients[axis]
     
     def to_data(self) -> Union[Number, list[Number]]:
@@ -100,12 +102,12 @@ class MassTransferDict(NamespaceDict):
     itype: type
     
     def __init__(self, 
-                 ext_namespace        : set,
-                 coordinate_components: CoordinateComponentDict,
-                 rates                : RateDict,
-                 states               : StateDict,
-                 parameters           : ParameterDict,
-                 mapping              : Union[dict, pd.DataFrame],
+                 ext_namespace         : set,
+                 coordinate_components : CoordinateComponentDict,
+                 rates                 : RateDict,
+                 states                : StateDict,
+                 parameters            : ParameterDict,
+                 mapping               : Union[dict, pd.DataFrame],
                  ) -> None:
         
         super().__init__(ext_namespace, 
@@ -137,14 +139,17 @@ class MassTransferDict(NamespaceDict):
         
         self.namespace = tuple(namespace)
         self.freeze()
-
+    
+    def find(self, state, axis):
+        return None
+    
 class Advection(MassTransfer):
     def __init__(self, 
-                 ext_namespace        : set,
-                 coordinate_components: CoordinateComponentDict,
-                 states               : StateDict,
-                 parameters           : ParameterDict,
-                 species              : str,
+                 ext_namespace         : set,
+                 coordinate_components : CoordinateComponentDict,
+                 states                : StateDict,
+                 parameters            : ParameterDict,
+                 species               : str,
                  *parameter_names    
                  ) -> None:
         name = ut.adv(species)
@@ -163,11 +168,11 @@ class AdvectionDict(MassTransferDict):
 
 class Diffusion(MassTransfer):
     def __init__(self, 
-                 ext_namespace        : set,
-                 coordinate_components: CoordinateComponentDict,
-                 states               : StateDict,
-                 parameters           : ParameterDict,
-                 species              : str,
+                 ext_namespace         : set,
+                 coordinate_components : CoordinateComponentDict,
+                 states                : StateDict,
+                 parameters            : ParameterDict,
+                 species               : str,
                  *parameter_names    
                  ) -> None:
         name = ut.dfn(species)

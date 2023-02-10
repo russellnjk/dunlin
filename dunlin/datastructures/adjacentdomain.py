@@ -5,7 +5,7 @@ from .bases               import TabularDict
 from .coordinatecomponent import CoordinateComponentDict
 from .domaintype          import DomainTypeDict
 
-class AdjacentDomainsDict(TabularDict):
+class AdjacentDomainDict(TabularDict):
     is_numeric = False
     
     def __init__(self, 

@@ -112,7 +112,7 @@ class Reaction(GenericItem):
         #It is now safe to call the parent's init
         super().__init__(ext_namespace, 
                          name, 
-                         eqn=eqn,
+                         eqn            = eqn,
                          _stoichiometry = stoich,
                          rate           = rate,
                          namespace      = tuple(namespace),

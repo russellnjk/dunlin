@@ -1,11 +1,15 @@
-from dunlin.datastructures.reaction import Reaction, ReactionDict
+from dunlin.datastructures.bases       import NamespaceDict
+from dunlin.datastructures.reaction    import Reaction
+from dunlin.datastructures.compartment import CompartmentDict
 
 class SpatialReaction(Reaction):
+    
     ###########################################################################
     #Constructor
     ###########################################################################
     def __init__(self, 
-                 ext_namespace: set, 
+                 ext_namespace: set,
+                 compartments : CompartmentDict,
                  name         : str, 
                  eqn          : str, 
                  fwd          : str, 
@@ -23,7 +27,22 @@ class SpatialReaction(Reaction):
         #Unfreeze
         self.unfreeze()
         
-        self.local =  local
+        #Continue pre-processing
+        domain_type2state = {}
+
+        for x in self.stoichiometry:
+            dmnt = compartments.state2domain_type[x]
+            domain_type2state.setdefault(dmnt, set()).add(x)
+            
+        if len(domain_type2state) > 2:
+            msg = f'Encountered reaction {name} with multiple domain_types.'
+            d   = '\n'.join([f'{k}: {v}' for k, v in domain_type2state.items()])
+            msg = f'{msg}\n{d}'
+            raise ValueError(msg)
+            
+        #Update attributes
+        self.domain_type2state = domain_type2state
+        self.local             = local
         
         #Freeze
         self.freeze()
@@ -36,6 +55,42 @@ class SpatialReaction(Reaction):
         
         return data
 
-class SpatialReactionDict(ReactionDict):
+class SpatialReactionDict(NamespaceDict):
     itype = SpatialReaction
+    
+    ###########################################################################
+    #Constructor
+    ###########################################################################
+    def __init__(self, 
+                 ext_namespace: set, 
+                 compartments: CompartmentDict,
+                 reactions: dict
+                 ) -> None:
+        namespace = set()
+        
+        #Make the dict
+        super().__init__(ext_namespace, reactions, compartments)
+        
+        states       = set()
+        domain_types = {}
+        
+        for rxn_name, rxn in self.items():
+            namespace.update(rxn.namespace)
+            states.update(list(rxn.stoichiometry))
+            
+            if len(rxn.domain_type2state) == 2:
+                key = frozenset(rxn.domain_type2state)
+            else:
+                key = next(iter(rxn.domain_type2state))
+            
+            domain_types[key] = rxn.domain_type2state
+                
+        #Save attributes
+        self.namespace    = tuple(namespace)
+        self.states       = tuple(states)
+        self.domain_types = domain_types
+        
+        #Freeze
+        self.freeze()
+    
     

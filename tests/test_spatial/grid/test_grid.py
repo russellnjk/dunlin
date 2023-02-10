@@ -4,7 +4,7 @@ import numpy             as np
 
 import addpath
 import dunlin as dn
-from dunlin.spatial.geometry.voxel import (RegularGrid, 
+from dunlin.spatial.grid.grid import (RegularGrid, 
                                            NestedGrid,
                                            make_basic_grids,
                                            merge_basic_grids,

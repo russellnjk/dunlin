@@ -73,9 +73,12 @@ class CompartmentDict(NamespaceDict):
         
         allowed           = set(states.keys()) 
         seen              = set()
-        namespace         = set()
-        dmnt_names        = set()
-        state2compartment = {}
+        namespace               = set()
+        dmnt_names              = set()
+        state2compartment       = {}
+        domain_type2state       = {}
+        state2domain_type       = {}
+        domain_type2compartment = {}
         
         for cpt_name, cpt in self.items():
             #Check that the domain type has been defined
@@ -89,7 +92,9 @@ class CompartmentDict(NamespaceDict):
                 raise ValueError(msg)
             else:
                 dmnt_names.add(domain_type)
-                
+            
+            domain_type2compartment[domain_type] = cpt_name
+            
             #Check that all names are states or reactions
             temp = set(cpt.namespace)
             unexpected = temp.difference(allowed)
@@ -111,17 +116,22 @@ class CompartmentDict(NamespaceDict):
             #Update state2compartment 
             for state in cpt.namespace:
                 state2compartment[state] = cpt
-        
+            
+            #Update domain_type and state mappings
+            domain_type2state[domain_type] = cpt.namespace
+            for x in cpt.namespace:
+                state2domain_type[x] = domain_type
+            
         missing = set(states.names).difference(namespace)
         if missing:
             msg = f'Compartments not assigned for {missing}.'
             raise ValueError(msg)
         
         #Update and freeze
-        self.namespace          = tuple(namespace)
-        self._state2compartment = state2compartment
+        self.namespace               = tuple(namespace)
+        self.state2compartment       = state2compartment
+        self.domain_type2state       = domain_type2state
+        self.state2domain_type       = state2domain_type
+        self.domain_type2compartment = domain_type2compartment
         self.freeze()
-            
-        
-    def locate_state(self, state) -> Compartment:
-        return self._state2compartment[state]
+      
