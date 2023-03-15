@@ -98,6 +98,8 @@ def is_valid_name(x):
 reserved = ['states', 
             'parameters', 
             'time', 
+            'advection',
+            'diffusion',
             'posterior', 
             'context', 
             'priors', 

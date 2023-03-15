@@ -1,13 +1,18 @@
-from typing import Union
+from typing import Sequence, Union
 
-import dunlin.utils                       as ut
-from dunlin.datastructures.bases import NamespaceDict, GenericItem
+import dunlin.utils as ut
+from dunlin.datastructures.bases      import NamespaceDict, GenericItem
+from dunlin.datastructures.stateparam import StateDict, ParameterDict
 
 class Variable(GenericItem):
     ###########################################################################
     #Constructor
     ###########################################################################
-    def __init__(self, ext_namespace: set, name: str, expr: Union[str, int, float]):
+    def __init__(self, 
+                 ext_namespace : set, 
+                 name          : str, 
+                 expr          : Union[str, int, float]
+                 ) -> None:
         #Parse expression and check
         expr_ori  = self.format_primitive(expr)
         expr      = str(expr).strip()
@@ -39,7 +44,10 @@ class VariableDict(NamespaceDict):
     ###########################################################################
     #Constructor
     ###########################################################################
-    def __init__(self, ext_namespace: set, variables: dict) -> None:
+    def __init__(self, 
+                 ext_namespace : set, 
+                 variables     : dict,
+                 ) -> None:
         namespace = set()
 
         #Make the dict

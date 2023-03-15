@@ -107,7 +107,11 @@ class GenericDict(ut.FrozenObject):
     _data: dict 
     itype: type
     
-    def __init__(self, ext_namespace: set, mapping: dict, *args):
+    def __init__(self, 
+                 ext_namespace : set, 
+                 mapping       : dict, 
+                 *args
+                 ) -> None:
         _data = {}
         
         if mapping:
@@ -129,7 +133,7 @@ class GenericDict(ut.FrozenObject):
                         item = self.itype(ext_namespace, *args, name, kwargs)
                     except Exception as e:
                         self._raise(e, name)
-                    
+                
                 _data[name] = item
           
         self._data = _data
@@ -241,10 +245,10 @@ class TabularDict(ABC, ut.FrozenObject):
         return df
 
     def __init__(self, 
-                 ext_namespace: set, 
-                 name: str, 
-                 mapping: Union[dict, pd.DataFrame], 
-                 n_format: Callable = sfd.format_num
+                 ext_namespace : set, 
+                 name          : str, 
+                 mapping       : Union[dict, pd.DataFrame], 
+                 n_format      : Callable = sfd.format_num
                  ) -> None:
         #Convert to df
         df = self.mapping2df(mapping)

@@ -59,7 +59,13 @@ class SpatialModelData(ModelData):
         xs, ps, funcs, vrbs, rts, evs, extra, units = self._init_basic(namespace, 
                                                                        states, 
                                                                        parameters, 
-                                                                       compartments
+                                                                       compartments,
+                                                                       functions,
+                                                                       variables,
+                                                                       rates, 
+                                                                       events, 
+                                                                       extra,
+                                                                       units,
                                                                        )
         
         #Instantiate geometry data structures

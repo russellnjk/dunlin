@@ -9,15 +9,15 @@ from .stateparam          import StateDict
 
 class BoundaryCondition(GenericItem):
     def __init__(self,
-                 ext_namespace: set(),
-                 coordinate_components: CoordinateComponentDict,
-                 states: StateDict,
-                 name: str,
-                 state: str,
-                 condition: Union[Number, str],
-                 condition_type: Literal['Neumann', 'Dirichlet', 'Robin'],
-                 axis: str=None,
-                 bound: Literal['min', 'max', None]=None
+                 ext_namespace         : set(),
+                 coordinate_components : CoordinateComponentDict,
+                 states                : StateDict,
+                 name                  : str,
+                 state                 : str,
+                 condition             : Union[Number, str],
+                 condition_type        : Literal['Neumann', 'Dirichlet', 'Robin'],
+                 axis                  : str=None,
+                 bound                 : Literal['min', 'max', None]=None
                  ) -> None:
         
         #Check the state
@@ -149,7 +149,10 @@ class BoundaryConditionDict(GenericDict):
         else:
             axis_ = axis 
         
-        bc  = self.cache.get(state, {}).get(axis_, {}).get(bnd, None)
+        if bnd is None:
+            bc = self.cache.get(state, {}).get(axis_, {})
+        else:
+            bc = self.cache.get(state, {}).get(axis_, {}).get(bnd, None)
             
         return bc
         

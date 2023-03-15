@@ -128,20 +128,18 @@ class MassTransferDict(NamespaceDict):
                 
             namespace.update(mt.namespace)
         
-        # missing = set(states.names).difference(seen)
-        # if rates:
-        #     missing = missing.difference(rates.states)
-            
-        
-        # if missing:
-        #     msg = f'Missing mass transfer data for one or more states: {missing}'
-        #     raise ValueError(msg)
-        
         self.namespace = tuple(namespace)
         self.freeze()
     
     def find(self, state, axis):
-        return None
+        try:
+            mt = self[state]
+        except KeyError:
+            return 0
+        except Exception as e:
+            raise e
+        
+        return mt[axis]
     
 class Advection(MassTransfer):
     def __init__(self, 

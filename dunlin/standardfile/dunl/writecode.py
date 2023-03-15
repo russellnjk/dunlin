@@ -150,6 +150,8 @@ def write_dict(dct, multiline_dict=True, _top_level=True) -> str:
     
     #Strip and remove trailing commas
     code = code.strip()
+    if not code:
+        return code.strip()
     if code[-1] == ',':
         code = code[:-1]
         

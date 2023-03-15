@@ -21,7 +21,7 @@ parameters = {
 
 reactions = {
     'synH' : ['      -> H', 'k_synH*C'],
-    'synB' : ['H + A -> B', 'k_synB*H*A', 'k_synH_A*B*1']
+    'synB' : ['H + A -> B', 'k_synB*H*A', 'vrb1*vrb2']
     }
 
 functions = {
@@ -29,8 +29,10 @@ functions = {
     }
 
 variables = {
-    'vrb0': 'func0(k_synH, C)',
-    'vrb1': 1
+    'vrb0' : 'func0(k_synH, C)',
+    'vrb1' : 'B*A',
+    'vrb2' : 1,
+    'vrb3' : 'vrb0*vrb1*vrb2'
     }
 
 rates = {
@@ -63,8 +65,8 @@ compartments = {
     }
 
 boundary_conditions = {
-    'bcBx' : ['B', -0.05, 'Neumann', 'x'],
-    'bcBy' : ['B', 0.1, 'Dirichlet', 'y']
+    'bcBx' : ['B', 0, 'Neumann',   'x'],
+    'bcBy' : ['B', 7, 'Dirichlet', 'y']
     }
 
 

@@ -5,11 +5,11 @@ import numpy             as np
 import addpath
 import dunlin as dn
 from dunlin.spatial.grid.grid import (RegularGrid, 
-                                           NestedGrid,
-                                           make_basic_grids,
-                                           merge_basic_grids,
-                                           make_grids_from_config
-                                           )
+                                      NestedGrid,
+                                      make_regular_grids,
+                                      merge_regular_grids,
+                                      make_grids_from_config
+                                      )
 
 plt.ion()
 plt.close('all')
@@ -77,7 +77,7 @@ grid4.plot(AX[4])
 grid5 = RegularGrid(0.25, [4, 5], [4, 5], name='grid5')
 grid5.plot(AX[3])
 
-grid6 = NestedGrid(grid2, grid3, grid5, name='grid6')
+grid6 = NestedGrid(grid2, grid5, grid3, name='grid6')
 grid6.plot(AX[5])
 
 ###############################################################################
@@ -90,11 +90,28 @@ d = {'config': [0.25, [4, 5], [4, 5]]}
 
 grid_config = {'main_grid': a,
                'grid1'    : b,
+               'grid3'    : c,
                'grid4'    : d,
-               'grid3'    : c
                }
 
-basic_grids  = make_basic_grids(grid_config)
-nested_grids = merge_basic_grids(basic_grids, grid_config, 'main_grid')
+span = -1, 7
+fig  = plt.figure(figsize=(8, 8))
+ax   = fig.add_subplot(1, 1, 1)
+# ax.set_box_aspect((1, 1, 1))
+ax.set_box_aspect()
+ax.set_xlim(*span)
+ax.set_ylim(*span)
+
+ax.set_xlabel('x')
+ax.set_ylabel('y')
+
+plt.grid(True)
+
+AX.append(ax)
+
+regular_grids = make_regular_grids(grid_config)
+nested_grids  = merge_regular_grids(regular_grids, grid_config, 'main_grid')
 
 nested_grids = make_grids_from_config(grid_config)
+
+nested_grids['main_grid'].plot(AX[6])

@@ -1,9 +1,10 @@
+import re
+
 from dunlin.datastructures.bases       import NamespaceDict
 from dunlin.datastructures.reaction    import Reaction
 from dunlin.datastructures.compartment import CompartmentDict
 
 class SpatialReaction(Reaction):
-    
     ###########################################################################
     #Constructor
     ###########################################################################
@@ -17,14 +18,13 @@ class SpatialReaction(Reaction):
                  local        : bool=False
                  ) -> None:
         
-        #Call the parent constructor without freezing
+        #Call the parent constructor and unfreeze
         super().__init__(ext_namespace, 
                          name, 
                          eqn, 
                          fwd, 
                          rev 
                          )
-        #Unfreeze
         self.unfreeze()
         
         #Continue pre-processing
@@ -62,33 +62,24 @@ class SpatialReactionDict(NamespaceDict):
     #Constructor
     ###########################################################################
     def __init__(self, 
-                 ext_namespace: set, 
-                 compartments: CompartmentDict,
-                 reactions: dict
+                 ext_namespace : set, 
+                 compartments  : CompartmentDict,
+                 reactions     : dict
                  ) -> None:
         namespace = set()
         
         #Make the dict
         super().__init__(ext_namespace, reactions, compartments)
         
-        states       = set()
-        domain_types = {}
+        states = set()
         
         for rxn_name, rxn in self.items():
             namespace.update(rxn.namespace)
             states.update(list(rxn.stoichiometry))
-            
-            if len(rxn.domain_type2state) == 2:
-                key = frozenset(rxn.domain_type2state)
-            else:
-                key = next(iter(rxn.domain_type2state))
-            
-            domain_types[key] = rxn.domain_type2state
-                
+           
         #Save attributes
-        self.namespace    = tuple(namespace)
-        self.states       = tuple(states)
-        self.domain_types = domain_types
+        self.namespace            = tuple(namespace)
+        self.states               = tuple(states)
         
         #Freeze
         self.freeze()

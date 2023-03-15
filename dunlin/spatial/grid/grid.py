@@ -236,7 +236,7 @@ class RegularGrid(BaseGrid):
         grid          = np.meshgrid(*axes)
         voxels        = {}
         slices        = (slice(1, None, 2), )*ndims
-        voxel_centers = np.stack([a[slices].flatten() for a in grid], axis=1)
+        voxel_centers = np.stack([a[slices].flatten().astype(np.float64) for a in grid], axis=1)
         sizes         = {}
         
         for point in voxel_centers:
@@ -462,12 +462,12 @@ class NestedGrid(BaseGrid):
 #Instantiation from Config Dicts
 ###############################################################################
 def make_grids_from_config(grid_config: dict, use_cache=True) -> dict[str, NestedGrid]:
-    basic_grids  = make_basic_grids(grid_config)
+    regular_grids  = make_regular_grids(grid_config)
     nested_grids = {}
     cache        = {} if use_cache else None
     
-    for name in basic_grids:
-        grid = merge_basic_grids(basic_grids, 
+    for name in regular_grids:
+        grid = merge_regular_grids(regular_grids, 
                                  grid_config, 
                                  name,
                                  cache
@@ -477,8 +477,8 @@ def make_grids_from_config(grid_config: dict, use_cache=True) -> dict[str, Neste
     
     return nested_grids
 
-def make_basic_grids(grid_config: dict) -> dict[str, RegularGrid]:
-    basic_grids = {}
+def make_regular_grids(grid_config: dict) -> dict[str, RegularGrid]:
+    regular_grids = {}
     
     for name, config in grid_config.items():
         args = config['config']
@@ -489,18 +489,18 @@ def make_basic_grids(grid_config: dict) -> dict[str, RegularGrid]:
             else:
                 grid = RegularGrid(*args)
         except Exception as e:
-            s = f'Error in instantiating BasicGrid {name}.\n'
+            s = f'Error in instantiating regularGrid {name}.\n'
             a = e.args[0]
             n = s + a
             
             raise type(e)(n)
             
-        basic_grids[name] = grid
+        regular_grids[name] = grid
     
-    return basic_grids
+    return regular_grids
     
 
-def merge_basic_grids(basic_grids: dict[str, RegularGrid], 
+def merge_regular_grids(regular_grids: dict[str, RegularGrid], 
                       grid_config: dict, 
                       parent_name: str, 
                       cache: dict=None, 
@@ -512,7 +512,7 @@ def merge_basic_grids(basic_grids: dict[str, RegularGrid],
         return cache[parent_name]
     
     #Prepare to extract child grids
-    parent_grid    = basic_grids[parent_name]
+    parent_grid    = regular_grids[parent_name]
     children_names = grid_config[parent_name].get('children', [])
     child_grids    = []
     
@@ -526,10 +526,10 @@ def merge_basic_grids(basic_grids: dict[str, RegularGrid],
         if child_name in cache:
             child_grid = cache[child_name]
         else:
-            child_grid = basic_grids[child_name]
+            child_grid = regular_grids[child_name]
             
             if grid_config[child_name].get('children'):
-                child_grid = merge_basic_grids(basic_grids, 
+                child_grid = merge_regular_grids(regular_grids, 
                                                grid_config, 
                                                child_name,
                                                cache,

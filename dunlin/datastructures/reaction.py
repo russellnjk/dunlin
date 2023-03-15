@@ -12,8 +12,8 @@ class Reaction(GenericItem):
         #Split the reaction
         try:
             rcts, prds = eqn.split('->')
-            rcts = rcts.strip()
-            prds = prds.strip()
+            rcts       = rcts.strip()
+            prds       = prds.strip()
         except:
             raise exc.InvalidDefinition('reaction equation', '<reactants> -> <products>', eqn)
         
