@@ -2,15 +2,29 @@ from typing import Callable
 
 import dunlin.utils as ut
 
-def process_kwargs(kwargs: dict, 
-                   keys: list[str], 
-                   default: dict=None, 
-                   sub_args: dict=None, 
+def process_kwargs(kwargs    : dict, 
+                   keys      : list[str], 
+                   default   : dict=None, 
+                   sub_args  : dict=None, 
                    converters: dict[Callable]=None
                    ) -> dict:
     
     '''
-    The master function for processing keyword arguments for plotting.                   
+    The master function for flattening keyword arguments for plotting. An example 
+    of an input argument could be this: 
+        
+        `{'size': 5, 
+          'color': {'case0': 'blue', 
+                    'case1': {'subcase0': 'red',
+                              'subcase1': 'orange'
+                              }
+                    }
+          }`
+    
+    We want the size to be 5 but the color should be blue for case0, red for 
+    case1/subcase0 and orange for case1/subcase1. If the keys provided are 
+    `['case0', 'subcase1']`, this function will return a dictionary where 
+    `color: 'orange'`.                 
 
     Parameters
     ----------
@@ -22,22 +36,33 @@ def process_kwargs(kwargs: dict,
         Default values which will be merged with the flattened keyword arguments. 
         The default is None.
     sub_args : dict, optional
-        The arguments for substitution after flattening. Supposed to supplied 
-        from the backend. The default is None.
+        The arguments for substitution after flattening. 
     converters : dict[str, Callable]
-        Pairs of keywords and callables. The keyword indicates which keyword 
-        argument requires substitution. The callables (or None) provides an 
-        additional layer of parsing for that keyword argument. The default is None.
+        A dictionary that maps the keywords in kwargs to a callable. The flattened 
+        value under each key will be passed to its associated callable. This provides 
+        an additional layer of processing and is useful when the flattened value 
+        is not a valid argument to downstream functions. 
+        
+        For example, a flattened argument could be `{'size': 3, 'color': 'cobalt'}`.
+        Unfortunately, matplotlib's plotting functions might not recognize 
+        cobalt as a valid input. In this case, we can supply a function that converts 
+        `"cobalt"` to a tuple of RGB values that are accepted by matplotlib's 
+        function. 
+        
+        Callables only need to be provided for arguments that expected to require 
+        additional processing. The default is None.
 
     Returns
     -------
     kwargs
-        A dictionary of keyword arguments suitable for passing into external 
+        A dictionary of keyword arguments suitable for passing into downstream 
         plotting functions.
 
     '''
     if keys:
         kwargs = flatten_kwargs(kwargs, keys)
+    elif not kwargs:
+        kwargs = {}
     else:
         kwargs = dict(kwargs)
         

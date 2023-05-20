@@ -15,16 +15,16 @@ cp0: [
 ;;;coordinate_components
 #SBML CoordinateComponent
 #id or name: [Boundary: [boundaryMin, boundaryMax], unit: UniSIdRef]
-x: [bounds: [0, 10], unit: m]
-y: [bounds: [0, 10], unit: m]
-z: [bounds: [0, 10], unit: m]
+x: [0, 10]
+y: [0, 10]
+z: [0, 10]
 
 #SBML ListofDomainTypes
 ;;;domain_types
 #SBML DomainType
 #id or name: [spatialDimensions : int, SpatialSymbolReference: Parameter, unit: UniSIdRef]
-dmntype0: [ndim: 3, variable: vrb0 , unit: m]
-dmntype1: [ndim: 2, variable: vrb0 , unit: m]
+dmntype0: [ndim: 3, variable: vrb0]
+dmntype1: [ndim: 2, variable: vrb0]
 
 ;;;domains
 #id or name: [domainType: DomainType, ListofInteriorPoints: [InteriorPoint...]]

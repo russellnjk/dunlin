@@ -1,8 +1,6 @@
 import numpy             as np
-import matplotlib.pyplot as plt
-from matplotlib.patches import Rectangle
 from numbers            import Number
-from typing             import Iterable, Sequence
+from typing             import Iterable, Union
 
 import dunlin.utils_plot     as upp
     
@@ -17,13 +15,13 @@ class BaseGrid:
     _edges         = dict(color='black', marker='None', linewidth=1)
     
     def __init__(self, 
-                 name, 
-                 step, 
-                 spans, 
-                 ndims, 
-                 voxels,  
-                 sizes,
-                 vertices
+                 name     : str, 
+                 step     : Number, 
+                 spans    : Iterable[tuple[Number, Number]], 
+                 ndims    : int, 
+                 voxels   : dict[tuple, dict],  
+                 sizes    : dict[Number],
+                 vertices : dict[tuple, dict]
                  ) -> None:
         self.name     = name
         self.step     = step
@@ -461,92 +459,38 @@ class NestedGrid(BaseGrid):
 ###############################################################################
 #Instantiation from Config Dicts
 ###############################################################################
-def make_grids_from_config(grid_config: dict, use_cache=True) -> dict[str, NestedGrid]:
-    regular_grids  = make_regular_grids(grid_config)
+def make_grids_from_config(grid_config: dict, 
+                           _name      : str    = '_main', 
+                           _step      : Number = None
+                           ) -> dict[str, Union[NestedGrid, RegularGrid]]:
     nested_grids = {}
-    cache        = {} if use_cache else None
     
-    for name in regular_grids:
-        grid = merge_regular_grids(regular_grids, 
-                                 grid_config, 
-                                 name,
-                                 cache
-                                 )
+    mins  = grid_config['min']
+    maxs  = grid_config['max']
+    
+    if len(mins) != len(maxs):
+        a = f'{len(mins)} arguments were provided for "min"'
+        b = f'{len(maxs)} arguments were provided for "max".'
+        c = f'{a} but {b}'
+        d = f'Error when making grid {_name}. {c}'
+        raise ValueError(d)
+    
+    step  = grid_config['step'] if _step is None else _step
+    spans = zip(mins, maxs)
+    grid  = RegularGrid(step, *spans, name=_name)
+    
+    #Recurse
+    child_grids = []
+    for child, child_config in grid_config.get('children', {}).items():
+        temp        = make_grids_from_config(child_config, _name=child, _step=step/2)
+        child_grid  = temp[child]
         
-        nested_grids[name] = grid
+        child_grids.append(child_grid)
+        nested_grids.update(temp)
+        
+    if child_grids:
+        grid = NestedGrid(grid, *child_grids, name=_name)
+        
+    nested_grids[_name] = grid
     
     return nested_grids
-
-def make_regular_grids(grid_config: dict) -> dict[str, RegularGrid]:
-    regular_grids = {}
-    
-    for name, config in grid_config.items():
-        args = config['config']
-        
-        try:
-            if hasattr(args, 'items'):
-                grid = RegularGrid(**args)
-            else:
-                grid = RegularGrid(*args)
-        except Exception as e:
-            s = f'Error in instantiating regularGrid {name}.\n'
-            a = e.args[0]
-            n = s + a
-            
-            raise type(e)(n)
-            
-        regular_grids[name] = grid
-    
-    return regular_grids
-    
-
-def merge_regular_grids(regular_grids: dict[str, RegularGrid], 
-                      grid_config: dict, 
-                      parent_name: str, 
-                      cache: dict=None, 
-                      _hierarchy: Sequence=()
-                      ) -> NestedGrid:
-    #Set up cache and return if possible
-    cache = {} if cache is None else cache
-    if parent_name in cache:
-        return cache[parent_name]
-    
-    #Prepare to extract child grids
-    parent_grid    = regular_grids[parent_name]
-    children_names = grid_config[parent_name].get('children', [])
-    child_grids    = []
-    
-    #Iterate and extract child grids
-    for child_name in children_names:
-        #Check the hierarchy
-        if child_name in _hierarchy:
-            raise CircularHierarchy(*_hierarchy, child_name)
-        
-        #Make child grid and append
-        if child_name in cache:
-            child_grid = cache[child_name]
-        else:
-            child_grid = regular_grids[child_name]
-            
-            if grid_config[child_name].get('children'):
-                child_grid = merge_regular_grids(regular_grids, 
-                                               grid_config, 
-                                               child_name,
-                                               cache,
-                                               _hierarchy + (child_name, )
-                                               )
-            
-        child_grids.append(child_grid)
-    
-    #Instantiate and update cache
-    nested_grid        = NestedGrid(parent_grid, *child_grids, name=parent_name)
-    cache[parent_name] = nested_grid 
-    
-    return nested_grid
-
-class CircularHierarchy(Exception):
-    def __init__(self, *hierarchy):
-        s   = ' -> '.join([str(i) for i in hierarchy])
-        msg = f'Circular hierarchy: {s}'
-        
-        super().__init__(msg)

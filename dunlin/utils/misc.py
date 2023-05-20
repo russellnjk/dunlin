@@ -60,7 +60,7 @@ def adv(x):
     return '_adv_' + x
 
 def unadv(x):
-    return x.split('adv_', 1)[1]
+    return x.split('_adv_', 1)[1]
 
 def isadv(x):
     if not isstrlike(x):
@@ -76,7 +76,7 @@ def dfn(x):
     return '_dfn_' + x
 
 def undfn(x):
-    return x.split('_adv_', 1)[1]
+    return x.split('_dfn_', 1)[1]
 
 def isdfn(x):
     if not isstrlike(x):
@@ -163,8 +163,13 @@ def isint(x):
     except:
         return False
     
-def isnum(x):
-    return isinstance(x, Number)
+def isnum(x, include_strings=False):
+    if isinstance(x, Number):
+        return True
+    elif include_strings and type(x) == str:
+        return strisnum(x)
+    else:
+        return False 
 
 def strisnum(x):
     if type(x) != str:

@@ -110,18 +110,41 @@ class GridConfigDict(GenericDict):
     itype = GridConfig
     
     def __init__(self, 
-                 ext_namespace: set,
+                 ext_namespace        : set,
                  coordinate_components: CoordinateComponentDict, 
-                 mapping: dict
+                 mapping              : dict
                  ) -> None:
-        super().__init__(ext_namespace, mapping,  coordinate_components)
         
-        ndims = coordinate_components.ndims
-        keys  = self.keys()
-        for item in self.values():
-            if item.children:
-                for child in item.children:
-                    if child not in keys:
-                        msg = f'{item.name} is missing child grid {child}.'
-                        raise ValueError(msg)
+        self.coordinate_components = coordinate_components
+        
+        self._check(mapping)
+        self._data = mapping
+    
+    def _check(self, dct, is_top_level=True):
+        if 'min' not in dct:
+            msg = 'Grid config is missing "min".'
+            raise ValueError(msg)
+        
+        if 'max' not in dct:
+            msg = 'Grid config is missing "max".'
+            raise ValueError(msg)
+        
+        
+        ndims = self.coordinate_components.ndims
+        
+        if len(dct['min']) != ndims:
+            msg = f'Expected "min" to have length {ndims}. Received : {dct["min"]}'
+            raise ValueError(msg)
+        
+        if len(dct['max']) != ndims:
+            msg = f'Expected "min" to have length {ndims}. Received : {dct["max"]}'
+            raise ValueError(msg)
+        
+        if is_top_level and 'step' in dct:
+            msg = '"step" for grid config can only be provided at the top level.'
+        
+        for child in dct.get('children', {}).values():
+            
+            self._check(child, is_top_level=False)
+        
             

@@ -4,9 +4,15 @@ from scipy.integrate import solve_ivp
 ###############################################################################
 #Main Algorithm
 ###############################################################################   
-def integrate(func, tspan, y0, p0, 
-              events=(), modify=None,
-              overlap=True, include_events=True,
+def integrate(func, 
+              tspan, 
+              y0, 
+              p0, 
+              events         = (), 
+              modify         = None,
+              overlap        = True, 
+              include_events = True,
+              *rhs_args,
               **kwargs
               ):
 
@@ -17,7 +23,7 @@ def integrate(func, tspan, y0, p0,
     interval = np.array([tspan[0], endpoint])
     y0       = np.array(y0, dtype=np.float64)
     p0       = np.array(p0, dtype=np.float64)
-    args     = (p0,)
+    args     = (p0,) + rhs_args
     
     #Check 
     if tspan[0] > 0:
@@ -86,7 +92,10 @@ def integrate(func, tspan, y0, p0,
 ###############################################################################
 #Supporting Functions for Event Handling
 ###############################################################################
-def find_events(r, events, include_events=True):
+def find_events(r, 
+                events: list, 
+                include_events: bool = True
+                ) -> tuple:
     if r.status:
         #Assumes one and only one terminal event took place
         #Find which event caused termination

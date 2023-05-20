@@ -75,16 +75,29 @@ coordinate_components = {
     'y': [0, 10]
     }
 
-grid_config = {
-    'gr_main': {'config'  : [2, [0, 10], [0, 10]], 
-                'children': ['gr_0']
-                },
-    'gr_0'   : {'config': [1, [2, 8 ], [2, 8 ]], 
-                'children': ['gr_1']
-                },
-    'gr_1'   : {'config': [0.5, [3, 7 ], [3, 7 ]]                 
-                }
-    }
+grid_config = {'step': 2,
+               'min' : [0, 0],
+               'max' : [10, 10],
+               'children': {'grd1':{'min'      : [2, 2],
+                                    'max'      : [8, 8],
+                                    'children' : {'grd2': {'min' : [3, 3],
+                                                           'max' : [7, 7]
+                                                           }
+                                                  }
+                                    }
+                            }
+               }
+
+# {
+#     'gr_main': {'config'  : [2, [0, 10], [0, 10]], 
+#                 'children': ['gr_0']
+#                 },
+#     'gr_0'   : {'config': [1, [2, 8 ], [2, 8 ]], 
+#                 'children': ['gr_1']
+#                 },
+#     'gr_1'   : {'config': [0.5, [3, 7 ], [3, 7 ]]                 
+#                 }
+#     }
 
 domain_types = {
     'extracellular' : {

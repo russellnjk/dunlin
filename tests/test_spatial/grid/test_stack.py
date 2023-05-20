@@ -3,7 +3,6 @@ import numpy             as np
 
 import addpath
 import dunlin as dn
-from dunlin.spatial.grid.grid  import (make_grids_from_config)
 from dunlin.spatial.grid.stack import Stack
 
 plt.close('all')
@@ -32,22 +31,23 @@ class Shape:
 #Test Preprocessing
 ###############################################################################
 #Set up
-grid_config = {'gr0' : {'config'   : [1, [-1, 1], [-1, 1]], 
-                        },
-               'gr1' : {'config'   : [1, [-2, 2], [-2, 2]], 
-                        'children' : ['gr2']
-                        },
-                'gr2' : {'config': [0.5, [-1, 1], [-1, 1]], 
-                         },
-                }
 
-nested_grids = Stack.make_grids_from_config(grid_config)
 
-span = -3, 3
-fig  = plt.figure(figsize=(18, 10))
+# grid_config = {'gr0' : {'config'   : [1, [0, 3], [0, 3]], 
+#                         },
+#                'gr1' : {'config': [0.5, [1, 2], [1, 2]], 
+#                         },
+#                'gr2' : {'config'   : [1, [0, 3], [0, 3]], 
+#                         'children' : ['gr1']
+#                         },
+#                 }
+
+
+span = -1, 4
+fig  = plt.figure(figsize=(10, 10))
 AX   = []
-for i in range(6):
-    ax  = fig.add_subplot(2, 3, i+1)#, projection='3d')
+for i in range(4):
+    ax  = fig.add_subplot(2, 2, i+1)#, projection='3d')
     ax.set_box_aspect(1)
     ax.set_box_aspect()
     ax.set_xlim(*span)
@@ -60,217 +60,124 @@ for i in range(6):
     
     AX.append(ax)
 
-nested_grids['gr0'].plot(AX[0])
-nested_grids['gr1'].plot(AX[1])
-nested_grids['gr2'].plot(AX[2])
+#Test class method for grid generation
+grid_config  = {'step'     : 1, 
+                'min'      : [0, 0], 
+                'max'      : [3, 3],
+                }
 
-shape0 = Shape(lambda x, y: x > 0, 'a', 'x')
-shape1 = Shape(lambda x, y: x < 0, 'b', 'x')
+nested_grids = Stack.make_grids_from_config(grid_config)
+nested_grids['_main'].plot(AX[0])
+
+shape0 = Shape(lambda x, y: True,  'a', 'x')
+shape1 = Shape(lambda x, y: x > 1, 'b', 'y')
 shapes = [shape0, shape1]
 
 #Test here
-grid_voxels = nested_grids['gr0'].voxels
+grid_voxels = nested_grids['_main'].voxels
 mappings    = Stack._make_mappings(grid_voxels, shapes)
 
-shape2domain_type = mappings[0]
-domain_type2shape = mappings[1]
-voxel2domain_type = mappings[2]
-domain_type2voxel = mappings[3]
-voxel2shape       = mappings[4]
-shape2voxel       = mappings[5]
-shape_dict        = mappings[6]
+shape_dict            = mappings[0]
+shape2domain_type     = mappings[1]
+voxel2domain_type     = mappings[2]
+voxel2domain_type_idx = mappings[3]
+voxel2shape           = mappings[4]
 
-assert shape2domain_type == {'b' : 'x', 
-                             'a' : 'x'
-                             }
-assert domain_type2shape == {'x' : {'b', 'a'}
-                             }
-assert voxel2domain_type == {(-0.5, -0.5) : 'x', 
-                             (-0.5,  0.5) : 'x', 
-                             ( 0.5, -0.5) : 'x', 
-                             ( 0.5,  0.5) : 'x'
-                             }
-assert domain_type2voxel == {'x': {(-0.5, -0.5), (-0.5, 0.5), (0.5, -0.5), (0.5, 0.5)}
-                             }
+assert shape2domain_type     == {'b' : 'y', 
+                                 'a' : 'x'
+                                 }
 
-assert voxel2shape       == {(-0.5, -0.5) : 'b', 
-                             (-0.5,  0.5) : 'b', 
-                             ( 0.5, -0.5) : 'a', 
-                             ( 0.5,  0.5) : 'a'
-                             }
-assert shape2voxel       == {'b': {(-0.5, -0.5), (-0.5, 0.5)}, 
-                             'a': {( 0.5, -0.5), ( 0.5, 0.5)}
-                             }
-assert shape_dict        == {'a': shape0, 'b': shape1}
+assert voxel2domain_type     == {(1.5, 0.5): 'y',
+                                 (2.5, 0.5): 'y',
+                                 (1.5, 1.5): 'y',
+                                 (2.5, 1.5): 'y',
+                                 (1.5, 2.5): 'y',
+                                 (2.5, 2.5): 'y',
+                                 (0.5, 0.5): 'x',
+                                 (0.5, 1.5): 'x',
+                                 (0.5, 2.5): 'x'
+                                 }
+
+assert voxel2domain_type_idx == {(1.5, 0.5): 0, 
+                                 (2.5, 0.5): 1, 
+                                 (1.5, 1.5): 2, 
+                                 (2.5, 1.5): 3, 
+                                 (1.5, 2.5): 4, 
+                                 (2.5, 2.5): 5, 
+                                 (0.5, 0.5): 0, 
+                                 (0.5, 1.5): 1, 
+                                 (0.5, 2.5): 2
+                                 }
+
+assert voxel2shape          == {(1.5, 0.5): 'b',
+                                (2.5, 0.5): 'b',
+                                (1.5, 1.5): 'b',
+                                (2.5, 1.5): 'b',
+                                (1.5, 2.5): 'b',
+                                (2.5, 2.5): 'b',
+                                (0.5, 0.5): 'a',
+                                (0.5, 1.5): 'a',
+                                (0.5, 2.5): 'a'
+                                }
+
+assert shape_dict           == {'a': shape0, 'b': shape1}
 
 ###############################################################################
 #Test Instantiation
 ###############################################################################
-shape0 = Shape(lambda x, y:   x > 0 or  y < 0, 'a', 'x')
-shape1 = Shape(lambda x, y:   x < 0 and y > 0, 'c', 'y')
-shape2 = Shape(lambda x, y:   x == -0.25 and  y == 0.25, 'b', 'x')
-shapes = [shape0, shape1, shape2]
+shape0 = Shape(lambda x, y:   True,                 'a', domain_type='x')
+shape1 = Shape(lambda x, y:   x > 1   and  y > 1,   'b', domain_type='y')
+shape2 = Shape(lambda x, y:   x < 1.5 and  y < 1.5, 'c', domain_type='x')
+shape3 = Shape(lambda x, y:   x < 1   and  y > 2,   'd', domain_type='z')
+shape4 = Shape(lambda x, y:   x > 2   and  y < 1 ,  'e', domain_type='z')
+shapes = [shape0, shape1, shape2, shape3, shape4]
 
-grid = nested_grids['gr1']
-stk  = Stack(grid, *shapes)
+grid_config  = {'step'     : 1, 
+                'min'      : [0, 0], 
+                'max'      : [3, 3],
+                'children' : {'child': {'step' : 0.5,
+                                        'min'  : [1, 1],
+                                        'max'  : [2, 2]
+                                        }
+                              }
+                }
 
-#Check boundaries
-assert not stk.shift2boundary[-2].get('y')
-assert len(stk.shift2boundary[-2]['x']) == 4
-assert stk.shift2boundary[-2]['x'][(-1.5, -1.5)] == {'size': 1, 'loc': (-1.5, -2.0)}
-assert stk.shift2boundary[-2]['x'][(-0.5, -1.5)] == {'size': 1, 'loc': (-0.5, -2.0)}
-assert stk.shift2boundary[-2]['x'][( 0.5, -1.5)] == {'size': 1, 'loc': ( 0.5, -2.0)}
-assert stk.shift2boundary[-2]['x'][( 1.5, -1.5)] == {'size': 1, 'loc': ( 1.5, -2.0)} 
+nested_grids = Stack.make_grids_from_config(grid_config)
+nested_grids['_main'].plot(AX[1])
+nested_grids['child'].plot(AX[2])
 
-assert len(stk.shift2boundary[-1]['y']) == 2
-assert len(stk.shift2boundary[-1]['x']) == 2
-assert stk.shift2boundary[-1]['y'][(-1.5,  0.5)] == {'size': 1, 'loc': (-2.0,  0.5)}
-assert stk.shift2boundary[-1]['y'][(-1.5,  1.5)] == {'size': 1, 'loc': (-2.0,  1.5)}
-assert stk.shift2boundary[-1]['x'][(-1.5, -1.5)] == {'size': 1, 'loc': (-2.0, -1.5)}
-assert stk.shift2boundary[-1]['x'][(-1.5, -0.5)] == {'size': 1, 'loc': (-2.0, -0.5)}
+grid = nested_grids['_main']
+stk  = Stack(grid, shapes)
 
-assert len(stk.shift2boundary[2]['y']) == 2
-assert len(stk.shift2boundary[2]['x']) == 2
-assert stk.shift2boundary[2]['y'][(-1.5, 1.5)] == {'size': 1, 'loc': (-1.5, 2.0)}
-assert stk.shift2boundary[2]['y'][(-0.5, 1.5)] == {'size': 1, 'loc': (-0.5, 2.0)}
-assert stk.shift2boundary[2]['x'][( 0.5, 1.5)] == {'size': 1, 'loc': (0.5, 2.0)}
-assert stk.shift2boundary[2]['x'][( 1.5, 1.5)] == {'size': 1, 'loc': (1.5, 2.0)}
-
-assert not stk.shift2boundary[1].get('y')
-assert stk.shift2boundary[1]['x'][(1.5, -1.5)] == {'size': 1, 'loc': (2.0, -1.5)}
-assert stk.shift2boundary[1]['x'][(1.5, -0.5)] == {'size': 1, 'loc': (2.0, -0.5)}
-assert stk.shift2boundary[1]['x'][(1.5,  0.5)] == {'size': 1, 'loc': (2.0, 0.5)}
-assert stk.shift2boundary[1]['x'][(1.5,  1.5)] == {'size': 1, 'loc': (2.0, 1.5)}
-
-#Check surfaces
-assert len(stk.shift2surface[-2])             == 1
-assert len(stk.shift2surface[-2][('y', 'x')]) == 3
-assert stk.shift2surface[-2][('y', 'x')][((-1.5,  0.5 ), (-1.5,  -0.5 ))] == {'interfacial': 1,   'distance': 2  }
-assert stk.shift2surface[-2][('y', 'x')][((-0.75, 0.25), (-0.75, -0.25))] == {'interfacial': 0.5, 'distance': 1.0}
-assert stk.shift2surface[-2][('y', 'x')][((-0.25, 0.75), (-0.25,  0.25))] == {'interfacial': 0.5, 'distance': 1.0}
-
-assert len(stk.shift2surface[-1])             == 1
-assert len(stk.shift2surface[-1][('x', 'y')]) == 3
-assert stk.shift2surface[-1][('x', 'y')][((-0.25, 0.25), (-0.75, 0.25))] == {'interfacial': 0.5, 'distance': 1.0}
-assert stk.shift2surface[-1][('x', 'y')][(( 0.5,  1.5 ), (-0.5,  1.5 ))] == {'interfacial': 1,   'distance': 2  }
-assert stk.shift2surface[-1][('x', 'y')][(( 0.25, 0.75), (-0.25, 0.75))] == {'interfacial': 0.5, 'distance': 1.0}
-
-assert len(stk.shift2surface[1])             == 1
-assert len(stk.shift2surface[1][('y', 'x')]) == 3
-assert stk.shift2surface[1][('y', 'x')][((-0.5,  1.5 ), (0.5,   1.5 ))] == {'interfacial': 1,   'distance': 2  }
-assert stk.shift2surface[1][('y', 'x')][((-0.75, 0.25), (-0.25, 0.25))] == {'interfacial': 0.5, 'distance': 1.0}
-assert stk.shift2surface[1][('y', 'x')][((-0.25, 0.75), (0.25,  0.75))] == {'interfacial': 0.5, 'distance': 1.0}
-
-assert len(stk.shift2surface[2])             == 1
-assert len(stk.shift2surface[2][('x', 'y')]) == 3
-assert stk.shift2surface[2][('x', 'y')][((-0.25,  0.25), (-0.25, 0.75))] == {'interfacial': 0.5, 'distance': 1.0}
-assert stk.shift2surface[2][('x', 'y')][((-1.5,  -0.5 ), (-1.5,  0.5 ))] == {'interfacial': 1,   'distance': 2  }
-assert stk.shift2surface[2][('x', 'y')][((-0.75, -0.25), (-0.75, 0.25))] == {'interfacial': 0.5, 'distance': 1.0}
-
-#Check bulk
-assert stk.shift2bulk[-2]['x'][((-0.25, 0.25), (-0.25, -0.25))] == {'interfacial': 0.5, 'distance': 1.0}
-assert stk.shift2bulk[-2]['x'][((-1.5, -0.5), (-1.5, -1.5))] == {'interfacial': 1, 'distance': 2}
-assert stk.shift2bulk[-2]['x'][((1.5, -0.5), (1.5, -1.5))] == {'interfacial': 1, 'distance': 2}
-assert stk.shift2bulk[-2]['x'][((1.5, 0.5), (1.5, -0.5))] == {'interfacial': 1, 'distance': 2}
-assert stk.shift2bulk[-2]['x'][((0.5, 1.5), (0.25, 0.75))] == {'interfacial': 0.5, 'distance': 1.5}
-assert stk.shift2bulk[-2]['x'][((0.5, 1.5), (0.75, 0.75))] == {'interfacial': 0.5, 'distance': 1.5}
-assert stk.shift2bulk[-2]['x'][((1.5, 1.5), (1.5, 0.5))] == {'interfacial': 1, 'distance': 2}
-assert stk.shift2bulk[-2]['x'][((-0.75, -0.75), (-0.5, -1.5))] == {'interfacial': 0.5, 'distance': 1.5}
-assert stk.shift2bulk[-2]['x'][((-0.25, -0.75), (-0.5, -1.5))] == {'interfacial': 0.5, 'distance': 1.5}
-assert stk.shift2bulk[-2]['x'][((0.25, -0.75), (0.5, -1.5))] == {'interfacial': 0.5, 'distance': 1.5}
-assert stk.shift2bulk[-2]['x'][((0.75, -0.75), (0.5, -1.5))] == {'interfacial': 0.5, 'distance': 1.5}
-assert stk.shift2bulk[-2]['x'][((-0.75, -0.25), (-0.75, -0.75))] == {'interfacial': 0.5, 'distance': 1.0}
-assert stk.shift2bulk[-2]['x'][((-0.25, -0.25), (-0.25, -0.75))] == {'interfacial': 0.5, 'distance': 1.0}
-assert stk.shift2bulk[-2]['x'][((0.25, -0.25), (0.25, -0.75))] == {'interfacial': 0.5, 'distance': 1.0}
-assert stk.shift2bulk[-2]['x'][((0.75, -0.25), (0.75, -0.75))] == {'interfacial': 0.5, 'distance': 1.0}
-assert stk.shift2bulk[-2]['x'][((0.25, 0.25), (0.25, -0.25))] == {'interfacial': 0.5, 'distance': 1.0}
-assert stk.shift2bulk[-2]['x'][((0.75, 0.25), (0.75, -0.25))] == {'interfacial': 0.5, 'distance': 1.0}
-assert stk.shift2bulk[-2]['x'][((0.25, 0.75), (0.25, 0.25))] == {'interfacial': 0.5, 'distance': 1.0}
-assert stk.shift2bulk[-2]['x'][((0.75, 0.75), (0.75, 0.25))] == {'interfacial': 0.5, 'distance': 1.0}
-assert stk.shift2bulk[-2]['y'][((-1.5, 1.5), (-1.5, 0.5))] == {'interfacial': 1, 'distance': 2}
-assert stk.shift2bulk[-2]['y'][((-0.5, 1.5), (-0.75, 0.75))] == {'interfacial': 0.5, 'distance': 1.5}
-assert stk.shift2bulk[-2]['y'][((-0.5, 1.5), (-0.25, 0.75))] == {'interfacial': 0.5, 'distance': 1.5}
-assert stk.shift2bulk[-2]['y'][((-0.75, 0.75), (-0.75, 0.25))] == {'interfacial': 0.5, 'distance': 1.0}
-
-assert stk.shift2bulk[-1]['y'][((-0.5, 1.5), (-1.5, 1.5))] == {'interfacial': 1, 'distance': 2}
-assert stk.shift2bulk[-1]['y'][((-0.75, 0.25), (-1.5, 0.5))] == {'interfacial': 0.5, 'distance': 1.5}
-assert stk.shift2bulk[-1]['y'][((-0.75, 0.75), (-1.5, 0.5))] == {'interfacial': 0.5, 'distance': 1.5}
-assert stk.shift2bulk[-1]['y'][((-0.25, 0.75), (-0.75, 0.75))] == {'interfacial': 0.5, 'distance': 1.0}
-
-assert stk.shift2bulk[-1]['x'][((-0.5, -1.5), (-1.5, -1.5))] == {'interfacial': 1, 'distance': 2}
-assert stk.shift2bulk[-1]['x'][((0.5, -1.5), (-0.5, -1.5))] == {'interfacial': 1, 'distance': 2}
-assert stk.shift2bulk[-1]['x'][((1.5, -1.5), (0.5, -1.5))] == {'interfacial': 1, 'distance': 2}
-assert stk.shift2bulk[-1]['x'][((1.5, -0.5), (0.75, -0.75))] == {'interfacial': 0.5, 'distance': 1.5}
-assert stk.shift2bulk[-1]['x'][((1.5, -0.5), (0.75, -0.25))] == {'interfacial': 0.5, 'distance': 1.5}
-assert stk.shift2bulk[-1]['x'][((1.5, 0.5), (0.75, 0.25))] == {'interfacial': 0.5, 'distance': 1.5}
-assert stk.shift2bulk[-1]['x'][((1.5, 0.5), (0.75, 0.75))] == {'interfacial': 0.5, 'distance': 1.5}
-assert stk.shift2bulk[-1]['x'][((1.5, 1.5), (0.5, 1.5))] == {'interfacial': 1, 'distance': 2}
-assert stk.shift2bulk[-1]['x'][((-0.75, -0.75), (-1.5, -0.5))] == {'interfacial': 0.5, 'distance': 1.5}
-assert stk.shift2bulk[-1]['x'][((-0.25, -0.75), (-0.75, -0.75))] == {'interfacial': 0.5, 'distance': 1.0}
-assert stk.shift2bulk[-1]['x'][((0.25, -0.75), (-0.25, -0.75))] == {'interfacial': 0.5, 'distance': 1.0}
-assert stk.shift2bulk[-1]['x'][((0.75, -0.75), (0.25, -0.75))] == {'interfacial': 0.5, 'distance': 1.0}
-assert stk.shift2bulk[-1]['x'][((-0.75, -0.25), (-1.5, -0.5))] == {'interfacial': 0.5, 'distance': 1.5}
-assert stk.shift2bulk[-1]['x'][((-0.25, -0.25), (-0.75, -0.25))] == {'interfacial': 0.5, 'distance': 1.0}
-assert stk.shift2bulk[-1]['x'][((0.25, -0.25), (-0.25, -0.25))] == {'interfacial': 0.5, 'distance': 1.0}
-assert stk.shift2bulk[-1]['x'][((0.75, -0.25), (0.25, -0.25))] == {'interfacial': 0.5, 'distance': 1.0}
-assert stk.shift2bulk[-1]['x'][((0.25, 0.25), (-0.25, 0.25))] == {'interfacial': 0.5, 'distance': 1.0}
-assert stk.shift2bulk[-1]['x'][((0.75, 0.25), (0.25, 0.25))] == {'interfacial': 0.5, 'distance': 1.0}
-assert stk.shift2bulk[-1]['x'][((0.75, 0.75), (0.25, 0.75))] == {'interfacial': 0.5, 'distance': 1.0}
-
-assert stk.shift2bulk[1]['x'][((-0.25, 0.25), (0.25, 0.25))] == {'interfacial': 0.5, 'distance': 1.0}
-assert stk.shift2bulk[1]['x'][((-1.5, -1.5), (-0.5, -1.5))] == {'interfacial': 1, 'distance': 2}
-assert stk.shift2bulk[1]['x'][((-0.5, -1.5), (0.5, -1.5))] == {'interfacial': 1, 'distance': 2}
-assert stk.shift2bulk[1]['x'][((0.5, -1.5), (1.5, -1.5))] == {'interfacial': 1, 'distance': 2}
-assert stk.shift2bulk[1]['x'][((-1.5, -0.5), (-0.75, -0.75))] == {'interfacial': 0.5, 'distance': 1.5}
-assert stk.shift2bulk[1]['x'][((-1.5, -0.5), (-0.75, -0.25))] == {'interfacial': 0.5, 'distance': 1.5}
-assert stk.shift2bulk[1]['x'][((0.5, 1.5), (1.5, 1.5))] == {'interfacial': 1, 'distance': 2}
-assert stk.shift2bulk[1]['x'][((-0.75, -0.75), (-0.25, -0.75))] == {'interfacial': 0.5, 'distance': 1.0}
-assert stk.shift2bulk[1]['x'][((-0.25, -0.75), (0.25, -0.75))] == {'interfacial': 0.5, 'distance': 1.0}
-assert stk.shift2bulk[1]['x'][((0.25, -0.75), (0.75, -0.75))] == {'interfacial': 0.5, 'distance': 1.0}
-assert stk.shift2bulk[1]['x'][((0.75, -0.75), (1.5, -0.5))] == {'interfacial': 0.5, 'distance': 1.5}
-assert stk.shift2bulk[1]['x'][((-0.75, -0.25), (-0.25, -0.25))] == {'interfacial': 0.5, 'distance': 1.0}
-assert stk.shift2bulk[1]['x'][((-0.25, -0.25), (0.25, -0.25))] == {'interfacial': 0.5, 'distance': 1.0}
-assert stk.shift2bulk[1]['x'][((0.25, -0.25), (0.75, -0.25))] == {'interfacial': 0.5, 'distance': 1.0}
-assert stk.shift2bulk[1]['x'][((0.75, -0.25), (1.5, -0.5))] == {'interfacial': 0.5, 'distance': 1.5}
-assert stk.shift2bulk[1]['x'][((0.25, 0.25), (0.75, 0.25))] == {'interfacial': 0.5, 'distance': 1.0}
-assert stk.shift2bulk[1]['x'][((0.75, 0.25), (1.5, 0.5))] == {'interfacial': 0.5, 'distance': 1.5}
-assert stk.shift2bulk[1]['x'][((0.25, 0.75), (0.75, 0.75))] == {'interfacial': 0.5, 'distance': 1.0}
-assert stk.shift2bulk[1]['x'][((0.75, 0.75), (1.5, 0.5))] == {'interfacial': 0.5, 'distance': 1.5}
-
-assert stk.shift2bulk[1]['y'][((-1.5, 0.5), (-0.75, 0.25))] == {'interfacial': 0.5, 'distance': 1.5}
-assert stk.shift2bulk[1]['y'][((-1.5, 0.5), (-0.75, 0.75))] == {'interfacial': 0.5, 'distance': 1.5}
-assert stk.shift2bulk[1]['y'][((-1.5, 1.5), (-0.5, 1.5))] == {'interfacial': 1, 'distance': 2}
-assert stk.shift2bulk[1]['y'][((-0.75, 0.75), (-0.25, 0.75))] == {'interfacial': 0.5, 'distance': 1.0}
-
-assert stk.shift2bulk[2]['y'][((-1.5, 0.5), (-1.5, 1.5))] == {'interfacial': 1, 'distance': 2}
-assert stk.shift2bulk[2]['y'][((-0.75, 0.25), (-0.75, 0.75))] == {'interfacial': 0.5, 'distance': 1.0}
-assert stk.shift2bulk[2]['y'][((-0.75, 0.75), (-0.5, 1.5))] == {'interfacial': 0.5, 'distance': 1.5}
-assert stk.shift2bulk[2]['y'][((-0.25, 0.75), (-0.5, 1.5))] == {'interfacial': 0.5, 'distance': 1.5}
-
-assert stk.shift2bulk[2]['x'][((-1.5, -1.5), (-1.5, -0.5))] == {'interfacial': 1, 'distance': 2}
-assert stk.shift2bulk[2]['x'][((-0.5, -1.5), (-0.75, -0.75))] == {'interfacial': 0.5, 'distance': 1.5}
-assert stk.shift2bulk[2]['x'][((-0.5, -1.5), (-0.25, -0.75))] == {'interfacial': 0.5, 'distance': 1.5}
-assert stk.shift2bulk[2]['x'][((0.5, -1.5), (0.25, -0.75))] == {'interfacial': 0.5, 'distance': 1.5}
-assert stk.shift2bulk[2]['x'][((0.5, -1.5), (0.75, -0.75))] == {'interfacial': 0.5, 'distance': 1.5}
-assert stk.shift2bulk[2]['x'][((1.5, -1.5), (1.5, -0.5))] == {'interfacial': 1, 'distance': 2}
-assert stk.shift2bulk[2]['x'][((1.5, -0.5), (1.5, 0.5))] == {'interfacial': 1, 'distance': 2}
-assert stk.shift2bulk[2]['x'][((1.5, 0.5), (1.5, 1.5))] == {'interfacial': 1, 'distance': 2}
-assert stk.shift2bulk[2]['x'][((-0.75, -0.75), (-0.75, -0.25))] == {'interfacial': 0.5, 'distance': 1.0}
-assert stk.shift2bulk[2]['x'][((-0.25, -0.75), (-0.25, -0.25))] == {'interfacial': 0.5, 'distance': 1.0}
-assert stk.shift2bulk[2]['x'][((0.25, -0.75), (0.25, -0.25))] == {'interfacial': 0.5, 'distance': 1.0}
-assert stk.shift2bulk[2]['x'][((0.75, -0.75), (0.75, -0.25))] == {'interfacial': 0.5, 'distance': 1.0}
-assert stk.shift2bulk[2]['x'][((-0.25, -0.25), (-0.25, 0.25))] == {'interfacial': 0.5, 'distance': 1.0}
-assert stk.shift2bulk[2]['x'][((0.25, -0.25), (0.25, 0.25))] == {'interfacial': 0.5, 'distance': 1.0}
-assert stk.shift2bulk[2]['x'][((0.75, -0.25), (0.75, 0.25))] == {'interfacial': 0.5, 'distance': 1.0}
-assert stk.shift2bulk[2]['x'][((0.25, 0.25), (0.25, 0.75))] == {'interfacial': 0.5, 'distance': 1.0}
-assert stk.shift2bulk[2]['x'][((0.75, 0.25), (0.75, 0.75))] == {'interfacial': 0.5, 'distance': 1.0}
-assert stk.shift2bulk[2]['x'][((0.25, 0.75), (0.5, 1.5))] == {'interfacial': 0.5, 'distance': 1.5}
-assert stk.shift2bulk[2]['x'][((0.75, 0.75), (0.5, 1.5))] == {'interfacial': 0.5, 'distance': 1.5}
+###############################################################################
+#Check Shape2Domain
+###############################################################################
+# assert stk.shape2domain == {'e': 0, 'd': 1, 'c': 2, 'b': 3, 'a': 2}
 
 domain_type_args = {'facecolor': {'x': 'steel',
-                                  'y': 'coral'
+                                  'y': 'pinkish',
+                                  'z': 'grey green'
                                   }
                     }
 
 stk.plot_voxels(AX[3], domain_type_args=domain_type_args)
 
+###############################################################################
+#Test Faulty Instantiation
+###############################################################################
+shape0 = Shape(lambda x, y:   True,                 'a', domain_type='x')
+shape1 = Shape(lambda x, y:   x > 1   and  y > 1,   'b', domain_type='y')
+shape2 = Shape(lambda x, y:   x < 1.5 and  y < 1.5, 'c', domain_type='x')
+shape3 = Shape(lambda x, y:   x < 1   and  y > 2,   'd', domain_type='z')
+shape4 = Shape(lambda x, y:   x > 2   and  y < -1 , 'e', domain_type='z')
+shapes = [shape0, shape1, shape2, shape3, shape4]
+
+grid = nested_grids['_main']
+try:
+    stk  = Stack(grid, shapes)
+except ValueError:
+    assert True
+else:
+    assert False
+
+# plt.show(block=True)

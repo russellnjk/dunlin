@@ -1,0 +1,13 @@
+{
+  "ExpandedNodes": [
+    "",
+    "\\dunlin",
+    "\\dunlin\\spatial",
+    "\\dunlin\\spatial\\grid",
+    "\\tests",
+    "\\tests\\test_spatial",
+    "\\tests\\test_spatial\\grid"
+  ],
+  "SelectedNode": "\\tests\\test_spatial\\grid\\test_stack.py",
+  "PreviewInSolutionExplorer": false
+}

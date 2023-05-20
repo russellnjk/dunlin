@@ -6,8 +6,6 @@ import addpath
 import dunlin as dn
 from dunlin.spatial.grid.grid import (RegularGrid, 
                                       NestedGrid,
-                                      make_regular_grids,
-                                      merge_regular_grids,
                                       make_grids_from_config
                                       )
 
@@ -83,16 +81,18 @@ grid6.plot(AX[5])
 ###############################################################################
 #Test Front-End Functions
 ###############################################################################
-a = {'config': [1, [0, 6], [0, 6]], 'children': ['grid1', 'grid4']}
-b = {'config' :[0.5, [1, 3], [1, 3]], 'children': ['grid3']}
-c = {'config': [0.25, [1.5, 2.5], [1.5, 2.5]]}
-d = {'config': [0.25, [4, 5], [4, 5]]}
 
-grid_config = {'main_grid': a,
-               'grid1'    : b,
-               'grid3'    : c,
-               'grid4'    : d,
+c = {'step': 0.5,  'min': [4,   4  ], 'max': [5,   5]} 
+b = {'step': 0.25, 'min': [1.5, 1.5], 'max': [2.5, 2.5]}
+a = {'step': 0.5,  'min': [1,   1  ], 'max': [3,   3  ], 'children': {'b': b}}
+
+grid_config = {'step'     : 1,
+               'min'      : [0, 0],
+               'max'      : [6, 6],
+               'children' : {'a': a, 'c': c}
                }
+
+nested_grids = make_grids_from_config(grid_config)
 
 span = -1, 7
 fig  = plt.figure(figsize=(8, 8))
@@ -109,9 +109,4 @@ plt.grid(True)
 
 AX.append(ax)
 
-regular_grids = make_regular_grids(grid_config)
-nested_grids  = merge_regular_grids(regular_grids, grid_config, 'main_grid')
-
-nested_grids = make_grids_from_config(grid_config)
-
-nested_grids['main_grid'].plot(AX[6])
+nested_grids['_main'].plot(AX[6])
