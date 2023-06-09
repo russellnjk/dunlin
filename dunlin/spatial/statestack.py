@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import numpy             as np
 from matplotlib.patches import Rectangle
 from numbers            import Number
-from typing             import Union
+from typing             import Literal, Union
 
 import dunlin.utils      as ut
 import dunlin.utils_plot as upp
@@ -27,8 +27,11 @@ class StateStack(DomainStack):
     of SpatialModelData instead of raw Python data.
     '''
     #For plotting
-    default_state_args = {'edgecolor': 'None'
-                          }
+    functions = {'__array'   : np.array,
+                 '__ones'    : np.ones,
+                 '__zeros'   : np.zeros,
+                 '__float64' : np.float64
+                 }
     
     #Expected mappings and attributes
     grid                  : Union[RegularGrid, NestedGrid]
@@ -58,6 +61,7 @@ class StateStack(DomainStack):
     function_code     : str
     diff_code         : str
     signature         : tuple[str]
+    functions         : dict[str, callable]
     
     def __init__(self, spatial_data: SpatialModelData) -> None:
         self.spatial_data = spatial_data
@@ -164,81 +168,7 @@ class StateStack(DomainStack):
     ###########################################################################
     #Plotting
     ###########################################################################
-    def make_scaled_cmap(self, **name2cmap_and_values) -> tuple:
-        '''
-        Each state, parameter, reaction etc. can have a unique range of values. 
-        This means that each of them requires a color map scaled to their range 
-        of values. This method returns a callable of the form `func(name, value)` 
-        that returns a color given the name of the item to be plotted and its value.
-        
-        To create the scaled color maps, this method applies `matplotlib.colors.Normalize` 
-        to (1) a Matplotlib `cmap` (2) the maximum and minimum values for each item.
-
-        Parameters
-        ----------
-        **name2cmap_and_values : dict
-            A dictionary where the keys are names of states, parameters, variable etc.
-            The values are dictionaries with the following mappings:
-                1. `cmap` : A string corresponding to a Matplotlib colormap OR an actual 
-                colormap object.
-                2. 'values' : An iterable of two or more numbers. This method 
-                searches for the maximum and minimum values to determine the 
-                lower and upper bounds for scaling the color map.
-            
-            An example would be:
-                `{'state0: {'cmap': 'coolwarm', 'values': [0, 1, 2, 3]}}`
-             
-        Returns
-        -------
-        norms : dict
-            A dictionary with the same keys as `name2cmap_and_values`. The values 
-            are `matplotlib.colors.Normalize` objects which normalize raw values. 
-            
-        func : callable
-            A function with signature `func(name, value)`. When called, it searches 
-            for a scaled color map indexed under `name` and returns the color for 
-            `value` according to that `cmap`. The scaled color map is in turn, a 
-            callable with the signature `scaled_cmap(value)` and wraps the 
-            `matplotlib.colors.Normalize` object in `norms`.
-        
-        '''
-        #For caching the results 
-        dct   = {}
-        norms = {}
-        cmaps = {}
-        
-        for name, cmap_and_values in name2cmap_and_values.items():
-            #Extract the arguments
-            cmap   = cmap_and_values['cmap']
-            values = cmap_and_values['values']
-            
-            sub_func = self._make_scaled_cmap_helper(values, cmap)
-            
-            dct[name]   = sub_func
-            norms[name] = sub_func.norm
-            cmaps[name] = sub_func.cmap
-            
-        #Combine into a single callable
-        def func(name, value):
-            try:
-                sub_func = dct[name]
-            except KeyError as e:
-                if '_default' in dct:
-                    sub_func = dct['_default']
-                else:
-                    raise e
-            except Exception as e:
-                raise e
-            
-            return sub_func(value)
-        
-        
-        func.norms = norms
-        func.cmaps = cmaps
-        
-        return func
-    
-    def _make_scaled_cmap_helper(self, values: np.array, cmap='coolwarm') -> callable:
+    def _make_cmap_and_norm(self, values: np.array, cmap='coolwarm') -> tuple:
         #Find the bounds and normalize
         lb   = min(values)
         ub   = max(values)
@@ -248,27 +178,40 @@ class StateStack(DomainStack):
         if type(cmap) == str:
             cmap = plt.get_cmap(cmap)
         
-        #Make into a function
-        func      = lambda value: cmap(norm(value))
-        func.norm = norm
-        func.cmap = cmap
-        
-        return func
+        return cmap, norm
     
     def _plot_bulk(self,
-                   ax,
+                   ax             : plt.Axes,
                    name           : str,
                    values         : np.array,
                    domain_type    : Domain_type,
-                   default_kwargs : dict,
-                   user_kwargs    : dict=None,
-                   label_voxels   : bool=True
+                   cmap           : str='coolwarm',
+                   norm           : Literal['linear', 'log']='linear',
+                   label_voxels   : bool=True,
+                   colorbar_ax    : plt.Axes=None
                    ) -> None:
-        results    = {}
-        converters = {'facecolor'   : upp.get_color, 
-                      'surfacecolor': upp.get_color,
-                      'color'       : upp.get_color
-                      }
+        
+        results = {}
+        
+        lb    = np.min(values)
+        ub    = np.max(values)
+        if callable(cmap):
+            cmap_ = cmap
+            norm_ = norm
+            
+            if not callable(norm):
+                msg = 'If cmap is callable, norm must also be callable.'
+                raise ValueError(msg)
+        else:
+            cmap_ = plt.get_cmap(cmap)
+            
+            if norm == 'linear':
+                norm_  = mpl.colors.Normalize(lb, ub)
+            elif norm == 'lognorm':
+                norm_  = mpl.colors.LogNorm(lb, ub)
+            else:
+                msg = f'norm argument must be "linear" or "log". Received {norm}.'
+                raise ValueError(msg)
         
         voxel2domain_type_idx = self.voxel2domain_type_idx
         sizes                 = self.sizes
@@ -280,18 +223,12 @@ class StateStack(DomainStack):
             value           = values[domain_type_idx]
             
             #Determine the arguments for the shape
-            sub_args            = {'name': name, 'value': value}
-            bulk_reaction_args_ = upp.process_kwargs(user_kwargs,
-                                                     [],
-                                                     default_kwargs,
-                                                     sub_args,
-                                                     converters
-                                                     )
+            facecolor = cmap_(norm_(value))
             
             #Create the patch
             s      = size/2
             anchor = [i-s for i in voxel]
-            patch  = Rectangle(anchor, size, size, **bulk_reaction_args_)
+            patch  = Rectangle(anchor, size, size, facecolor=facecolor)
                 
             #Plot the patch
             temp = ax.add_patch(patch)
@@ -303,45 +240,44 @@ class StateStack(DomainStack):
                         value, 
                         horizontalalignment='center'
                         )
-            
+        
+        if colorbar_ax:
+            mpl.colorbar.Colorbar(ax   = colorbar_ax, 
+                                  cmap = cmap, 
+                                  norm = norm_
+                                  )   
         return results
     
     def plot_state(self, 
                    ax, 
                    state_name   : str, 
                    state_values : np.array, 
-                   state_args   : dict = None,
-                   label_voxels : bool = True
+                   **kwargs
                    )-> dict:
         
         if state_name not in self.state2domain_type:
             raise ValueError(f'No state named {state_name}.')
         
         domain_type    = self.state2domain_type[state_name]
-        default_kwargs = self.default_state_args
         
         return self._plot_bulk(ax, 
                                state_name, 
                                state_values, 
                                domain_type, 
-                               default_kwargs, 
-                               state_args,
-                               label_voxels
+                               **kwargs
                                )
     
     def plot_diff(self, 
                    ax, 
                    state_name   : str, 
                    diff_values  : np.array, 
-                   diff_args    : dict = None,
-                   label_voxels : bool = True
+                   **kwargs
                    )-> dict:
         
         return self.plot_state(ax, 
                                state_name, 
                                diff_values, 
-                               diff_args,
-                               label_voxels
+                               **kwargs
                                )
     
         

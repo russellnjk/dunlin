@@ -4,20 +4,72 @@ import numpy             as np
 import numpy.ma          as ma
 import textwrap          as tw
 from collections import Counter
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 import addpath
 import dunlin       as dn 
 import dunlin.utils as ut
-from dunlin.spatial.masstransferstack import (calculate_advection0,
-                                              calculate_advection1,
+from dunlin.spatial.masstransferstack import (calculate_advection,
                                               calculate_diffusion,
-                                              calculate_neumann_boundary0,
-                                              calculate_neumann_boundary1
+                                              calculate_neumann_boundary,
+                                              calculate_dirichlet_boundary,
                                               )
 from dunlin.spatial.masstransferstack import MassTransferStack as Stack
 from dunlin.datastructures.spatial    import SpatialModelData
 from test_spatial_data                import all_data
 
+
+
+#Set up
+plt.close('all')
+plt.ion()
+
+spatial_data = SpatialModelData.from_all_data(all_data, 'M0')
+
+def make_fig(AX):
+    span = -1, 5
+    fig  = plt.figure(figsize=(10, 10))
+    
+    for i in range(4):
+        ax  = fig.add_subplot(2, 2, i+1)#, projection='3d')
+        ax.set_box_aspect(1)
+        
+        ax.set_xlim(*span)
+        ax.set_ylim(*span)
+        
+        ax.set_xlabel('x')
+        ax.set_ylabel('y')
+        
+        plt.grid(True)
+        
+        AX.append(ax)
+    
+    fig.subplots_adjust(hspace=0.4, wspace=0.4)
+    
+    return fig, AX
+
+def make_colorbar_ax(ax):
+    divider = make_axes_locatable(ax)
+    cax     = divider.append_axes("right", size="5%", pad=0.05)
+    return cax
+
+AX = []
+
+###############################################################################
+#Test Instantiation
+###############################################################################
+stk = Stack(spatial_data)
+
+domain_type_args = {'facecolor': {'cytosolic'     : 'steel',
+                                  'extracellular' : 'salmon'
+                                  }
+                    }
+
+stk.plot_voxels(AX[0], domain_type_args=domain_type_args)
+
+###############################################################################
+#Test Advection Code
+###############################################################################
 X     = np.array([0, 10, 20, 30, 40, 50])
 coeff = np.array([0, 1,   0, -1,  0, -1])
 
@@ -30,16 +82,10 @@ right_mapping = np.array([[ 1, 2, 3, 4, -1, -1],
                           [ 1, 1, 1, 1,  0,  0]
                           ])
 
-dX = calculate_advection1(X, coeff, left_mapping[None, :], right_mapping[None, :])
-print(dX)
+transfer = calculate_advection(X, coeff, (left_mapping, ), (right_mapping, ))
+print(transfer)
 
-assert all(dX == [0, -10, 40, -30, 0, 0])
-
-coeff = -1
-dX    = calculate_advection0(X, coeff, left_mapping[None, :], right_mapping[None, :])
-print(dX)
-
-assert all(dX == [10, 10, 10, 10, -40, 0])
+assert all(transfer == [0, -10, 40, -30, 0, 0])
 
 #Scale up
 n_tiles = 200
@@ -55,200 +101,167 @@ f = lambda m : np.concatenate(np.array(g(m)), axis=1)
 left_mapping  = f(left_mapping)
 right_mapping = f(right_mapping)
 
-dX = calculate_advection1(X, coeff, left_mapping[None, :], right_mapping[None, :])
-print(dX)
+transfer = calculate_advection(X, coeff, (left_mapping, ), (right_mapping, ))
+print(transfer)
 
-# #Set up
-# plt.close('all')
-# plt.ion()
+# for key, value in stk.advection_terms.items():
+#     print(key)
+#     for k, v in value.items():
+#         print(k)
+#         print(v)
+#         print()
 
-# global_scope = {'__array': np.array, '__zeros': np.zeros}
+# print(ut.advion_code)
+code = tw.dedent(stk.advection_code)
 
-# advection    = all_data['M0'].pop('reactions')
-# spatial_data = SpatialModelData.from_all_data(all_data, 'M0')
+scope = {'F_B'        : -1,
+          'F_C_x'      : 1,
+          'F_C_y'      : 0,
+          'B'          : np.arange(4).astype(np.float64),
+          'C'          : np.arange(12).astype(np.float64),
+          'D'          : np.arange(12).astype(np.float64),
+          ut.diff('B') : np.zeros(4).astype(np.float64),
+          ut.diff('C') : np.zeros(12).astype(np.float64),
+          ut.diff('D') : np.zeros(12).astype(np.float64),
+          **stk.functions
+          }
 
-# span = -1, 5
-# fig  = plt.figure(figsize=(15, 10))
-# AX   = []
-# for i in range(6):
-#     ax  = fig.add_subplot(2, 3, i+1)#, projection='3d')
-#     ax.set_box_aspect(1)
-#     ax.set_box_aspect()
-#     ax.set_xlim(*span)
-#     ax.set_ylim(*span)
-    
-#     ax.set_xlabel('x')
-#     ax.set_ylabel('y')
-    
-#     plt.grid(True)
-    
-#     AX.append(ax)
+exec(code, None, scope)
+# print(scope)
 
-# ###############################################################################
-# #Test Instantiation
-# ###############################################################################
-# stk = Stack(spatial_data)
+fig, AX = make_fig(AX)
 
-# domain_type_args = {'facecolor': {'cytosolic'     : 'steel',
-#                                   'extracellular' : 'salmon'
-#                                   }
-#                     }
+cax = make_colorbar_ax(AX[1])
+stk.plot_advection(AX[1], 'B', scope[ut.adv('B')], cmap='coolwarm', colorbar_ax=cax)
+AX[1].set_title(ut.adv('B'))
 
-# stk.plot_voxels(AX[0], domain_type_args=domain_type_args)
+cax = make_colorbar_ax(AX[2])
+stk.plot_advection(AX[2], 'C', scope[ut.adv('C')], cmap='coolwarm', colorbar_ax=cax)
+AX[2].set_title(ut.adv('C'))
 
-# ###############################################################################
-# #Test Advection Code
-# ###############################################################################
-# # for key, value in stk.advection_terms.items():
-# #     print(key)
-# #     for k, v in value.items():
-# #         print(k)
-# #         print(v)
-# #         print()
+cax = make_colorbar_ax(AX[3])
+stk.plot_advection(AX[3], 'D', scope[ut.adv('D')], cmap='coolwarm', colorbar_ax=cax)
+AX[3].set_title(ut.adv('D'))
 
-# # print(ut.advion_code)
-# code = tw.dedent(stk.advection_code)
+###############################################################################
+#Test Diffusion Code
+###############################################################################
+X     = np.array([0, 10, 20, 30, 40, 50])
+coeff = 1
 
-# scope = {'F_B'        : -1,
-#          'F_C_x'      : 1,
-#          'F_C_y'      : 0,
-#          'B'          : np.arange(4).astype(np.float64),
-#          'C'          : np.arange(12).astype(np.float64),
-#          'D'          : np.arange(12).astype(np.float64),
-#          ut.diff('B') : np.zeros(4).astype(np.float64),
-#          ut.diff('C') : np.zeros(12).astype(np.float64),
-#          ut.diff('D') : np.zeros(12).astype(np.float64),
-#          **stk.advection_calculators
-#          }
+left_mapping  = np.array([[-1, 0, 1, 2, 3, -1], 
+                          [ 0, 1, 1, 1, 1,  1],
+                          [ 0, 1, 1, 1, 1,  0]
+                          ])
 
-# exec(code, global_scope, scope)
-# # print(scope)
+transfer    = calculate_diffusion(X, np.ones(6)*coeff, (left_mapping, ))
+print(transfer)
 
-# cmap_and_values = {'cmap'   : 'coolwarm',
-#                     'values' : [-8, 8]
-#                     }
-
-# color_func = stk.make_scaled_cmap(_default=cmap_and_values)
-
-# state_args = {'facecolor': color_func,
-#               }
-
-# stk.plot_advection(AX[1], 'B', scope[ut.adv('B')], state_args)
-# AX[1].set_title(ut.adv('B'))
+assert all(transfer == [10, 0, 0, 0, -10, 0])
 
 
-# stk.plot_advection(AX[2], 'C', scope[ut.adv('C')], state_args)
-# AX[2].set_title(ut.adv('C'))
+fig, AX = make_fig(AX)
 
-# stk.plot_advection(AX[3], 'D', scope[ut.adv('D')], state_args)
-# AX[3].set_title(ut.adv('D'))
+stk.plot_voxels(AX[4], domain_type_args=domain_type_args)
 
-# AX[4].grid(False)
-# cb = mpl.colorbar.Colorbar(ax=AX[4], 
-#                             cmap=color_func.cmaps['_default'], 
-#                             norm=color_func.norms['_default']
-#                             )   
-# AX[4].set_title('Advection colormap')
+# print(stk.diffusion_code)
+code = tw.dedent(stk.diffusion_code)
 
-# ###############################################################################
-# #Test Diffusion Code
-# ###############################################################################
-# X     = np.array([0, 10, 20, 30, 40, 50])
-# coeff = 1
+scope = {'J_B'        : 1,
+         'J_C_x'      : 1,
+         'J_C_y'      : 0,
+         'B'          : np.arange(4).astype(np.float64),
+         'C'          : np.arange(12).astype(np.float64),
+         'D'          : np.arange(12).astype(np.float64),
+         ut.diff('B') : np.zeros(4).astype(np.float64),
+         ut.diff('C') : np.zeros(12).astype(np.float64),
+         ut.diff('D') : np.zeros(12).astype(np.float64),
+         **stk.functions
+         }
+exec(code, None, scope)
+# print(scope)
 
-# left_mapping  = np.array([[-1, 0, 1, 2, 3, -1], 
-#                           [ 0, 1, 1, 1, 1,  1],
-#                           [ 0, 1, 1, 1, 1,  0]
-#                           ])
+cax = make_colorbar_ax(AX[5])
+stk.plot_diffusion(AX[5], 'B', scope[ut.dfn('B')], cmap='coolwarm', colorbar_ax=cax)
+AX[5].set_title(ut.dfn('B'))
 
-# dX    = calculate_diffusion(X, coeff, (left_mapping, ))
-# print(dX)
+cax = make_colorbar_ax(AX[6])
+stk.plot_diffusion(AX[6], 'C', scope[ut.dfn('C')], cmap='coolwarm', colorbar_ax=cax)
+AX[6].set_title(ut.dfn('C'))
 
-# assert all(dX == [10, 0, 0, 0, -10, 0])
+cax = make_colorbar_ax(AX[7])
+stk.plot_diffusion(AX[7], 'C', scope[ut.dfn('D')], cmap='coolwarm', colorbar_ax=cax)
+AX[7].set_title(ut.dfn('D'))
 
+assert Counter(scope[ut.dfn('B')]) == {3: 1, 1: 1, -1: 1, -3: 1}
+assert Counter(scope[ut.dfn('C')]) == {1: 2, 0: 8, -1: 2}
+assert Counter(scope[ut.dfn('D')]) == {5: 1, 0: 6, 1: 1, -2: 1, 2: 1, -1: 1, -5: 1}
 
-# fig  = plt.figure(figsize=(15, 10))
-# for i in range(6):
-#     ax  = fig.add_subplot(2, 3, i+1)#, projection='3d')
-#     ax.set_box_aspect(1)
-#     ax.set_box_aspect()
-#     ax.set_xlim(*span)
-#     ax.set_ylim(*span)
-    
-#     ax.set_xlabel('x')
-#     ax.set_ylabel('y')
-    
-#     plt.grid(True)
-    
-#     AX.append(ax)
+###############################################################################
+#Test Boundary Condition Code
+###############################################################################
+#Neumann
+X          = np.array([0,  10, 20, 30, 40, 50])
+left_flux  = np.array([5,   5,  5,  5,  5,  5])
+right_flux = np.array([10, 10, 10, 10, 10, 10])
 
-# stk.plot_voxels(AX[6], domain_type_args=domain_type_args)
+left_mapping = np.array([[0, 2],
+                         [1, 1]
+                         ])
 
-# # print(stk.diffusion_code)
-# code = tw.dedent(stk.diffusion_code)
+right_mapping = np.array([[5],
+                          [1]
+                          ])
 
-# scope = {'J_B'         : 1,
-#           'J_C_x'      : 1,
-#           'J_C_y'      : 0,
-#           'B'          : np.arange(4).astype(np.float64),
-#           'C'          : np.arange(12).astype(np.float64),
-#           'D'          : np.arange(12).astype(np.float64),
-#           ut.diff('B') : np.zeros(4).astype(np.float64),
-#           ut.diff('C') : np.zeros(12).astype(np.float64),
-#           ut.diff('D') : np.zeros(12).astype(np.float64),
-#           '__dfnfunc'  : calculate_diffusion
-#           }
-# exec(code, global_scope, scope)
-# # print(scope)
+transfer  = calculate_neumann_boundary(X, left_flux,  left_mapping )
+transfer += calculate_neumann_boundary(X, right_flux, right_mapping)
+print(transfer)
 
-# cmap_and_values = {'cmap'   : 'coolwarm',
-#                    'values' : [-6, 6]
-#                    }
+assert all(transfer == [5, 0, 5, 0, 0, 10])
 
-# color_func = stk.make_scaled_cmap(_default=cmap_and_values)
+#Dirichlet
+X     = np.array([  0,  10,  20,  30,  40,  50])
+coeff = np.array([  1,   1,   1,   1,   1,   1])
+conc  = np.array([100, 100, 100, 100, 100, 100])
 
-# state_args = {'facecolor': color_func,
-#               }
+transfer  = calculate_dirichlet_boundary(X, coeff, conc, left_mapping )
+transfer += calculate_dirichlet_boundary(X, coeff, conc, right_mapping)
+print(transfer)
 
-# stk.plot_diffusion(AX[7], 'B', scope[ut.dfn('B')], state_args)
-# AX[7].set_title(ut.dfn('B'))
+assert all(transfer == [100, 0, 80, 0, 0, 50])
 
-# stk.plot_diffusion(AX[8], 'C', scope[ut.dfn('C')], state_args)
-# AX[8].set_title(ut.dfn('C'))
+#Plot
+fig, AX = make_fig(AX)
 
-# stk.plot_diffusion(AX[9], 'C', scope[ut.dfn('D')], state_args)
-# AX[9].set_title(ut.dfn('D'))
+stk.plot_voxels(AX[8], domain_type_args=domain_type_args)
 
-# AX[10].grid(False)
-# cb = mpl.colorbar.Colorbar(ax=AX[10], 
-#                             cmap=color_func.cmaps['_default'], 
-#                             norm=color_func.norms['_default']
-#                             )
-# AX[10].set_title('Diffusion colormap')
+print(stk.boundary_code)
+code = tw.dedent(stk.boundary_code)
 
-# assert Counter(scope[ut.dfn('B')]) == {3: 1, 1: 1, -1: 1, -3: 1}
-# assert Counter(scope[ut.dfn('C')]) == {1: 2, 0: 8, -1: 2}
-# assert Counter(scope[ut.dfn('D')]) == {5: 1, 0: 6, 1: 1, -2: 1, 2: 1, -1: 1, -5: 1}
+scope = {'J_C_x'      : 0,
+         'J_C_y'      : 0,
+         'C'          : np.arange(12).astype(np.float64),
+         ut.diff('C') : np.zeros(12).astype(np.float64),
+         **stk.functions
+         }
+exec(code, None, scope)
+# print(scope)
 
-# ###############################################################################
-# #Test Boundary Condition Code
-# ###############################################################################
-# X    = np.array([0, 10, 20, 30, 40, 50])
-# flux = 5
+cax = make_colorbar_ax(AX[9])
+stk.plot_boundary_condition(AX[9], 'C', scope[ut.bc('C')], cmap='coolwarm', colorbar_ax=cax)
+AX[9].set_title(ut.bc('C') + ' Neumann only')
 
-# domain_type_idxs = np.array([0, 1, 5])
-# scale            = np.array([1, 1, 1])
-# dX = calculate_neumann_boundary0(X, flux, domain_type_idxs, scale)
-# print(dX)
+scope = {'J_C_x'      : 1,
+         'J_C_y'      : 1,
+         'C'          : np.arange(12).astype(np.float64),
+         ut.diff('C') : np.zeros(12).astype(np.float64),
+         **stk.functions
+         }
+exec(code, None, scope)
+# print(scope)
 
-# assert all(dX == [5, 0, 5, 0, 0, 5])
-
-# flux = np.array([1, 2, -3, 4, 5, 6])
-
-# dX = calculate_neumann_boundary1(X, flux, domain_type_idxs, scale)
-# print(dX)
-
-# assert all(dX == [1, 0, -3, 0, 0, 6])
-
+cax = make_colorbar_ax(AX[10])
+stk.plot_boundary_condition(AX[10], 'C', scope[ut.bc('C')], cmap='coolwarm', colorbar_ax=cax)
+AX[10].set_title(ut.bc('C'))
 
 

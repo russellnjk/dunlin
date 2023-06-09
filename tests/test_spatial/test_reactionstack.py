@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import numpy             as np
 import textwrap          as tw
 from collections import Counter
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 import addpath
 import dunlin       as dn 
@@ -15,33 +16,43 @@ from test_spatial_data             import all_data
 plt.close('all')
 plt.ion()
 
-global_scope = {'__array': np.array, '__zeros': np.zeros}
-
-advection    = all_data['M0'].pop('advection')
-diffusion    = all_data['M0'].pop('diffusion') 
 spatial_data = SpatialModelData.from_all_data(all_data, 'M0')
 
-span = -1, 5
-fig  = plt.figure(figsize=(15, 10))
-AX   = []
-for i in range(6):
-    ax  = fig.add_subplot(2, 3, i+1)#, projection='3d')
-    ax.set_box_aspect(1)
-    ax.set_box_aspect()
-    ax.set_xlim(*span)
-    ax.set_ylim(*span)
+def make_fig(AX):
+    span = -1, 5
+    fig  = plt.figure(figsize=(15, 10))
     
-    ax.set_xlabel('x')
-    ax.set_ylabel('y')
+    for i in range(6):
+        ax  = fig.add_subplot(2, 3, i+1)#, projection='3d')
+        ax.set_box_aspect(1)
+        
+        ax.set_xlim(*span)
+        ax.set_ylim(*span)
+        
+        ax.set_xlabel('x')
+        ax.set_ylabel('y')
+        
+        plt.grid(True)
+        
+        AX.append(ax)
     
-    plt.grid(True)
+    fig.subplots_adjust(hspace=0.4, wspace=0.4)
     
-    AX.append(ax)
+    return fig, AX
+
+def make_colorbar_ax(ax):
+    divider = make_axes_locatable(ax)
+    cax     = divider.append_axes("right", size="5%", pad=0.05)
+    return cax
+
+AX = []
 
 ###############################################################################
 #Test Instantiation
 ###############################################################################
 stk = Stack(spatial_data)
+
+fig, AX = make_fig(AX)
 
 domain_type_args = {'facecolor': {'cytosolic'     : 'steel',
                                   'extracellular' : 'salmon'
@@ -60,8 +71,9 @@ scope = {'func0'  : lambda a, b: a*b,
          'A'      : np.ones(4),
          'B'      : np.array(list(range(0, 4))),
          'C'      : np.array(list(range(0, 12))),
-          }
-exec(code, global_scope, scope)
+         **stk.functions
+         }
+exec(code, {}, scope)
 print(stk.variable_code)
 # print(scope)
 
@@ -105,8 +117,9 @@ scope = {'k_synB'     : 1,
          ut.diff('B') : np.zeros(4),
          ut.diff('C') : np.zeros(12),
          ut.diff('D') : np.zeros(12),
+         **stk.functions
          }
-exec(code, global_scope, scope)
+exec(code, None, scope)
 # print(scope)
 
 #Scalar
@@ -141,8 +154,9 @@ scope = {'k_synB'     : 0,
          ut.diff('B') : np.zeros(4),
          ut.diff('C') : np.zeros(12),
          ut.diff('D') : np.zeros(12),
+         **stk.functions
          }
-exec(code, global_scope, scope)
+exec(code, None, scope)
 
 surface = ('cytosolic', 'extracellular')
 idxs    = stk.get_surface(surface, 'extracellular')
@@ -156,23 +170,17 @@ dC[iC] = rxn[iR]
 assert Counter({0.0: 6, 2.0: 2, 4.0: 2, 6.0: 2}) == {0.0: 6, 2.0: 2, 4.0: 2, 6.0: 2} 
 
 #Plot
-cmap_and_values = {'cmap'   : 'coolwarm',
-                   'values' : [0, 6]
-                   }
+cax = make_colorbar_ax(AX[1])
+stk.plot_reaction(AX[1], 'pumpB', scope['pumpB'], cmap='coolwarm', colorbar_ax=cax)
+AX[1].set_title('Surface reaction pumpB')
 
-color_func = stk.make_scaled_cmap(_default=cmap_and_values)
+cax = make_colorbar_ax(AX[2])
+stk.plot_diff(AX[2], 'C', scope[ut.diff('C')], cmap='coolwarm', colorbar_ax=cax)
+AX[2].set_title(ut.diff('B'))
 
-reaction_args = {'color': color_func,
-                 }
-stk.plot_reaction(AX[1], 'pumpB', scope['pumpB'], reaction_args)
-AX[1].set_title('pumpB')
-
-AX[2].grid(False)
-cb = mpl.colorbar.Colorbar(ax   = AX[2], 
-                           cmap = color_func.cmaps['_default'], 
-                           norm = color_func.norms['_default']
-                           )
-AX[2].set_title('pumpB colormap')
+cax = make_colorbar_ax(AX[3])
+stk.plot_diff(AX[3], 'B', scope[ut.diff('B')], cmap='PiYG', colorbar_ax=cax)
+AX[3].set_title(ut.diff('C'))
 
 #Bulk reaction
 scope = {'k_synB'     : 0,
@@ -188,31 +196,16 @@ scope = {'k_synB'     : 0,
          ut.diff('B') : np.zeros(4),
          ut.diff('C') : np.zeros(12),
          ut.diff('D') : np.zeros(12),
+         **stk.functions
          }
-exec(code, global_scope, scope)
+exec(code, None, scope)
 
-cmap_and_values = {'cmap'   : 'coolwarm',
-                   'values' : scope['synD']
-                   }
+cax = make_colorbar_ax(AX[4])
+stk.plot_reaction(AX[4], 'synD', scope['synD'], cmap='coolwarm', colorbar_ax=cax)
+AX[4].set_title('Bulk reaction synD')
 
-color_func = stk.make_scaled_cmap(_default=cmap_and_values)
-
-reaction_args = {'facecolor': color_func,
-                 }
-
-stk.plot_reaction(AX[3], 'synD', scope['synD'], reaction_args)
-AX[3].set_title('synD')
-
-AX[4].grid(False)
-cb = mpl.colorbar.Colorbar(ax   = AX[4], 
-                           cmap = color_func.cmaps['_default'], 
-                           norm = color_func.norms['_default']
-                           )
-AX[4].set_title('synD colormap')
-
-
-
-diff_args = {'facecolor': color_func
-             }
-stk.plot_diff(AX[5], 'D', scope[ut.diff('D')], diff_args)
+cax = make_colorbar_ax(AX[5])
+stk.plot_diff(AX[5], 'D', scope[ut.diff('D')], cmap='coolwarm', colorbar_ax=cax)
 AX[5].set_title(ut.diff('D'))
+
+

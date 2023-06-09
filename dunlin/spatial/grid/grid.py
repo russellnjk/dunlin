@@ -237,6 +237,8 @@ class RegularGrid(BaseGrid):
         voxel_centers = np.stack([a[slices].flatten().astype(np.float64) for a in grid], axis=1)
         sizes         = {}
         
+        # self.underlying = voxel_centers.copy()
+        
         for point in voxel_centers:
             #Use tuples instead of numpy arrays for hashing
             key        = tuple(point) 

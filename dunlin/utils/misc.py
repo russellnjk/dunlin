@@ -87,6 +87,22 @@ def isdfn(x):
 def check_not_dfn(x):
     if isdiff(x):
         raise NameError(f'{x} is a diffusion coefficient and is reserved.')
+
+def bc(x):
+    return '_bc_' + x
+
+def unbc(x):
+    return x.split('_bc_', 1)[1]
+
+def isbc(x):
+    if not isstrlike(x):
+        raise TypeError(f'Expected a string. Received {type(x)}')
+    
+    return x[:5] == '_bc_'
+
+def check_not_bc(x):
+    if isdiff(x):
+        raise NameError(f'{x} is a boundary condition and is reserved.')
         
 def is_valid_name(x):
     try:

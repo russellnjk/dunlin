@@ -1,10 +1,12 @@
+import matplotlib        as mpl
+import matplotlib.pyplot as plt
 import numpy             as np
 import re
 import warnings
 from matplotlib.patches import Rectangle
 from numbers import Number
 from scipy   import spatial
-from typing  import Union
+from typing  import Literal, Union
 
 import dunlin.utils      as ut
 import dunlin.utils_plot as upp
@@ -23,16 +25,7 @@ Surface = tuple[Domain_type, Domain_type]
 #ReactionStack
 class ReactionStack(StateStack):
     #For plotting
-    default_global_variable_args  = {'edgecolor': 'None'
-                                     }
-    default_bulk_variable_args    = {'edgecolor': 'None'
-                                     }
-    default_surface_variable_args = {'linewidth' : 5
-                                     }
-    default_bulk_reaction_args    = {'edgecolor': 'None'
-                                     }
-    default_surface_reaction_args = {'linewidth' : 5
-                                     }
+    surface_linewidth = 5
     
     #Expected mappings and attributes
     grid                  : Union[RegularGrid, NestedGrid]
@@ -61,6 +54,8 @@ class ReactionStack(StateStack):
     parameter_code    : str
     function_code     : str
     diff_code         : str
+    signature         : tuple[str]
+    functions         : dict[str, callable]
     
     surface2domain_type_idx  : dict[Surface, One2One[int, int]]
     surfacepoint2surface_idx : One2One[tuple[Number], tuple[int, Surface]]
@@ -73,6 +68,7 @@ class ReactionStack(StateStack):
     bulk_reactions           : dict[str, Domain_type]
     surface_reactions        : dict[str, Surface]
     reaction_code            : str
+    surface_linewidth        : float
     
     def __init__(self, spatial_data: SpatialModelData):
         #Data structures for self._add_surface
@@ -472,7 +468,113 @@ class ReactionStack(StateStack):
                         )
     
         return results
+    
+    def _plot_surface(self, 
+                      ax, 
+                      name           : str, 
+                      values         : np.array,
+                      surface        : Surface,
+                      cmap           : str='coolwarm',
+                      norm           : Literal['linear', 'log']='linear',
+                      label_surfaces : bool=True,
+                      colorbar_ax    : plt.Axes=None
+                      ) -> dict:
+        results    = {}
         
+        lb    = np.min(values)
+        ub    = np.max(values)
+        if callable(cmap):
+            cmap_ = cmap
+            norm_ = norm
+            
+            if not callable(norm):
+                msg = 'If cmap is callable, norm must also be callable.'
+                raise ValueError(msg)
+        else:
+            cmap_ = plt.get_cmap(cmap)
+            
+            if norm == 'linear':
+                norm_  = mpl.colors.Normalize(lb, ub)
+            elif norm == 'lognorm':
+                norm_  = mpl.colors.LogNorm(lb, ub)
+            else:
+                msg = f'norm argument must be "linear" or "log". Received {norm}.'
+                raise ValueError(msg)
+        
+        domain_type_idx2voxel         = self.voxel2domain_type_idx.inverse
+        sizes                         = self.sizes
+        voxels                        = self.voxels
+        
+        surface_data = self.surface2domain_type_idx[surface]
+        
+        domain_type0, domain_type1 = surface
+        
+        d         = self.surfacepoint2surface_idx.inverse 
+        plot_data = []
+        
+        surface_linewidth = self.surface_linewidth
+        
+        for surface_idx, value in enumerate(values):
+            surfacepoint = d[surface, surface_idx]
+            
+            plot_data.append([*surfacepoint, value])
+            
+            domain_type_idx0 = surface_data[domain_type0][surface_idx]
+            domain_type_idx1 = surface_data[domain_type1][surface_idx]
+            
+            voxel0 = domain_type_idx2voxel[domain_type_idx0, domain_type0]
+            voxel1 = domain_type_idx2voxel[domain_type_idx1, domain_type1]
+            
+            size0 = sizes[voxel0]
+            size1 = sizes[voxel1]
+            
+            if size0 > size1:
+                voxel, neighbour = voxel1, voxel0
+                neighbour_domain_type = domain_type0
+            else:
+                voxel, neighbour = voxel0, voxel1
+                neighbour_domain_type = domain_type1
+            
+            #Determine the arguments for the
+            color = cmap_(norm_(value))
+            
+            #Create the line
+            shift       = voxels[voxel]['surface'][neighbour_domain_type][neighbour]
+            delta       = np.sign(shift)*size0/2
+            idx         = abs(shift)-1
+            point       = np.array(voxel)
+            point[idx] += delta
+            start       = np.array(voxel)
+            stop        = np.array(voxel)
+            
+            for i, n in enumerate(voxel):
+                if i == idx:
+                    start[i] += delta
+                    stop[i]  += delta
+                else:
+                    start[i] -= size0/2
+                    stop[i]  += size0/2
+            
+            x, y = np.stack([start, stop]).T
+            line = ax.plot(x, y, linewidth=surface_linewidth, color=color)
+            
+            results[surface_idx] = line
+            
+            #Add text
+            if label_surfaces:
+                ax.text(*np.mean([start, stop], axis=0), 
+                        value, 
+                        horizontalalignment='center'
+                        )
+        
+        if colorbar_ax:
+            mpl.colorbar.Colorbar(ax   = colorbar_ax, 
+                                  cmap = cmap, 
+                                  norm = norm_
+                                  )   
+            
+        return results
+    
     def _plot_global(self,
                      ax,
                      name           : str,
@@ -516,14 +618,14 @@ class ReactionStack(StateStack):
                       ax, 
                       reaction_name   : str, 
                       reaction_values : np.array,
-                      reaction_args   : dict = None
+                      **kwargs
                       ) -> dict:
         
         if reaction_name in self.bulk_reactions:
-            return self._plot_bulk_reaction(ax, reaction_name, reaction_values, reaction_args)
+            return self._plot_bulk_reaction(ax, reaction_name, reaction_values, **kwargs)
     
         elif reaction_name in self.surface_reactions:
-            return self._plot_surface_reaction(ax, reaction_name, reaction_values, reaction_args)
+            return self._plot_surface_reaction(ax, reaction_name, reaction_values, **kwargs)
         
         else:
             raise ValueError(f'No reaction named {reaction_name}.')
@@ -532,47 +634,45 @@ class ReactionStack(StateStack):
                            ax,
                            reaction_name   : str, 
                            reaction_values : np.array,
-                           reaction_args   : dict = None
+                           **kwargs
                            ) -> dict:
-        domain_type    = self.bulk_reactions[reaction_name]
-        default_kwargs = self.default_bulk_reaction_args
+        domain_type = self.bulk_reactions[reaction_name]
+        
         return self._plot_bulk(ax, 
                                reaction_name, 
                                reaction_values, 
                                domain_type, 
-                               default_kwargs, 
-                               reaction_args
+                               **kwargs
                                )
 
     def _plot_surface_reaction(self, 
                               ax, 
                               reaction_name   : str, 
                               reaction_values : np.array,
-                              reaction_args   : dict = None
+                              **kwargs
                               ) -> dict:
         
-        surface        = self.surface_reactions[reaction_name]
-        default_kwargs = self.default_surface_reaction_args
+        surface = self.surface_reactions[reaction_name]
         
         return self._plot_surface(ax, 
                                   reaction_name, 
                                   reaction_values, 
                                   surface, 
-                                  default_kwargs,
-                                  reaction_args
+                                  **kwargs
                                   )
     
     def plot_variable(self, 
+                      ax              : plt.Axes, 
                       variable_name   : str,
                       variable_values : np.array,
-                      variable_args   : dict = None
+                      **kwargs
                       ) -> dict:
         if variable_name in self.bulk_variables:
-            pass
+            return self._plot_bulk_variable(ax, variable_name, variable_values, **kwargs)
         elif variable_name in self.surface_variables:
-            pass
+            return self._plot_surface_variable(ax, variable_name, variable_values, **kwargs)
         elif variable_name in self.global_variable:
-            pass
+            return self._plot_global_variable(ax, variable_name, variable_values, **kwargs)
         else:
             raise ValueError(f'No variable named {variable_name}.')
     
@@ -580,48 +680,44 @@ class ReactionStack(StateStack):
                               ax,
                               variable_name   : str, 
                               variable_values : np.array,
-                              variable_args   : dict = None
+                              **kwargs
                               ) -> dict:
-        default_kwargs = self.default_global_variable_args
+        
         return self._plot_global(ax, 
                                  variable_name, 
                                  variable_values, 
-                                 default_kwargs, 
-                                 variable_args
+                                 **kwargs
                                  )
     
     def _plot_bulk_variable(self,
                             ax,
                             variable_name   : str, 
                             variable_values : np.array,
-                            variable_args   : dict = None
+                            **kwargs
                             ) -> dict:
-        domain_type    = self.bulk_variables[variable_name]
-        default_kwargs = self.default_bulk_variable_args
+        domain_type = self.bulk_variables[variable_name]
+        
         return self._plot_bulk(ax, 
                                variable_name, 
                                variable_values, 
                                domain_type, 
-                               default_kwargs, 
-                               variable_args
+                               **kwargs
                                )
     
     def _plot_surface_variable(self, 
                               ax, 
                               variable_name   : str, 
                               variable_values : np.array,
-                              variable_args   : dict = None
+                              **kwargs
                               ) -> dict:
         
-        surface        = self.surface_variables[variable_name]
-        default_kwargs = self.default_surface_variable_args
+        surface = self.surface_variables[variable_name]
         
         return self._plot_surface(ax, 
                                   variable_name, 
                                   variable_values, 
                                   surface, 
-                                  default_kwargs,
-                                  variable_args
+                                  **kwargs
                                   )
     
     

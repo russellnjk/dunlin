@@ -90,7 +90,17 @@ def recursive_get(dct, *keys):
     if type(dct) != dict:
         return dct
     
-    result = dct.get(keys[0], None)
+    #Modified Jun 2023
+    default = dct.get('_default', None)
+    result  = dct.get(keys[0], default)
+    # try:
+    #     result = dct[keys[0]]
+    # except KeyError:
+    #     if keys[0] not in dct and '_default' in dct:
+    #         result = dct['_default']
+    #     else:
+    #         result = None
+    # result = dct.get(keys[0])
     
     if type(result) == dict:
         if len(keys) == 1:
@@ -102,35 +112,37 @@ def recursive_get(dct, *keys):
 ###############################################################################
 #Parsing Flattened Args
 ###############################################################################
-#TODO: Deprecate this
-def replace(kwargs, key, default, _converter=None, **repl_args):
-    value = kwargs.get(key, default)
-    
-    if callable(value):
-        value = value(**repl_args)
-    elif hasattr(value, 'format'):
-        value = str(value).format(**repl_args)
-        
-    if _converter:
-        value = _converter(value)
-    
-    kwargs[key] = value
 
-#TODO: Deprecate this
-def call(kwargs, _skip=('label', 'color'), _converter=None, **repl):
-    for key in kwargs:
-        if key in _skip:
-            continue
-        else:
-            value = kwargs[key]
+#Commented out Jun 2023. Delete this if everything has been working since then.
+# #TODO: Deprecate this
+# def replace(kwargs, key, default, _converter=None, **repl_args):
+#     value = kwargs.get(key, default)
+    
+#     if callable(value):
+#         value = value(**repl_args)
+#     elif hasattr(value, 'format'):
+#         value = str(value).format(**repl_args)
+        
+#     if _converter:
+#         value = _converter(value)
+    
+#     kwargs[key] = value
+
+# #TODO: Deprecate this
+# def call(kwargs, _skip=('label', 'color'), _converter=None, **repl):
+#     for key in kwargs:
+#         if key in _skip:
+#             continue
+#         else:
+#             value = kwargs[key]
             
-            if callable(value):
-                value = value(**repl)
+#             if callable(value):
+#                 value = value(**repl)
             
-            if _converter:
-                value = _converter(value)
+#             if _converter:
+#                 value = _converter(value)
             
-            kwargs[key] = value
+#             kwargs[key] = value
 
 def substitute(kwargs, key, converter=None, sub_args=None):
     sub_args = {} if sub_args is None else sub_args

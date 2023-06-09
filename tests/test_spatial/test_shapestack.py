@@ -25,8 +25,8 @@ plt.ion()
 spatial_data = SpatialModelData.from_all_data(all_data, 'M0')
 shapes       = make_shapes(spatial_data.geometry_definitions)
 grids        = make_grids_from_config(spatial_data.grid_config)
-main_grid    = grids['gr_main']
-stk0         = Stack(main_grid, *shapes)
+main_grid    = next(iter(grids.values()))
+stk0         = Stack(main_grid, spatial_data)
 
 fig0  = plt.figure(figsize=(10, 10))
 span = -1, 11

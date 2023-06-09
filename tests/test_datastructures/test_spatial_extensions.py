@@ -14,7 +14,6 @@ from dunlin.datastructures.masstransfer        import (Advection, AdvectionDict,
 
 from dunlin.datastructures.boundarycondition   import BoundaryCondition,   BoundaryConditionDict
 from dunlin.datastructures.coordinatecomponent import CoordinateComponentDict
-from dunlin.datastructures.adjacentdomain      import AdjacentDomainsDict
 from dunlin.datastructures.stateparam          import ParameterDict, StateDict
 
 data0 = {'x': [0, 10],
@@ -23,16 +22,14 @@ data0 = {'x': [0, 10],
 
 ccd = CoordinateComponentDict(data0)
 
-data0 = {'dmnt0': {'ndims': 3,
-                   'domains': {'dmn0': [[2, 2]]
-                                }
-                    },
-          'dmnt1': {'ndims': 3,
-                    'domains': {'dmn1': [[5, 5]]
-                                }
-                    }
-          }
+
 ext_namespace = set()
+data0 = {'dmnt0': {'dmn0': [2, 2]
+                   },
+         'dmnt1': {'dmn1': [5, 5]
+                   }
+          }
+
 dmnts         = DomainTypeDict(ext_namespace, ccd, data0)
 
 data0  = {'x0c': [1], 'x0e': [1]}
@@ -177,7 +174,7 @@ C = BoundaryConditionDict
 #Test instantiation
 F0 = C(ext_namespace, ccd, xs, data0)
 
-data0_ = {'bc0': ['x0c', 0, 'Neumann', ],
+data0_ = {'bc0': ['x0c', 0, 'Neumann', 'x', 'min'],
           'bc1': ['x0c', 0, 'Neumann', 'x', 'max'],
           }
 

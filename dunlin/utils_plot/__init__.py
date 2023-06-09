@@ -12,8 +12,6 @@ from .plot             import (label_ax,
                                )
 from .keywords         import (flatten_kwargs,
                                recursive_get, 
-                               replace, 
-                               call,
                                process_kwargs
                                )
 from .bar              import (plot_bar)  

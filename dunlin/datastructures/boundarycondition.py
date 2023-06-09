@@ -94,7 +94,7 @@ class BoundaryConditionDict(GenericDict):
                  mapping: dict
                  ) -> None:
         super().__init__(ext_namespace, mapping, coordinate_components, states)
-        
+
         seen   = {}
         states = []
         for bc in self.values():
@@ -119,7 +119,7 @@ class BoundaryConditionDict(GenericDict):
                     seen[state][axis] = {'min': bc, 'max': bc}
             else:
                 seen.setdefault(state, {})
-                seen[state].setdefault(axis, [])
+                seen[state].setdefault(axis, {})
                 if bound in seen[state][axis]:
                     raise ValueError(msg)
                 else:
