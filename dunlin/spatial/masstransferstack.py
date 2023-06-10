@@ -1,17 +1,10 @@
-import numpy     as np
-import numpy.ma  as ma
-import re
-import textwrap  as tw
-import warnings
-from collections        import namedtuple
-from matplotlib.patches import Rectangle
-from numba              import njit  
-from numbers            import Number
-from scipy              import spatial
-from typing             import Literal, Union
+import numpy as np
+from numba   import njit  
+from numbers import Number
+from scipy   import spatial
+from typing  import Union
 
 import dunlin.utils      as ut
-import dunlin.utils_plot as upp
 from .grid.grid            import RegularGrid, NestedGrid
 from .grid.bidict          import One2One, One2Many
 from .reactionstack        import (ReactionStack,
@@ -20,7 +13,7 @@ from .reactionstack        import (ReactionStack,
                                    State, Parameter,
                                    Surface
                                    )
-from dunlin.datastructures import SpatialModelData, AdvectionDict, DiffusionDict
+from dunlin.datastructures import SpatialModelData
 
 '''
 Notes:
@@ -181,10 +174,6 @@ def calculate_diffusion(X              : np.array,
 
 #ReactionStack
 class MassTransferStack(ReactionStack):
-    #For plotting
-    default_mass_transfer_args      = {'edgecolor': 'None'
-                                       }
-    
     #Expected mappings and attributes
     grid                  : Union[RegularGrid, NestedGrid]
     ndims                 : int
@@ -228,23 +217,23 @@ class MassTransferStack(ReactionStack):
     reaction_code            : str
     surface_linewidth        : float
     
-    advection_terms          : dict[Domain_type, dict[int, dict]]
-    diffusion_terms          : dict[Domain_type, dict[int, dict]]
-    boundary_terms           : dict[Domain_type, dict[int, dict]]
-    advection_code           : str
-    diffusion_code           : str
-    boundary_code            : str
+    domain_type2volume : dict[Domain_type, dict[int, float]]
+    advection_terms    : dict[Domain_type, dict[int, dict]]
+    diffusion_terms    : dict[Domain_type, dict[int, dict]]
+    boundary_terms     : dict[Domain_type, dict[int, dict]]
+    advection_code     : str
+    diffusion_code     : str
+    boundary_code      : str
+    formatter          : str
     
     def __init__(self, spatial_data: SpatialModelData):
-        
+        #Data structures for self._add_voxel
         self.domain_type2volume = {}
         
         #Data structures for self._add_bulk
         self.advection_terms = {}
         self.diffusion_terms = {}
         self.boundary_terms  = {}
-        
-        #Data structures for self._add_boundary
         
         #Call the parent constructor
         super().__init__(spatial_data)
@@ -272,8 +261,6 @@ class MassTransferStack(ReactionStack):
         self.boundary_condition_code = ''
         self._add_boundary_code()
         
-        #Update rhs signature
-        self.signature += tuple(self.advection_calculators)
         
     ###########################################################################
     #Preprocessing
@@ -597,7 +584,7 @@ class MassTransferStack(ReactionStack):
                 
             code += f'\t{ut.diff(state)} += {ut.bc(state)}\n\n'
                 
-        self.boundary_code = code + '\n'
+        self.boundary_condition_code = code + '\n'
         
     ###########################################################################
     #Retrieval

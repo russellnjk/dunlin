@@ -60,6 +60,8 @@ AX = []
 ###############################################################################
 stk = Stack(spatial_data)
 
+fig, AX = make_fig(AX)
+
 domain_type_args = {'facecolor': {'cytosolic'     : 'steel',
                                   'extracellular' : 'salmon'
                                   }
@@ -128,8 +130,6 @@ scope = {'F_B'        : -1,
 
 exec(code, None, scope)
 # print(scope)
-
-fig, AX = make_fig(AX)
 
 cax = make_colorbar_ax(AX[1])
 stk.plot_advection(AX[1], 'B', scope[ut.adv('B')], cmap='coolwarm', colorbar_ax=cax)
@@ -235,8 +235,8 @@ fig, AX = make_fig(AX)
 
 stk.plot_voxels(AX[8], domain_type_args=domain_type_args)
 
-print(stk.boundary_code)
-code = tw.dedent(stk.boundary_code)
+print(stk.boundary_condition_code)
+code = tw.dedent(stk.boundary_condition_code)
 
 scope = {'J_C_x'      : 0,
          'J_C_y'      : 0,

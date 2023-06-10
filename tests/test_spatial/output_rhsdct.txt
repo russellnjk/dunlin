@@ -1,4 +1,4 @@
-def model_M0(time, states, parameters):
+def model_M0_dct(time, states, parameters):
 
 	#States
 	A = states[0:4]
@@ -156,4 +156,4 @@ def model_M0(time, states, parameters):
 	_d_A += vrb0
 
 	_d_states = __concatenate((_d_A, _d_B, _d_C, _d_D, ))
-	return _d_states
+	return (time, A, B, C, D, k_degA, k_synB, k_synD, k_degD, k_pump, J_B, J_C_x, J_C_y, F_B, F_C_x, F_C_y, vrb0, vrb1, vrb2, vrb3, synB, pumpB, synD, _adv_B, _adv_C, _adv_D, _dfn_B, _dfn_C, _dfn_D, _bc_C, _d_A, _d_B, _d_C, _d_D)

@@ -62,6 +62,7 @@ class StateStack(DomainStack):
     diff_code         : str
     signature         : tuple[str]
     functions         : dict[str, callable]
+    formatter         : str
     
     def __init__(self, spatial_data: SpatialModelData) -> None:
         self.spatial_data = spatial_data
@@ -93,6 +94,7 @@ class StateStack(DomainStack):
         self._add_function_code()
         
         self.signature = 'time', 'states', 'parameters'
+        self.formatter = '{:.2f}'
     
     def _add_state_code(self) -> None:
         spatial_data      = self.spatial_data
@@ -166,6 +168,24 @@ class StateStack(DomainStack):
         return idx
     
     ###########################################################################
+    #Conversion of State Input
+    ###########################################################################
+    def reshape(self, init_array: np.array) -> np.array:
+        '''Reshapes row from DataFrame into array for rhs.
+        '''
+        
+        state2dxidx = self.state2dxidx
+        
+        lst = []
+        for state, value in zip(self.spatial_data.states, init_array):
+            start, stop  = state2dxidx[state]
+            lst         += [value]* (stop-start)
+        
+        array = np.array(lst)
+        
+        return array
+    
+    ###########################################################################
     #Plotting
     ###########################################################################
     def _make_cmap_and_norm(self, values: np.array, cmap='coolwarm') -> tuple:
@@ -216,6 +236,7 @@ class StateStack(DomainStack):
         voxel2domain_type_idx = self.voxel2domain_type_idx
         sizes                 = self.sizes
         voxels                = self.voxel2domain_type.inverse[domain_type]
+        formatter             = self.formatter
         
         for voxel in voxels:
             size            = sizes[voxel]
@@ -237,7 +258,7 @@ class StateStack(DomainStack):
             #Add text
             if label_voxels:
                 ax.text(*voxel, 
-                        value, 
+                        formatter.format(value), 
                         horizontalalignment='center'
                         )
         

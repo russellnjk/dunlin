@@ -56,6 +56,7 @@ class ReactionStack(StateStack):
     diff_code         : str
     signature         : tuple[str]
     functions         : dict[str, callable]
+    formatter         : str
     
     surface2domain_type_idx  : dict[Surface, One2One[int, int]]
     surfacepoint2surface_idx : One2One[tuple[Number], tuple[int, Surface]]

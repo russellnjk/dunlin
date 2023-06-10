@@ -1,6 +1,6 @@
 import numpy  as np
 import pandas as pd
-from typing import Any, Optional, Union
+from typing import Any, Union
 
 ###############################################################################
 #Non-Standard Imports
@@ -14,8 +14,6 @@ import dunlin.ode.ivp        as ivp
 import dunlin.utils_plot     as upp
 
 #Type hints
-Frame    = Union[dict, pd.DataFrame, pd.Series]
-ODict    = Optional[dict]
 Scenario = Union[str, float, int, tuple]
 
 class ODEModel:
@@ -32,14 +30,24 @@ class ODEModel:
         
         return cls(**flattened)
     
-    def __init__(self, ref: str, states: Frame, parameters:Frame, 
-                 functions: ODict = None, variables: ODict = None, 
-                 reactions: ODict = None, rates: ODict = None, 
-                 events: ODict = None, extra: ODict = None, tspan: ODict=None,
-                 compartments: ODict = None, int_args: ODict = None, 
-                 sim_args: ODict = None, optim_args: ODict = None, 
-                 data_args: ODict = None, meta: ODict = None,
-                 dtype: str = 'ode',
+    def __init__(self, 
+                 ref          : str, 
+                 states       : pd.DataFrame, 
+                 parameters   : pd.DataFrame, 
+                 functions    : dict = None, 
+                 variables    : dict = None, 
+                 reactions    : dict = None, 
+                 rates        : dict = None, 
+                 events       : dict = None, 
+                 extra        : dict = None, 
+                 tspan        : dict =None,
+                 compartments : dict = None, 
+                 int_args     : dict = None, 
+                 sim_args     : dict = None, 
+                 optim_args   : dict = None, 
+                 data_args    : dict = None, 
+                 meta         : dict = None,
+                 dtype        : str   = 'ode',
                  **kwargs
                  ):
         

@@ -110,7 +110,7 @@ code       = tw.dedent(stk.parameter_code)
 scope      = stk.functions
 exec(code, None, scope)
 
-print(stk.parameter_code)
+# print(stk.parameter_code)
 # print(scope)
 
 assert scope['k_degA'] == 0
@@ -135,3 +135,13 @@ exec(code, None, scope)
 print(stk.function_code)
 assert scope['func0'](2, 3) == -6
 
+###############################################################################
+#Test Conversion of State Input into Array
+###############################################################################
+init_df    = spatial_data.states.df
+init_array = init_df.loc[1].values
+
+states = stk.reshape(init_array)
+print(states)
+
+assert all(states == [1]*4 + [2]*4 + [3]*12 + [4]*12)
