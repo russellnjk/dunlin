@@ -16,13 +16,13 @@ def make_events(ode, model_data):
     
 def make_event(ev_data):
    
-    ev_obj = Event(name=ev_data.name, 
-                   trigger_func=ev_data.trigger_func, 
-                   execute=ev_data.assign_func, 
-                   delay=ev_data.delay,
-                   persistent=ev_data.persistent,
-                   priority=ev_data.priority,
-                   ref=ev_data.ref
+    ev_obj = Event(name         = ev_data.name, 
+                   trigger_func = ev_data.trigger_func, 
+                   execute      = ev_data.assign_func, 
+                   delay        = ev_data.delay,
+                   persistent   = ev_data.persistent,
+                   priority     = ev_data.priority,
+                   ref          = ev_data.ref
                    )
 
     ev_obj._data = ev_data

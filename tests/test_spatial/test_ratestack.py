@@ -6,8 +6,9 @@ from collections import Counter
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 import addpath
-import dunlin       as dn 
-import dunlin.utils as ut
+import dunlin         as dn 
+import dunlin.ode.ivp as ivp
+import dunlin.utils   as ut
 from dunlin.spatial.ratestack      import RateStack as Stack
 from dunlin.datastructures.spatial import SpatialModelData
 from test_spatial_data             import all_data
@@ -128,27 +129,63 @@ with open('output_rhsdct.txt', 'w') as file:
     file.write(code)
 
 
-time       = 0
-states     = np.arange(0, 32)
+#Before running the code
+#Check that time, states and parameters are 
+#formatted according to the output of the integration function
+time       = np.array([0, 1])
+states     = np.array([np.arange(0, 32), np.arange(0, 32)]).T
 parameters = spatial_data.parameters.df.loc[0].values
+parameters = np.array([parameters, parameters]).T
 
 stk.numba = False
 dct        = stk.rhsdct(time, states, parameters)
 
+# print(dct)
+# for key, value in dct.items():
+#     print(key)
+#     print(value)
+    # print()
+    
 fig, AX = make_fig(AX)
 
 cax = make_colorbar_ax(AX[8])
-stk.plot_rate(AX[8], 'A', dct[ut.diff('A')], cmap='coolwarm', colorbar_ax=cax)
+stk.plot_rate(AX[8], 'A', dct[ut.diff('A')][:,0], cmap='coolwarm', colorbar_ax=cax)
 AX[8].set_title(ut.diff('A'))
 
 cax = make_colorbar_ax(AX[9])
-stk.plot_rate(AX[9], 'B', dct[ut.diff('B')], cmap='coolwarm', colorbar_ax=cax)
+stk.plot_rate(AX[9], 'B', dct[ut.diff('B')][:,0], cmap='coolwarm', colorbar_ax=cax)
 AX[9].set_title(ut.diff('B'))
 
 cax = make_colorbar_ax(AX[10])
-stk.plot_rate(AX[10], 'C', dct[ut.diff('C')], cmap='coolwarm', colorbar_ax=cax)
+stk.plot_rate(AX[10], 'C', dct[ut.diff('C')][:,0], cmap='coolwarm', colorbar_ax=cax)
 AX[10].set_title(ut.diff('C'))
 
 cax = make_colorbar_ax(AX[11])
-stk.plot_rate(AX[11], 'D', dct[ut.diff('D')], cmap='coolwarm', colorbar_ax=cax)
+stk.plot_rate(AX[11], 'D', dct[ut.diff('D')][:,0], cmap='coolwarm', colorbar_ax=cax)
 AX[11].set_title(ut.diff('D'))
+
+###############################################################################
+#Test Integration
+###############################################################################
+time       = 0
+states     = np.arange(0, 32)
+parameters = spatial_data.parameters.df.loc[0].values
+tspan      = np.linspace(0, 50, 11)
+
+t, y, p = ivp.integrate(stk.rhs, tspan, states, parameters)
+
+A = stk.get_state_from_array('A', y)
+assert A.shape == (4, 11)
+
+B = stk.get_state_from_array('B', y)
+assert B.shape == (4, 11)
+
+C = stk.get_state_from_array('C', y)
+assert C.shape == (12, 11)
+
+D = stk.get_state_from_array('D', y)
+assert D.shape == (12, 11)
+
+#Get rhsdct
+dct = stk.rhsdct(t, y, p)
+

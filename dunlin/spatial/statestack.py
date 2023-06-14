@@ -114,7 +114,7 @@ class StateStack(DomainStack):
             state2dxidx[state] = idx, stop
             
             self.state_code += f'\t{state} = states[{idx}:{stop}]\n'
-            self.diff_code  += f'\t{ut.diff(state)} = __zeros({n_voxels}).astype(__float64)\n'
+            self.diff_code  += f'\t{ut.diff(state)} = __zeros({state}.shape, __float64)\n'
             
             #Update idx
             idx = stop
@@ -167,6 +167,15 @@ class StateStack(DomainStack):
         
         return idx
     
+    def get_state_from_array(self, 
+                             state_name: str, 
+                             array: np.array
+                             ) -> np.array:
+        
+        start, stop = self.state2dxidx[state_name]
+        
+        return array[start: stop]
+            
     ###########################################################################
     #Conversion of State Input
     ###########################################################################

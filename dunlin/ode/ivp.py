@@ -33,6 +33,9 @@ def integrate(func,
     if len(y0.shape) != 1:
         raise ValueError('parameter p must be 1-dimensional.')
     
+    if endpoint <= t_last:
+        raise ValueError('Endpoint of t_span is equal to or less than the first time value.')
+    
     #Event preprocessing
     #Set direction before integration
     events = sorted(events, key=lambda x: getattr(x, 'priority', 0), reverse=True) 

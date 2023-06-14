@@ -37,6 +37,11 @@ reactions = {'synB'  : ['  -> B', 'k_synB'],
 rates = {'A': 'vrb0'
          }
 
+events = {'ev0': {'trigger' : 'D > 5', 
+                  'assign'  : ['D = 0']
+                  }
+          }
+
 diffusion = {'B' : 'J_B',
              'C' : ['J_C_x', 'J_C_y'],
              'D' : 1

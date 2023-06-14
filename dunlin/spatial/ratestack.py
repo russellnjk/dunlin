@@ -86,6 +86,9 @@ class RateStack(MassTransferStack):
         self.functions['__concatenate'] = np.concatenate
         self.functions['__njit'       ] = njit
         
+        self.rhsdct_aux['__concatenate'] = np.concatenate
+        self.rhsdct_aux['__njit'       ] = njit
+        
         #Parse rates
         self.rate_code = ''
         self._add_rate_code()
@@ -214,16 +217,31 @@ class RateStack(MassTransferStack):
         
         self.rhsdct_code = code
         
-        exec(code, self.functions, scope)
+        #Execute code
+        exec(code, self.rhsdct_aux, scope)
         tuple_func0 = scope[self.rhsdct_name]
         tuple_func1 = njit(tuple_func0)
+
+        #Create wrapped functions
+        # dct_func0   = self._wrap(tuple_func0, lst)
+        # dct_func1   = self._wrap(tuple_func1, lst)
         
-        dct_func0   = lambda time, state, parameters: dict(zip(lst, tuple_func0(time, state, parameters)))
-        dct_func1   = lambda time, state, parameters: dict(zip(lst, tuple_func1(time, state, parameters)))
+        dct_func0   = lambda t, y, p: dict(zip(lst, tuple_func0(t, y, p)))
+        dct_func1   = lambda t, y, p: dict(zip(lst, tuple_func1(t, y, p)))
         
         self._rhsdct_funcs = dct_func0, dct_func1
         self._rhsdct       = self._rhsdct_funcs[1]
     
+    @staticmethod
+    def _wrap(f, lst):
+        def helper(t, y, p):
+            raw      = [f(*x) for x in zip(t, y.T, p.T)]
+            reshaped = [np.array(x).T for x in zip(*raw)]
+            dct      = dict(zip(lst, reshaped))
+            
+            return dct
+        return helper
+            
     ###########################################################################
     #Plotting
     ###########################################################################
