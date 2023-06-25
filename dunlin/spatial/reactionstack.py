@@ -59,18 +59,16 @@ class ReactionStack(StateStack):
     rhsdct_functions  : dict[str, callable]
     formatter         : str
     
-    surface_data  : dict[Surface, One2One[int, int]]
-    midpoint2surface_idx : One2One[tuple[Number], tuple[int, Surface]]
-    midpoint_lst         : list[tuple[Number]]
-    surface2tree             : spatial.KDTree
-    global_variables         : set
-    bulk_variables           : dict[str, Domain_type]
-    surface_variables        : dict[str, Surface]
-    variable_code            : str
-    bulk_reactions           : dict[str, Domain_type]
-    surface_reactions        : dict[str, Surface]
-    reaction_code            : str
-    surface_linewidth        : float
+    surface_data      : dict[Surface, dict]
+    surface2tree      : spatial.KDTree
+    global_variables  : set
+    bulk_variables    : dict[str, Domain_type]
+    surface_variables : dict[str, Surface]
+    variable_code     : str
+    bulk_reactions    : dict[str, Domain_type]
+    surface_reactions : dict[str, Surface]
+    reaction_code     : str
+    surface_linewidth : float
     
     def __init__(self, spatial_data: SpatialModelData):
         #Data structures for self._add_surface
@@ -78,15 +76,7 @@ class ReactionStack(StateStack):
         
         #Call the parent constructor
         super().__init__(spatial_data)
-        
         self._reformat_surface_data()
-        
-        #Data structures for retrieval by location
-        self.surface2tree = {}
-        for surface, surface_datum in self.surface_data.items():
-            midpoints = list(surface_datum['spatial']['surface_idx2midpoint'].values())
-            
-            self.surface2tree[surface] = spatial.KDTree(midpoints)
         
         #Parse the variables
         self.global_variables  = set()
@@ -255,6 +245,10 @@ class ReactionStack(StateStack):
                                         'domain_type_idxs'     : domain_type_idxs,
                                         'shifts'               : shifts 
                                         }
+            
+            #Add a tree for searching
+            midpoints             = list(surface_idx2midpoint.values())
+            surface_datum['tree'] = spatial.KDTree(midpoints)
             
     ###########################################################################
     #Utils
@@ -479,7 +473,8 @@ class ReactionStack(StateStack):
                         *points : tuple[Number], 
                         ) -> int:
         #Set up variables
-        surface_idx2midpoint = self.surface_data[surface]['spatial']['surface_idx2midpoint']
+        surface_datum        = self.surface_data
+        surface_idx2midpoint = surface_datum[surface]['spatial']['surface_idx2midpoint']
         midpoint2surface_idx = surface_idx2midpoint.inverse
         surface_idxs         = []
         surface_midpoints    = []
@@ -492,8 +487,8 @@ class ReactionStack(StateStack):
                 midpoint = point
                 
             except KeyError:
-                dist, idx   = self.surface2tree[surface].query(point)
-                midpoint    = surface_idx2midpoint[idx]
+                dist, idx = surface_datum['tree'].query(point)
+                midpoint  = surface_idx2midpoint[idx]
                 
                 if dist > self.grid.step:
                     msg  = 'Attempted to find closest point to {point} for {name}. '
