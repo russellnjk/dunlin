@@ -5,6 +5,7 @@ from collections import namedtuple
 import dunlin.utils          as ut
 import dunlin.datastructures as dst
 import dunlin.ode.extrafunc  as exf
+from dunlin.ode.event import evs_tup 
 
 model_args_ = 'time', 'states', 'parameters'
 model_args  = ', '.join(model_args_)
@@ -276,8 +277,6 @@ def _rxns2code(model_data):
 ###############################################################################
 #Function and Code Generation for Events
 ###############################################################################
-evs_tup = namedtuple('rhsevent', 'ref name trigger_func assign_func delay persistent priority')
-
 def make_rhsevents(model_data):
     ref = model_data['ref']
     
@@ -289,8 +288,7 @@ def make_rhsevents(model_data):
                 rxnrts2code(model_data),
                 ]
     
-    mid_code = '\n\n'.join(mid_code)
-    
+    mid_code  = '\n\n'.join(mid_code)
     rhsevents = {}
     
     #Make test values

@@ -45,8 +45,14 @@ class Event(GenericItem):
     ###########################################################################
     #Constructor
     ###########################################################################
-    def __init__(self, ext_namespace: set, name: str, trigger: str, assign: str, 
-                 delay: float = 0, persistent: bool = True, priority: int = 0, 
+    def __init__(self, 
+                 ext_namespace : set, 
+                 name          : str, 
+                 trigger       : str, 
+                 assign        : str, 
+                 delay         : float = 0, 
+                 persistent    : bool = True, 
+                 priority      : int = 0, 
                  ):
         
         #Format trigger

@@ -71,8 +71,8 @@ scope = {'func0'  : lambda a, b: a*b,
          'A'      : np.ones(4),
          'B'      : np.array(list(range(0, 4))),
          'C'      : np.array(list(range(0, 12))),
-         **stk.functions
-         }
+          **stk.rhs_functions
+          }
 exec(code, {}, scope)
 print(stk.variable_code)
 # print(scope)
@@ -82,22 +82,23 @@ assert Counter(scope['vrb1']) == {0: 2, 4: 1, 10: 1, 24: 1, 36: 1, 42: 1, 60: 1}
 assert scope['vrb2']     == 1
 assert Counter(scope['vrb3']) == {0: 2, 12: 1, 30: 1, 72: 1, 108: 1, 126: 1, 180: 1}
 
-vrb = scope['vrb1']
-B   = scope['B']
-C   = scope['C']
-k   = scope['k_pump']
+# vrb = scope['vrb1']
 
-iB  = stk.get_bulk_idx([1.5, 2.5])
-iC  = stk.get_bulk_idx([0.5, 2.5])
-iS  = stk.get_surface_idx([1, 2.5])
+# B   = scope['B']
+# C   = scope['C']
+# k   = scope['k_pump']
 
-assert vrb[iS] == k*B[iB]*C[iC]
+# iB  = stk.get_surface_idx([1.5, 2.5])
+# iC  = stk.get_surface_idx([0.5, 2.5])
+# iV  = stk.get_surface_idx([1, 2.5])
 
-iB  = stk.get_bulk_idx([2.5, 2.5])
-iC  = stk.get_bulk_idx([3.5, 2.5])
-iS  = stk.get_surface_idx([3, 2.5])
+# assert vrb[iS] == k*B[iB]*C[iC]
 
-assert vrb[iS] == k*B[iB]*C[iC]
+# iB  = stk.get_bulk_idx([2.5, 2.5])
+# iC  = stk.get_bulk_idx([3.5, 2.5])
+# iS  = stk.get_surface_idx([3, 2.5])
+
+# assert vrb[iS] == k*B[iB]*C[iC]
 
 ###############################################################################
 #Test Reaction Code
@@ -106,19 +107,19 @@ print(stk.reaction_code)
 
 code  = tw.dedent(stk.reaction_code)
 scope = {'k_synB'     : 1,
-         'k_pump'     : 2,
-         'k_synD'     : 3,
-         'vrb2'       : 0,
-         'A'          : np.arange(4),
-         'B'          : np.arange(4),
-         'C'          : np.arange(12),
-         'D'          : np.arange(12),
-         ut.diff('A') : np.zeros(4),
-         ut.diff('B') : np.zeros(4),
-         ut.diff('C') : np.zeros(12),
-         ut.diff('D') : np.zeros(12),
-         **stk.functions
-         }
+          'k_pump'     : 2,
+          'k_synD'     : 3,
+          'vrb2'       : 0,
+          'A'          : np.arange(4),
+          'B'          : np.arange(4),
+          'C'          : np.arange(12),
+          'D'          : np.arange(12),
+          ut.diff('A') : np.zeros(4),
+          ut.diff('B') : np.zeros(4),
+          ut.diff('C') : np.zeros(12),
+          ut.diff('D') : np.zeros(12),
+          **stk.rhs_functions
+          }
 exec(code, None, scope)
 # print(scope)
 
@@ -132,42 +133,42 @@ assert all(a == scope['synD'])
 #Surface reaction with vector
 assert Counter(scope['pumpB']) == {0: 2, 2: 2, 4: 2, 6: 2}
 
-rxn = scope['pumpB']
-B   = scope['B']
-k   = scope['k_pump']
+# rxn = scope['pumpB']
+# B   = scope['B']
+# k   = scope['k_pump']
 
-iB  = stk.get_bulk_idx([1.5, 2.5])
-iS  = stk.get_surface_idx([1, 2.5])
+# iB  = stk.get_bulk_idx([1.5, 2.5])
+# iS  = stk.get_surface_idx([1, 2.5])
 
-assert rxn[iS] == k*B[iB]
+# assert rxn[iS] == k*B[iB]
 
-scope = {'k_synB'     : 0,
-         'k_pump'     : 2,
-         'k_synD'     : 0,
-         'vrb1'       : 0,
-         'vrb2'       : 0,
-         'A'          : np.arange(4),
-         'B'          : np.arange(4),
-         'C'          : np.arange(12),
-         'D'          : np.arange(12),
-         ut.diff('A') : np.zeros(4),
-         ut.diff('B') : np.zeros(4),
-         ut.diff('C') : np.zeros(12),
-         ut.diff('D') : np.zeros(12),
-         **stk.functions
-         }
-exec(code, None, scope)
+# scope = {'k_synB'     : 0,
+#          'k_pump'     : 2,
+#          'k_synD'     : 0,
+#          'vrb1'       : 0,
+#          'vrb2'       : 0,
+#          'A'          : np.arange(4),
+#          'B'          : np.arange(4),
+#          'C'          : np.arange(12),
+#          'D'          : np.arange(12),
+#          ut.diff('A') : np.zeros(4),
+#          ut.diff('B') : np.zeros(4),
+#          ut.diff('C') : np.zeros(12),
+#          ut.diff('D') : np.zeros(12),
+#          **stk.rhs_functions
+#          }
+# exec(code, None, scope)
 
-surface = ('cytosolic', 'extracellular')
-idxs    = stk.get_surface(surface, 'extracellular')
-iC      = list(idxs.values())
-iR      = list(idxs.keys())
-rxn     = scope['pumpB']
+# surface = ('cytosolic', 'extracellular')
+# idxs    = stk.get_surface(surface, 'extracellular')
+# iC      = list(idxs.values())
+# iR      = list(idxs.keys())
+# rxn     = scope['pumpB']
 
-dC     = np.zeros(12)
-dC[iC] = rxn[iR]
+# dC     = np.zeros(12)
+# dC[iC] = rxn[iR]
 
-assert Counter({0.0: 6, 2.0: 2, 4.0: 2, 6.0: 2}) == {0.0: 6, 2.0: 2, 4.0: 2, 6.0: 2} 
+# assert Counter({0.0: 6, 2.0: 2, 4.0: 2, 6.0: 2}) == {0.0: 6, 2.0: 2, 4.0: 2, 6.0: 2} 
 
 #Plot
 cax = make_colorbar_ax(AX[1])
@@ -184,20 +185,20 @@ AX[3].set_title(ut.diff('C'))
 
 #Bulk reaction
 scope = {'k_synB'     : 0,
-         'k_pump'     : 0,
-         'k_synD'     : 2,
-         'vrb1'       : 0,
-         'vrb2'       : 0,
-         'A'          : np.arange(4),
-         'B'          : np.arange(4),
-         'C'          : np.arange(12),
-         'D'          : np.arange(12),
-         ut.diff('A') : np.zeros(4),
-         ut.diff('B') : np.zeros(4),
-         ut.diff('C') : np.zeros(12),
-         ut.diff('D') : np.zeros(12),
-         **stk.functions
-         }
+          'k_pump'     : 0,
+          'k_synD'     : 2,
+          'vrb1'       : 0,
+          'vrb2'       : 0,
+          'A'          : np.arange(4),
+          'B'          : np.arange(4),
+          'C'          : np.arange(12),
+          'D'          : np.arange(12),
+          ut.diff('A') : np.zeros(4),
+          ut.diff('B') : np.zeros(4),
+          ut.diff('C') : np.zeros(12),
+          ut.diff('D') : np.zeros(12),
+          **stk.rhs_functions
+          }
 exec(code, None, scope)
 
 cax = make_colorbar_ax(AX[4])

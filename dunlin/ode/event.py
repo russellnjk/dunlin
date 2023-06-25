@@ -1,4 +1,5 @@
 import numpy as np
+from collections import namedtuple
 
 ###############################################################################
 #Dunlin Exceptions
@@ -10,12 +11,13 @@ class TriggerError(Exception):
 ###############################################################################
 #Main Instantiation Algorithm
 ###############################################################################
-def make_events(ode, model_data):
-    events = [make_event(ev_data) for ev_data in ode.rhsevents.values()]
+evs_tup = namedtuple('rhsevent', 'ref name trigger_func assign_func delay persistent priority')
+
+def make_events(rhsevents: dict[str, evs_tup]):
+    events = [make_event(ev_data) for ev_data in rhsevents.values()]
     return events
     
-def make_event(ev_data):
-   
+def make_event(ev_data: evs_tup):
     ev_obj = Event(name         = ev_data.name, 
                    trigger_func = ev_data.trigger_func, 
                    execute      = ev_data.assign_func, 

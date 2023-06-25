@@ -68,16 +68,16 @@ assert len(stk.state2dxidx) == 4
 ###############################################################################
 print(stk.state_code)
 
-states = list(range(0, 32))
-code   = tw.dedent(stk.state_code)
-scope  = stk.functions
-exec(code, {'states': states}, scope)
+states = np.array(list(range(0, 32)))
+code   = tw.dedent(stk.state_code) 
+scope  = {'states': states}
+exec(code, stk.rhs_functions, scope)
 # print(scope)
 
-assert scope['A'] == [0, 1, 2, 3]
-assert scope['B'] == [4, 5, 6, 7]
-assert scope['C'] == [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
-assert scope['D'] == [20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]
+assert all(scope['A'] == [0, 1, 2, 3])
+assert all(scope['B'] == [4, 5, 6, 7])
+assert all(scope['C'] == [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19])
+assert all(scope['D'] == [20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31])
 
 cax = make_colorbar_ax(AX[1])
 stk.plot_state(AX[1], 'A', scope['A'], cmap='coolwarm', colorbar_ax=cax)
@@ -88,8 +88,8 @@ stk.plot_state(AX[2], 'D', scope['D'], cmap='coolwarm', colorbar_ax=cax)
 AX[2].set_title('D')
 
 code  = tw.dedent(stk.diff_code)
-scope = stk.functions
-exec(code, None, scope)
+#Reuse scope from previous exec statement
+exec(code, stk.rhs_functions, scope)
 
 print(stk.diff_code)
 # print(scope)
@@ -107,7 +107,7 @@ AX[3].set_title(ut.diff('A'))
 ###############################################################################
 parameters = list(range(0, 11))
 code       = tw.dedent(stk.parameter_code)
-scope      = stk.functions
+scope      = stk.rhs_functions
 exec(code, None, scope)
 
 # print(stk.parameter_code)

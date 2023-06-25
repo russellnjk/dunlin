@@ -68,7 +68,7 @@ stk.plot_voxels(AX[0], domain_type_args=domain_type_args)
 code  = tw.dedent(stk.rate_code)
 scope = {ut.diff('A') : np.zeros(4),
          'vrb0'       : np.array([1, 2, 3, 4]),
-         **stk.functions
+         **stk.rhs_functions
          }
 
 # print(stk.rate_code)

@@ -76,7 +76,7 @@ class ODEModel:
         
         #Assign ode attributes
         self._rhs       = ode.rhs
-        self._events    = oev.make_events(ode, model_data)
+        self._events    = oev.make_events(ode.rhsevents)
         self._extra     = ode.rhsextra
         self._dct       = ode.rhsdct 
         self.namespace  = model_data.namespace
@@ -167,10 +167,16 @@ class ODEModel:
     ###########################################################################
     #Integration
     ###########################################################################
-    def __call__(self, scenario=None, y0=None, p0=None, tspan=None, 
-                 overlap=True, raw=False, include_events=True,
+    def __call__(self, 
+                 scenario       = None, 
+                 y0             = None, 
+                 p0             = None, 
+                 tspan          = None, 
+                 overlap        = True, 
+                 raw            = False, 
+                 include_events = True,
                  **int_args
-                 ):
+                 ) -> np.array:
         
         def _2array(vals, default, variables, name):
             if vals is None:

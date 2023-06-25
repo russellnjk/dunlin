@@ -118,7 +118,8 @@ M0 = {'states'              : states,
       'advection'           : advection,
       'compartments'        : compartments,
       'boundary_conditions' : boundary_conditions,
-      'geometry'            : geometry
+      'geometry'            : geometry,
+      'events'              : events 
       }
 
 all_data = {'M0': M0}

@@ -61,7 +61,7 @@ def calculate_dirichlet_boundary(X             : np.array,
                                  coeff         : np.array,
                                  concentration : np.array, 
                                  mapping       : np.array,
-                                 volumes   : np.array 
+                                 volumes       : np.array 
                                  ) -> np.array:
     #Overhead
     mass_transferred        = np.zeros(X.shape)
@@ -87,11 +87,11 @@ def calculate_advection(X              : np.array,
                         coeff          : np.array, 
                         left_mappings  : tuple[np.array], 
                         right_mappings : tuple[np.array],
-                        volumes          : np.array
+                        volumes        : np.array
                         ) -> np.array:
     
     mass_transferred = np.zeros(X.shape)
-    abs_coeff       = np.abs(coeff)
+    abs_coeff        = np.abs(coeff)
     
     #Case 1: coeff < 0
     for left_mapping in left_mappings:
@@ -138,10 +138,10 @@ def calculate_advection(X              : np.array,
 def calculate_diffusion(X              : np.array, 
                         coeff          : Number, 
                         left_mappings  : tuple[np.array], 
-                        volumes          : np.array
+                        volumes        : np.array
                         ) -> np.array:
     #Overhead
-    mass_transferred        = np.zeros(X.shape)
+    mass_transferred = np.zeros(X.shape)
     
     for left_mapping in left_mappings:
         #Find the center and the left voxels
@@ -166,7 +166,7 @@ def calculate_diffusion(X              : np.array,
 def calculate_neumann_boundary2(X       : np.array, 
                                 flux    : np.array, 
                                 mapping : np.array,
-                                volumes   : np.array
+                                volumes : np.array
                                 ) -> np.array:
     dX = np.zeros(X.shape)
     
@@ -280,7 +280,9 @@ class MassTransferStack(ReactionStack):
     function_code     : str
     diff_code         : str
     signature         : tuple[str]
-    functions         : dict[str, callable]
+    rhs_functions     : dict[str, callable]
+    rhsdct_functions  : dict[str, callable]
+    formatter         : str
     
     surface2domain_type_idx  : dict[Surface, One2One[int, int]]
     surfacepoint2surface_idx : One2One[tuple[Number], tuple[int, Surface]]
@@ -319,10 +321,15 @@ class MassTransferStack(ReactionStack):
         #Data structures for retrieval by location
         
         #Update calculators
-        self.functions['__advection'] = calculate_advection
-        self.functions['__diffusion'] = calculate_diffusion
-        self.functions['__Neumann'  ] = calculate_neumann_boundary
-        self.functions['__Dirichlet'] = calculate_dirichlet_boundary
+        self.rhs_functions['__advection'] = calculate_advection
+        self.rhs_functions['__diffusion'] = calculate_diffusion
+        self.rhs_functions['__Neumann'  ] = calculate_neumann_boundary
+        self.rhs_functions['__Dirichlet'] = calculate_dirichlet_boundary
+        
+        self.rhsdct_functions['__advection'] = calculate_advection2
+        self.rhsdct_functions['__diffusion'] = calculate_diffusion2
+        self.rhsdct_functions['__Neumann'  ] = calculate_neumann_boundary2
+        self.rhsdct_functions['__Dirichlet'] = calculate_dirichlet_boundary2
         
         #Parse the advection
         self._reformat_mass_transfer_terms(self.advection_terms)
@@ -338,12 +345,6 @@ class MassTransferStack(ReactionStack):
         self._reformat_boundary_terms(self.boundary_terms)
         self.boundary_condition_code = ''
         self._add_boundary_code()
-        
-        self.rhsdct_aux                = self.functions.copy()
-        self.rhsdct_aux['__advection'] = calculate_advection2
-        self.rhsdct_aux['__diffusion'] = calculate_diffusion2
-        self.rhsdct_aux['__Neumann'  ] = calculate_neumann_boundary2
-        self.rhsdct_aux['__Dirichlet'] = calculate_dirichlet_boundary2
         
     ###########################################################################
     #Preprocessing
@@ -409,13 +410,13 @@ class MassTransferStack(ReactionStack):
             #0 : dst, 1: scale, 2: mask
             if advection_term[m][0][c0] == -1:
                 advection_term[m][0][c0] = c1
-                advection_term[m][1][c0] = A/D
+                advection_term[m][1][c0] = A
                 advection_term[m][2][c0] = 1
                 
                 if diffusion_term is not None:
-                    diffusion_term[m][0][c0]   = c1
-                    diffusion_term[m][1][c0] = A/D**2
-                    diffusion_term[m][2][c0]  = 1
+                    diffusion_term[m][0][c0] = c1
+                    diffusion_term[m][1][c0] = A/D
+                    diffusion_term[m][2][c0] = 1
                 
                 break
             
@@ -448,12 +449,12 @@ class MassTransferStack(ReactionStack):
         #Calculate the values to store
         c    = voxel2domain_type_idx[voxel][0]
         size = sizes[voxel]
-        A     = size**(nd-1)
-        V     = size**nd
+        A    = size**(nd-1)
+        D    = size
         
         #Find a vacant element and store the information
         boundary_term[0].append(c)
-        boundary_term[1].append(A*V)
+        boundary_term[1].append(A/D)
     
     def _reformat_mass_transfer_terms(self, terms: dict) -> None:
         helper0 = lambda x: repr(tuple([np.array(i) for i in x]))
@@ -488,9 +489,11 @@ class MassTransferStack(ReactionStack):
         domain_type2volume = self.domain_type2volume
             
         for state in advection:
+            #Extract information
+            state_       = ut.undot(state)
             domain_type  = state2domain_type[state]
             code        += f'\t#{name} {state}\n'
-            code        += f'\t{ut.adv(state)} = __zeros({state}.shape)\n\n'
+            code        += f'\t{ut.adv(state_)} = __zeros({state_}.shape)\n\n'
             
             for axis, axis_data in advection_terms[domain_type].items():
                 #Extract information
@@ -504,7 +507,7 @@ class MassTransferStack(ReactionStack):
                 
                 
                 #Make code for calling external function
-                lhs   = f'{ut.adv(state)}'
+                lhs   = f'{ut.adv(state_)}'
                 
                 if coeff in self.bulk_variables:
                     #Check the domain types match
@@ -516,11 +519,11 @@ class MassTransferStack(ReactionStack):
                         msg += f'However, it is being for a state that exists in domain type {domain_type1}.'
                         raise ValueError(msg)
                     
-                coeff = f'__ones({state}.shape)*{coeff}'
-                rhs   = f'__advection({state}, {coeff}, _left, _right, {volumes})\n'
+                coeff = f'__ones({state_}.shape)*{coeff}'
+                rhs   = f'__advection({state_}, {coeff}, _left, _right, {volumes})\n'
                 code += f'\t{lhs} += {rhs}\n'
                 
-            code += f'\t{ut.diff(state)} += {ut.adv(state)}\n\n'
+            code += f'\t{ut.diff(state_)} += {ut.adv(state_)}\n\n'
                 
         self.advection_code = code + '\n'
             
@@ -535,13 +538,14 @@ class MassTransferStack(ReactionStack):
         
         for state in diffusion:
             #Extract information
+            state_      = ut.undot(state)
             domain_type = state2domain_type[state]
             volumes     = domain_type2volume[domain_type]
             volumes     = f'__array({volumes})'
             
             #Update code
             code += f'\t#{name} {state}\n'
-            code += f'\t{ut.dfn(state)} = __zeros({state}.shape)\n\n'
+            code += f'\t{ut.dfn(state_)} = __zeros({state_}.shape)\n\n'
             
             for axis, axis_data in diffusion_terms[domain_type].items():
                 #Extract information
@@ -550,7 +554,7 @@ class MassTransferStack(ReactionStack):
                 code          += f'\t_left = {left_mappings}\n'
                 
                 #Make code for calling external function
-                lhs   = f'{ut.dfn(state)}'
+                lhs   = f'{ut.dfn(state_)}'
                 
                 if coeff in self.bulk_variables:
                     msg = 'Diffusion coefficient must be a number, parameter or global variable.'
@@ -565,11 +569,11 @@ class MassTransferStack(ReactionStack):
                         msg += f'However, it is being for a state that exists in domain type {domain_type1}.'
                         raise ValueError(msg)
                 
-                coeff = f'__ones({state}.shape)*{coeff}'
-                rhs   = f'__diffusion({state}, {coeff}, _left, {volumes})\n'
+                coeff = f'__ones({state_}.shape)*{coeff}'
+                rhs   = f'__diffusion({state_}, {coeff}, _left, {volumes})\n'
                 code += f'\t{lhs} += {rhs}\n'
                 
-            code += f'\t{ut.diff(state)} += {ut.dfn(state)}\n\n'
+            code += f'\t{ut.diff(state_)} += {ut.dfn(state_)}\n\n'
                 
         self.diffusion_code = code + '\n'
         
@@ -587,6 +591,8 @@ class MassTransferStack(ReactionStack):
         domain_type2volume    = self.domain_type2volume
         
         def helper(state, axis, n_voxels, condition, mapping, volumes):
+            state_ = ut.undot(state)
+            
             if condition.condition_type == 'Neumann':
                 flux = condition.condition
                 
@@ -603,13 +609,13 @@ class MassTransferStack(ReactionStack):
                         msg += f'However, it is being for a state that exists in domain type {domain_type1}.'
                         raise ValueError(msg)
                         
-                flux = f'__ones({state}.shape)*{flux}'
-                rhs  = f'__Neumann({state}, {flux}, {mapping}, {volumes})'
+                flux = f'__ones({state_}.shape)*{flux}'
+                rhs  = f'__Neumann({state_}, {flux}, {mapping}, {volumes})'
                 
             elif condition.condition_type == 'Dirichlet':
                 concentration = condition.condition
                 
-                concentration = f'__ones({state}.shape)*{concentration}'
+                concentration = f'__ones({state_}.shape)*{concentration}'
                 if concentration in self.bulk_variables:
                     msg = 'Dirichlet boundary concentration must be a number, parameter or global variable.'
                     raise NotImplementedError(msg)
@@ -624,8 +630,8 @@ class MassTransferStack(ReactionStack):
                         raise ValueError(msg)
                     
                 coeff = self.spatial_data.diffusion.find(state, axis) 
-                coeff = f'__ones({state}.shape)*{coeff}'
-                rhs   = f'__Dirichlet({state}, {coeff}, {concentration}, {mapping}, {volumes})'
+                coeff = f'__ones({state_}.shape)*{coeff}'
+                rhs   = f'__Dirichlet({state_}, {coeff}, {concentration}, {mapping}, {volumes})'
             else:
                 msg = f'No implementation for {condition.condition_type} boundary.'
                 raise NotImplementedError(msg)
@@ -634,6 +640,7 @@ class MassTransferStack(ReactionStack):
         
         for state in boundary_conditions.states:
             #Extract information
+            state_          = ut.undot(state)
             domain_type     = state2domain_type[state]
             n_voxels        = len(domain_type2voxel[domain_type])
             volumes         = domain_type2volume[domain_type]
@@ -641,30 +648,32 @@ class MassTransferStack(ReactionStack):
             
             #Update code
             code += f'\t#{name} {state}\n'
-            code += f'\t{ut.bc(state)} = __zeros({state}.shape)\n\n'
+            code += f'\t{ut.bc(state_)} = __zeros({state}.shape)\n\n'
             
             for axis, axis_data in boundary_terms[domain_type].items():
+                #Parse left side/axis minimum
                 #Extract information
                 condition  = boundary_conditions.find(state, axis=-axis)
                 mappings   = axis_data['left']
                 code      += f'\t_left = {mappings}\n'
 
                 #Make code for calling external function
-                lhs   = f'{ut.bc(state)}'
-                rhs   = helper(state, axis, n_voxels, condition, '_left', volumes)
+                lhs   = f'{ut.bc(state_)}'
+                rhs   = helper(state, axis, n_voxels, ut.undot(condition), '_left', volumes)
                 code += f'\t{lhs} += {rhs}\n'
                 
+                #Parse right side/axis maximum
                 #Extract information
                 condition  = boundary_conditions.find(state, axis=axis)
                 mappings   = axis_data['right']
                 code      += f'\t_right = {mappings}\n'
 
                 #Make code for calling external function
-                lhs   = f'{ut.bc(state)}'
+                lhs   = f'{ut.bc(state_)}'
                 rhs   = helper(state, axis, n_voxels, condition, '_right', volumes)
                 code += f'\t{lhs} += {rhs}\n'
                 
-            code += f'\t{ut.diff(state)} += {ut.bc(state)}\n\n'
+            code += f'\t{ut.diff(state_)} += {ut.bc(state_)}\n\n'
                 
         self.boundary_condition_code = code + '\n'
         

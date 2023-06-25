@@ -100,5 +100,20 @@ class SpatialModel:
         self.data_args       = {} if data_args  is None else data_args
         self.tspan           = tspan
         self.meta            = meta
+    
+    ###########################################################################
+    #Integration
+    ###########################################################################
+    def integrate(self, 
+                  tspan: np.array, 
+                  y0: np.array, 
+                  p0: np.array,
+                  **kwargs
+                  ) -> tuple[np.array, np.array, np.array]:
         
+        t, y, p = integrate(self.rhs, tspan, y0, p0, **kwargs)
+        
+        return t, y, p
+    
+    
         

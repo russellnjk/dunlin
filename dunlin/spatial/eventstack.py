@@ -1,4 +1,5 @@
 import numpy as np
+import re
 from numba   import njit  
 from numbers import Number
 from scipy   import spatial
@@ -14,6 +15,8 @@ from .ratestack            import (RateStack,
                                    Surface
                                    )
 from dunlin.datastructures import SpatialModelData
+from dunlin.ode.ode_coder  import make_rhsevents
+from dunlin.ode.event      import Event
 
 class EventStack(RateStack):
     #Expected mappings and attributes
@@ -44,7 +47,8 @@ class EventStack(RateStack):
     function_code     : str
     diff_code         : str
     signature         : tuple[str]
-    functions         : dict[str, callable]
+    rhs_functions     : dict[str, callable]
+    rhsdct_functions  : dict[str, callable]
     formatter         : str
     
     surface2domain_type_idx  : dict[Surface, One2One[int, int]]
@@ -81,5 +85,118 @@ class EventStack(RateStack):
     
     def __init__(self, spatial_data: SpatialModelData):
         super().__init__(spatial_data)
+        self.event_functions = {'__mean' : np.mean}
+        
+        self.average = np.mean
+        self._events = []
+        self._add_events()
+    
+    ###########################################################################
+    #Events
+    ###########################################################################
+    def _add_events(self) -> None:
+        spatial_data = self.spatial_data
+        
+        #Shared templates
+        ref       = spatial_data.ref
+        signature = ', '.join(self.signature)
+        body_code = '\n'.join([self.state_code,
+                               self.parameter_code,
+                               self.diff_code, 
+                               self.function_code,
+                               self.variable_code,
+                               self.d_states_code
+                               ])
+        
+        #Templates for trigger
+        trigger_def       = f'def {{trigger_name}}({signature}):'
+        trigger_return    = '\treturn __triggered'
+        trigger_expr      = '\t__triggered = {trigger_expr}'
+        
+        #Templates for assignment
+        assign_def        = f'def {{assign_name}}({signature}):'
+        assign_return     = '\treturn new_y, new_p'
+        assign_expr       = '\t__triggered = __ones{assign_expr}'
+        xs                = [ut.undot(x) for x in spatial_data.states    ]
+        ps                = [ut.undot(p) for p in spatial_data.parameters]
+        new_y             = f'\tnew_y = __concatenate(({", ".join(xs)}))'
+        new_p             = f'\tnew_p = __array([{", ".join(ps)}])'
+        assign_collate    = '\n'.join(['\t#Collate', new_y, new_p])
         
         
+        #Iterate through events
+        for event in spatial_data.events.values(): 
+            #Create trigger function
+            trigger_name = f'trigger_{ref}_{event.name}'
+            
+            code = [trigger_def.format(trigger_name=trigger_name), 
+                    body_code, 
+                    '\t#Trigger\n', 
+                    trigger_expr.format(trigger_expr=event.trigger_expr), 
+                    trigger_return
+                    ]
+            code = '\n\n'.join(code)
+            
+            #Execute code
+            scope = {}
+            exec(code, self.rhs_functions, scope)
+            trigger_func      = scope[trigger_name]
+            trigger_func      = self._wrap_trigger(trigger_func)
+            trigger_func.code = code
+            
+            #Create assign function=
+            assign_name = f'assign_{ref}_{event.name}'
+            
+            exprs = []
+            for assign_expr in event.assign:
+                pattern = '(^\W*)(\w*)(\W*=)'
+                
+                def repl(match):
+                    lhs = match[2]
+                    if lhs in xs:
+                        add = f'__ones({lhs}.shape)*'
+                        result = match[0] + add
+                    else:
+                        result = match[0]
+                    
+                    return f'\t{result}'
+                
+                new_expr = re.sub(pattern, repl, assign_expr)
+                exprs.append(new_expr)
+            
+            
+            code = [assign_def.format(assign_name=assign_name), 
+                    body_code, 
+                    '\t#Assign\n', 
+                    '\n'.join(exprs), 
+                    assign_collate,
+                    assign_return
+                    ]
+            code = '\n\n'.join(code)
+            
+            #Execute code
+            scope = {}
+            exec(code, self.rhs_functions, scope)
+            assign_func      = scope[assign_name]
+            assign_func.code = code 
+            
+            #Make event
+            event_object = Event(event.name, 
+                                 trigger_func, 
+                                 assign_func, 
+                                 delay      = event.delay, 
+                                 persistent = event.persistent, 
+                                 priority   = event.priority, 
+                                 ref        = ref
+                                 )
+            self._events.append(event_object)
+            
+    def _wrap_trigger(self, trigger_func: callable) -> callable:
+        def helper(time, states, parameters):
+            raw     = trigger_func(time, states, parameters)
+            average = self.average(raw)
+            return average
+        return helper
+    
+    
+      

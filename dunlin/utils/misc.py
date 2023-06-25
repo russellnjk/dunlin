@@ -15,8 +15,10 @@ def undot(x, ignore=lambda x: x[:2] == '__'):
                 return variable.replace('.', '__dot__')
         
         return re.sub('[a-zA-Z_]+[\w_]*\.', repl, x)
-    else:
+    elif hasattr(x, '__iter__'):
         return [undot(i) for i in x]
+    else:
+        return x
     
 def dot(x):
     if isstrlike(x):

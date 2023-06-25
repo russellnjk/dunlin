@@ -14,6 +14,7 @@ from .masstransferstack    import (MassTransferStack,
                                    Surface
                                    )
 from dunlin.datastructures import SpatialModelData
+from dunlin.ode.ivp        import integrate
 
 class RateStack(MassTransferStack):
     #Expected mappings and attributes
@@ -44,7 +45,8 @@ class RateStack(MassTransferStack):
     function_code     : str
     diff_code         : str
     signature         : tuple[str]
-    functions         : dict[str, callable]
+    rhs_functions     : dict[str, callable]
+    rhsdct_functions  : dict[str, callable]
     formatter         : str
     
     surface2domain_type_idx  : dict[Surface, One2One[int, int]]
@@ -83,11 +85,11 @@ class RateStack(MassTransferStack):
         super().__init__(spatial_data)
         
         #Add required functions
-        self.functions['__concatenate'] = np.concatenate
-        self.functions['__njit'       ] = njit
+        self.rhs_functions['__concatenate'] = np.concatenate
+        self.rhs_functions['__njit'       ] = njit
         
-        self.rhsdct_aux['__concatenate'] = np.concatenate
-        self.rhsdct_aux['__njit'       ] = njit
+        self.rhsdct_functions['__concatenate'] = np.concatenate
+        self.rhsdct_functions['__njit'       ] = njit
         
         #Parse rates
         self.rate_code = ''
@@ -143,8 +145,9 @@ class RateStack(MassTransferStack):
         
         code = ''
         for state, rate in rates.items():
-            lhs = f'{ut.diff(state)}'
-            rhs = rate.expr
+            state_ = ut.undot(state)
+            lhs    = f'{ut.diff(state_)}'
+            rhs    = ut.undot(rate.expr)
             
             code += f'\t{lhs} += {rhs}\n'
         
@@ -154,7 +157,8 @@ class RateStack(MassTransferStack):
         code = f'\t{ut.diff("states")} = __concatenate(('
         
         for state in self.spatial_data.states:
-            code += ut.diff(state) + ', '
+            state_  = ut.undot(state)
+            code   += ut.diff(state_) + ', '
         
         code += '))'
         
@@ -192,7 +196,7 @@ class RateStack(MassTransferStack):
         self.rhs_code = code
         
         scope = {}
-        exec(code, self.functions, scope)
+        exec(code, self.rhs_functions, scope)
         self._rhs_funcs = scope[self.rhs_name], njit(scope[self.rhs_name])
         self._rhs       = self._rhs_funcs[1]
         
@@ -200,17 +204,18 @@ class RateStack(MassTransferStack):
         self.rhsdct_name = f'model_{model_ref}_dct'
         function_def     = f'def {self.rhsdct_name}({signature}):\n'
         
-        lst = ['time']
-        lst += list(spatial_data.states)
-        lst += list(spatial_data.parameters)
-        lst += list(spatial_data.variables)
-        lst += list(spatial_data.reactions)
-        lst += [ut.adv(x)  for x in spatial_data.advection]
-        lst += [ut.dfn(x)  for x in spatial_data.diffusion]
-        lst += [ut.bc(x)   for x in spatial_data.boundary_conditions.states]
-        lst += [ut.diff(x) for x in spatial_data.states]
+        lst  = ['time']
+        lst  += list(spatial_data.states)
+        lst  += list(spatial_data.parameters)
+        lst  += list(spatial_data.variables)
+        lst  += list(spatial_data.reactions)
+        lst  += [ut.adv(x)  for x in spatial_data.advection]
+        lst  += [ut.dfn(x)  for x in spatial_data.diffusion]
+        lst  += [ut.bc(x)   for x in spatial_data.boundary_conditions.states]
+        lst  += [ut.diff(x) for x in spatial_data.states]
+        lst_  = ut.undot(lst)
         
-        temp       = ', '.join(lst)
+        temp       = ', '.join(lst_)
         return_val = f'\treturn ({temp})'
         
         code = '\n'.join([function_def, body_code, return_val])
@@ -218,13 +223,9 @@ class RateStack(MassTransferStack):
         self.rhsdct_code = code
         
         #Execute code
-        exec(code, self.rhsdct_aux, scope)
+        exec(code, self.rhsdct_functions, scope)
         tuple_func0 = scope[self.rhsdct_name]
         tuple_func1 = njit(tuple_func0)
-
-        #Create wrapped functions
-        # dct_func0   = self._wrap(tuple_func0, lst)
-        # dct_func1   = self._wrap(tuple_func1, lst)
         
         dct_func0   = lambda t, y, p: dict(zip(lst, tuple_func0(t, y, p)))
         dct_func1   = lambda t, y, p: dict(zip(lst, tuple_func1(t, y, p)))
@@ -232,16 +233,6 @@ class RateStack(MassTransferStack):
         self._rhsdct_funcs = dct_func0, dct_func1
         self._rhsdct       = self._rhsdct_funcs[1]
     
-    @staticmethod
-    def _wrap(f, lst):
-        def helper(t, y, p):
-            raw      = [f(*x) for x in zip(t, y.T, p.T)]
-            reshaped = [np.array(x).T for x in zip(*raw)]
-            dct      = dict(zip(lst, reshaped))
-            
-            return dct
-        return helper
-            
     ###########################################################################
     #Plotting
     ###########################################################################

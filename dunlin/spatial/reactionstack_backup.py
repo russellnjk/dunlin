@@ -1,3 +1,10 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Fri Jun 23 13:17:26 2023
+
+@author: Russell
+"""
+
 import matplotlib        as mpl
 import matplotlib.pyplot as plt
 import numpy             as np
@@ -59,9 +66,9 @@ class ReactionStack(StateStack):
     rhsdct_functions  : dict[str, callable]
     formatter         : str
     
-    surface_data  : dict[Surface, One2One[int, int]]
-    midpoint2surface_idx : One2One[tuple[Number], tuple[int, Surface]]
-    midpoint_lst         : list[tuple[Number]]
+    surface2domain_type_idx  : dict[Surface, One2One[int, int]]
+    surfacepoint2surface_idx : One2One[tuple[Number], tuple[int, Surface]]
+    surfacepoint_lst         : list[tuple[Number]]
     surface2tree             : spatial.KDTree
     global_variables         : set
     bulk_variables           : dict[str, Domain_type]
@@ -74,19 +81,15 @@ class ReactionStack(StateStack):
     
     def __init__(self, spatial_data: SpatialModelData):
         #Data structures for self._add_surface
-        self.surface_data  = {}
+        self.surface2domain_type_idx  = {}
+        self.surfacepoint2surface_idx = One2One('surfacepoint', 'surface_idx/surface')
         
         #Call the parent constructor
         super().__init__(spatial_data)
         
-        self._reformat_surface_data()
-        
         #Data structures for retrieval by location
-        self.surface2tree = {}
-        for surface, surface_datum in self.surface_data.items():
-            midpoints = list(surface_datum['spatial']['surface_idx2midpoint'].values())
-            
-            self.surface2tree[surface] = spatial.KDTree(midpoints)
+        self.surfacepoint_lst = list(self.surfacepoint2surface_idx)
+        self.surface2tree     = spatial.KDTree(self.surfacepoint_lst)
         
         #Parse the variables
         self.global_variables  = set()
@@ -107,161 +110,50 @@ class ReactionStack(StateStack):
     def _add_surface(self, voxel0, voxel1, shift) -> None:
         voxel2domain_type        = self.voxel2domain_type
         voxel2domain_type_idx    = self.voxel2domain_type_idx
-        surface_data  = self.surface_data
-        sizes                    = self.sizes
-        ndims                    = self.ndims
+        surface2domain_type_idx  = self.surface2domain_type_idx
+        surfacepoint2surface_idx = self.surfacepoint2surface_idx
         
         #Extract domain_type information
         domain_type0 = voxel2domain_type[voxel0]
         domain_type1 = voxel2domain_type[voxel1]
         domain_types = domain_type0, domain_type1
         surface      = tuple(sorted([domain_type0, domain_type1]))
-        size0        = sizes[voxel0]
-        size1        = sizes[voxel1]
-        n            = ndims - 1
         
-        #Prevent double computation
+        #Prevent double copmutation
         if surface != domain_types:
             return
-        
-        #Update self.surface_data
+    
+        #Update self.surface2domain_type_idx
         #When assigning the value of a surface variable/reaction
         #Given the domain types of each state/bulk variable, 
         #we can find the relevant indices
         voxel0_idx = voxel2domain_type_idx[voxel0][0]
         voxel1_idx = voxel2domain_type_idx[voxel1][0]
         
-        default       = {'batch_data' : []}
-        surface_datum = surface_data.setdefault(surface, default)
-        batch_data    = surface_datum['batch_data']
+        default = {domain_type0: One2Many('surface_idx', 'domain_type_idx'), 
+                   domain_type1: One2Many('surface_idx', 'domain_type_idx')
+                   }
         
-        i = 0
-        while True:
-            if i == len(batch_data):
-                batch_data.append({'idxs'    : {}, 
-                                   'scales'  : [],
-                                   'shifts'  : [],
-                                   'mids'    : [],
-                                   'volumes' : {}
-                                   }
-                                  )
-            
-            batch   = batch_data[i]
-            idxs    = batch['idxs'  ]
-            scales  = batch['scales']
-            mids    = batch['mids'  ] 
-            volumes = batch['volumes']
-            shifts  = batch['shifts']
-            
-            if voxel0_idx in idxs:
-                i += 1
-                
-            else:
-                #Update idxs
-                idxs[voxel0_idx] = voxel1_idx
-                
-                #Update scales
-                A  = min(size0, size1)**n
-                scales.append(A)
-                
-                #Update shifts
-                shifts.append(shift)
-                
-                #Update midpoints
-                midpoint = tuple(np.mean([voxel0, voxel1], axis=0))
-                mids.append(midpoint)
-                
-                #Update volumes
-                volumes.setdefault(domain_type0, []).append(size0**ndims)
-                volumes.setdefault(domain_type1, []).append(size1**ndims)
-                
-                break
+        dct = surface2domain_type_idx.setdefault(surface,
+                                                 default
+                                                 )
         
-    def _reformat_surface_data(self) -> None:
-        surface_data = self.surface_data
+        surface_idx                    = len(dct[domain_type0])
+        dct[domain_type0][surface_idx] = voxel0_idx
+        dct[domain_type1][surface_idx] = voxel1_idx
         
-        start = 0
-        for surface in surface_data.keys():
-            domain_type0, domain_type1 = surface
-            surface_datum              = surface_data[surface]  
-            batches                    = surface_datum['batch_data']
-            template                   = '__array({})'
-            collated0                  = []
-            collated1                  = []
-            split                      = []
-            surface_idx2midpoint       = {}
-            domain_type_idxs           = []
-            shifts                     = []
-            
-            for batch in batches:
-                #Create code chunks corresponding to indices
-                domain_type_idxs0, domain_type_idxs1 = zip(*batch['idxs'].items()) 
-        
-                stop         = start + len(domain_type_idxs0) 
-                split_       = {domain_type0 : template.format(list(domain_type_idxs0)),
-                                domain_type1 : template.format(list(domain_type_idxs1)),
-                                '_scale'     : template.format(batch['scales']),
-                                '_idxs'      : (start, stop),
-                                '_volumes'   : {}
-                                }
-                
-                split.append(split_)
-                collated0.extend(domain_type_idxs0)
-                collated1.extend(domain_type_idxs1)
-                
-                #Update surface_idx2midpoint
-                midpoints             = batch['mids'] 
-                surface_idx2midpoint_ = dict(enumerate(midpoints, start=start))
-                surface_idx2midpoint.update(surface_idx2midpoint_)
-                
-                #Update surface_idx2domain_type_idx
-                pairs = list(zip(domain_type_idxs0, domain_type_idxs1))
-                
-                domain_type_idxs.extend(pairs)
-                
-                #Update shifts
-                shifts.extend(batch['shifts'])
-                
-                #Update volumes
-                volumes0 = list(batch['volumes'][domain_type0])
-                volumes1 = list(batch['volumes'][domain_type1])
-                
-                volumes0 = template.format(volumes0)
-                volumes1 = template.format(volumes1)
-                
-                split_['_volumes'][domain_type0] = volumes0
-                split_['_volumes'][domain_type1] = volumes1
-                
-                #Update start
-                start = stop
-            
-            #Convert collated from list to string
-            collated0   = template.format('[' + ', '.join([str(i) for i in collated0]) + ']')
-            collated1   = template.format('[' + ', '.join([str(i) for i in collated1]) + ']')
-            
-            #Convert surface_idx2midpoint into One2One to allow 2 way access
-            surface_idx2midpoint = One2One('surface_idx', 'midpoint', surface_idx2midpoint)
-            
-            #Update surface_datum
-            #Add code chunks to surface_datum
-            surface_datum['code'] = {'collated': {domain_type0 : collated0,
-                                                          domain_type1 : collated1,
-                                                          }, 
-                                     'split'   : split,
-                                     }
-            
-            #Add spatial data to surface_datum
-            surface_datum['spatial'] = {'surface_idx2midpoint' : surface_idx2midpoint,
-                                        'domain_type_idxs'     : domain_type_idxs,
-                                        'shifts'               : shifts 
-                                        }
-            
+        #Update self.surfacepoint2surface_idx
+        #Given a location, we can find the index of interest
+        surfacepoint                           = np.mean([voxel0, voxel1], axis=0)
+        surfacepoint                           = tuple(surfacepoint)
+        surfacepoint2surface_idx[surfacepoint] = surface, surface_idx
+    
     ###########################################################################
     #Utils
     ###########################################################################
-    def sub(self, expr):
+    def sub(self, expr, **kwargs):
         if ut.isstrlike(expr):
-            repl = self.repl
+            repl = lambda match: self.repl(match, **kwargs)
             return re.sub('[a-zA-z]\w*', repl, expr)  
         else:
             return expr
@@ -274,13 +166,13 @@ class ReactionStack(StateStack):
             state       = match[0]
             domain_type = state2domain_type[state]
             
-            return state + f'[{{{domain_type}}}]'
+            return state + f'[__array({{{domain_type}}})]'
         
         elif match[0] in bulk_variables:
             variable    = match[0]
             domain_type = bulk_variables[variable]
             
-            return variable + f'[{{{domain_type}}}]'
+            return variable + f'[__array({{{domain_type}}})]'
         
         else:
             return match[0]
@@ -344,17 +236,14 @@ class ReactionStack(StateStack):
         return self._add_global_variable_code(variable)
     
     def _add_surface_variable_code(self, variable, surface) -> None:
-        surface_data = self.surface_data
+        surface2domain_type_idx = self.surface2domain_type_idx
         
         expr          = variable.expr
         lhs           = variable.name
         rhs           = self.sub(expr)
-        surface_datum = surface_data[surface]
-        
-        #Get a mapping that maps the domain_type of a state/bulk variable 
-        #to indices in code form
-        collated      = surface_datum['code']['collated']
-        rhs           = rhs.format(**collated)
+        surface_data  = surface2domain_type_idx[surface]
+        surface_data_ = {k: list(v.values()) for k, v in surface_data.items()}
+        rhs           = rhs.format(**surface_data_)
         variable_code = f'\t{lhs} = {rhs}\n'
         
         self.variable_code += variable_code + '\n'
@@ -425,92 +314,169 @@ class ReactionStack(StateStack):
         self.reaction_code += diff_code + '\n'
         
     def _add_surface_reaction_code(self, reaction, surface) -> None:
-        surface_data      = self.surface_data
-        state2domain_type = self.state2domain_type
+        surface2domain_type_idx = self.surface2domain_type_idx
+        state2domain_type       = self.state2domain_type
         
-        #Update reaction code
         expr          = reaction.rate
         lhs           = reaction.name
         rhs           = self.sub(expr)
-        surface_datum = surface_data[surface]
-        
-        #Get a mapping that maps the domain_type of a state/bulk variable 
-        #to indices in code form
-        collated      = surface_datum['code']['collated']
-        rhs           = rhs.format(**collated)
+        surface_data  = surface2domain_type_idx[surface]
+        surface_data_ = {k: list(v.values()) for k, v in surface_data.items()}
+        rhs           = rhs.format(**surface_data_)
         reaction_code = f'\t{lhs} = {rhs}\n\n'
         
         self.reaction_code += reaction_code 
         
         #Update diff code
         for state, stoich in reaction.stoichiometry.items():
-            domain_type = state2domain_type[state]
-            split       = surface_datum['code']['split']
+            domain_type           = state2domain_type[state]
+            state_idx2surface_idx = surface_data[domain_type].inverse
             
-            for batch in split:
-                #Parse the lhs
-                state_idxs  = batch[domain_type]
-                lhs         = ut.diff(state) + f'[{state_idxs}]'
-                
-                #Parse the rhs
-                state_idxs = ':'.join([str(i) for i in batch['_idxs']])
-                scale      = batch['_scale']
-                volumes    = batch['_volumes'][domain_type]
-                rhs        = f'{stoich}*{reaction.name}[{state_idxs}]'
-                rhs        = f'{rhs}*{scale}/{volumes}'
-                
+            state_idxs  = list(state_idx2surface_idx)
+            lhs         = ut.diff(state) + f'[__array({state_idxs})]'
             
-                diff_code   = f'\t{lhs} += {rhs}\n' 
+            rhs = f'{stoich}*__array(['
+            for surface_idxs in state_idx2surface_idx.values():
+                rhs_element = [f'{reaction.name}[{idx}]' for idx in surface_idxs]
+                rhs_element = '+'.join(rhs_element)
+                rhs_element = f'{rhs_element}, '
                 
+                rhs += rhs_element
+            
+            rhs += '])'
+            
+            diff_code   = f'\t{lhs} += {rhs}\n' 
             self.reaction_code += diff_code + '\n'
          
     ###########################################################################
     #Retrieval
     ###########################################################################
-    def get_surface_midpoints(self,
-                              surface : Surface
-                              ) -> list[tuple]:
-        surface_idx2midpoint = self.surface_data[surface]['spatial']['surface_idx2midpoint']
-        surface_midpoints    = list(surface_idx2midpoint.values())
-        return surface_midpoints 
-    
     def get_surface_idx(self, 
-                        surface : Surface,
-                        *points : tuple[Number], 
+                        point          : tuple[Number], 
+                        return_surface : bool=False
                         ) -> int:
-        #Set up variables
-        surface_idx2midpoint = self.surface_data[surface]['spatial']['surface_idx2midpoint']
-        midpoint2surface_idx = surface_idx2midpoint.inverse
-        surface_idxs         = []
-        surface_midpoints    = []
+        point = tuple(point)
+        try:
+            surface, idx  = self.surfacepoint2surface_idx[point]
+            dist          = 0
+        except KeyError:
+            dist, temp   = self.surface2tree.query(point)
+            point_       = self.surfacepoint_lst[temp]
+            surface, idx = self.surfacepoints[point_]
+        except Exception as e:
+            raise e
         
-        #Iterate and perform search for each point
-        for point in points:
-            point = tuple(point)
-            try:
-                idx      = midpoint2surface_idx[point]
-                midpoint = point
-                
-            except KeyError:
-                dist, idx   = self.surface2tree[surface].query(point)
-                midpoint    = surface_idx2midpoint[idx]
-                
-                if dist > self.grid.step:
-                    msg  = 'Attempted to find closest point to {point} for {name}. '
-                    msg += 'The resulting closest point is further than the step size of the largest grid.'
-                    warnings.warn(msg)
-            except Exception as e:
-                raise e
-            
-            #Update results
-            surface_idxs.append(idx)
-            surface_midpoints.append(midpoint)
-
-        return surface_idxs, surface_midpoints
+        if dist > self.grid.step:
+            msg  = 'Attempted to find closest point to {point} for {name}. '
+            msg += 'The resulting closest point is further than the step size of the largest grid.'
+            warnings.warn(msg)
+        
+        if return_surface:
+            return surface, idx
+        else:
+            return idx
+    
+    def get_surface(self, 
+                    surface     : Surface, 
+                    domain_type : Domain_type=None,
+                    ):
+        dct = self.surface2domain_type_idx[surface]
+        
+        if domain_type is None:
+            return dct
+        else:
+            return dct[domain_type]
     
     ###########################################################################
     #Plotting
     ###########################################################################
+    def _plot_surface(self, 
+                      ax, 
+                      name           : str, 
+                      values         : np.array,
+                      surface        : Surface,
+                      default_kwargs : dict,
+                      user_kwargs    : dict = None,
+                      label_surfaces : bool = True
+                      ) -> dict:
+        results    = {}
+        converters = {'facecolor'   : upp.get_color, 
+                      'surfacecolor': upp.get_color,
+                      'color'       : upp.get_color
+                      }
+        
+        domain_type_idx2voxel         = self.voxel2domain_type_idx.inverse
+        sizes                         = self.sizes
+        voxels                        = self.voxels
+        
+        surface_data = self.surface2domain_type_idx[surface]
+        
+        domain_type0, domain_type1 = surface
+        
+        d         = self.surfacepoint2surface_idx.inverse 
+        plot_data = []
+        
+        for surface_idx, value in enumerate(values):
+            surfacepoint = d[surface, surface_idx]
+            
+            plot_data.append([*surfacepoint, value])
+            
+            domain_type_idx0 = surface_data[domain_type0][surface_idx]
+            domain_type_idx1 = surface_data[domain_type1][surface_idx]
+            
+            voxel0 = domain_type_idx2voxel[domain_type_idx0, domain_type0]
+            voxel1 = domain_type_idx2voxel[domain_type_idx1, domain_type1]
+            
+            size0 = sizes[voxel0]
+            size1 = sizes[voxel1]
+            
+            if size0 > size1:
+                voxel, neighbour = voxel1, voxel0
+                neighbour_domain_type = domain_type0
+            else:
+                voxel, neighbour = voxel0, voxel1
+                neighbour_domain_type = domain_type1
+                
+            #Determine the arguments for the surface
+            sub_args       = {'name': name, 'value': value}
+            reaction_args_ = upp.process_kwargs(user_kwargs,
+                                                [],
+                                                default_kwargs,
+                                                sub_args,
+                                                converters
+                                                )
+            
+            #Create the line
+            shift       = voxels[voxel]['surface'][neighbour_domain_type][neighbour]
+            delta       = np.sign(shift)*size0/2
+            idx         = abs(shift)-1
+            point       = np.array(voxel)
+            point[idx] += delta
+            start       = np.array(voxel)
+            stop        = np.array(voxel)
+            
+            for i, n in enumerate(voxel):
+                if i == idx:
+                    start[i] += delta
+                    stop[i]  += delta
+                else:
+                    start[i] -= size0/2
+                    stop[i]  += size0/2
+            
+            x, y = np.stack([start, stop]).T
+            line = ax.plot(x, y, **reaction_args_)
+            
+            results[surface_idx] = line
+            
+            #Add text
+            if label_surfaces:
+                ax.text(*np.mean([start, stop], axis=0), 
+                        value, 
+                        horizontalalignment='center'
+                        )
+    
+        return results
+    
     def _plot_surface(self, 
                       ax, 
                       name           : str, 
@@ -521,48 +487,85 @@ class ReactionStack(StateStack):
                       label_surfaces : bool=True,
                       colorbar_ax    : plt.Axes=None
                       ) -> dict:
-        #Create the cache for the results
-        results = {}
+        results    = {}
         
-        #Parse the cmap and norm
-        cmap_, norm_, *_ = self._parse_cmap(values, cmap, norm)
+        lb    = np.min(values)
+        ub    = np.max(values)
+        if callable(cmap):
+            cmap_ = cmap
+            norm_ = norm
+            
+            if not callable(norm):
+                msg = 'If cmap is callable, norm must also be callable.'
+                raise ValueError(msg)
+        else:
+            cmap_ = plt.get_cmap(cmap)
+            
+            if norm == 'linear':
+                norm_  = mpl.colors.Normalize(lb, ub)
+            elif norm == 'lognorm':
+                norm_  = mpl.colors.LogNorm(lb, ub)
+            else:
+                msg = f'norm argument must be "linear" or "log". Received {norm}.'
+                raise ValueError(msg)
         
-        #Set up the mappings
-        domain_type_idx2voxel = self.voxel2domain_type_idx.inverse
-        sizes                 = self.sizes
-        surface_datum         = self.surface_data[surface]
-        surface_idx2midpoint  = surface_datum['spatial']['surface_idx2midpoint']
-        domain_type_idxs      = surface_datum['spatial']['domain_type_idxs']
-        shifts                = surface_datum['spatial']['shifts']
+        domain_type_idx2voxel         = self.voxel2domain_type_idx.inverse
+        sizes                         = self.sizes
+        voxels                        = self.voxels
         
-        #Other overhead
+        surface_data = self.surface2domain_type_idx[surface]
+        
         domain_type0, domain_type1 = surface
-        surface_linewidth          = self.surface_linewidth
+        
+        d         = self.surfacepoint2surface_idx.inverse 
+        plot_data = []
+        
+        surface_linewidth = self.surface_linewidth
         
         for surface_idx, value in enumerate(values):
+            surfacepoint = d[surface, surface_idx]
+            
+            plot_data.append([*surfacepoint, value])
+            
+            domain_type_idx0 = surface_data[domain_type0][surface_idx]
+            domain_type_idx1 = surface_data[domain_type1][surface_idx]
+            
+            voxel0 = domain_type_idx2voxel[domain_type_idx0, domain_type0]
+            voxel1 = domain_type_idx2voxel[domain_type_idx1, domain_type1]
+            
+            size0 = sizes[voxel0]
+            size1 = sizes[voxel1]
+            
+            if size0 > size1:
+                voxel, neighbour = voxel1, voxel0
+                neighbour_domain_type = domain_type0
+            else:
+                voxel, neighbour = voxel0, voxel1
+                neighbour_domain_type = domain_type1
+            
             #Determine the arguments for the
             color = cmap_(norm_(value))
             
-            #Get the arguments for drawing the line
-            domain_type_idx0, domain_type_idx1 = domain_type_idxs[surface_idx]
+            #Create the line
+            shift       = voxels[voxel]['surface'][neighbour_domain_type][neighbour]
+            delta       = np.sign(shift)*size0/2
+            idx         = abs(shift)-1
+            point       = np.array(voxel)
+            point[idx] += delta
+            start       = np.array(voxel)
+            stop        = np.array(voxel)
             
-            midpoint   = surface_idx2midpoint[surface_idx]
-            shift      = shifts[surface_idx]
-            idx        = abs(shift)-1
-            voxel0     = domain_type_idx2voxel[domain_type_idx0, domain_type0]
-            voxel1     = domain_type_idx2voxel[domain_type_idx1, domain_type1]
-            size0      = sizes[voxel0]
-            size1      = sizes[voxel1]
-            delta      = np.ones(len(midpoint)) * min(size0, size1)/2
-            delta[idx] = 0
-            start      = np.array(midpoint) - delta
-            stop       = np.array(midpoint) + delta
-            x, y       = np.stack([start, stop]).T
+            for i, n in enumerate(voxel):
+                if i == idx:
+                    start[i] += delta
+                    stop[i]  += delta
+                else:
+                    start[i] -= size0/2
+                    stop[i]  += size0/2
             
-            #Plot the line
+            x, y = np.stack([start, stop]).T
             line = ax.plot(x, y, linewidth=surface_linewidth, color=color)
             
-            #Update the results
             results[surface_idx] = line
             
             #Add text
@@ -572,7 +575,6 @@ class ReactionStack(StateStack):
                         horizontalalignment='center'
                         )
         
-        #Plot the color bar if applicable
         if colorbar_ax:
             mpl.colorbar.Colorbar(ax   = colorbar_ax, 
                                   cmap = cmap, 
@@ -583,52 +585,40 @@ class ReactionStack(StateStack):
     
     def _plot_global(self,
                      ax,
-                     name         : str,
-                     values       : np.array,
-                     cmap         : str='coolwarm',
-                     norm         : Literal['linear', 'log']='linear',
-                     label_voxels : bool=True,
-                     colorbar_ax  : plt.Axes=None
+                     name           : str,
+                     values         : np.array,
+                     default_kwargs : dict,
+                     user_kwargs    : dict=None,
                      ) -> None:
-        #Create the cache for the results
-        results = {}
+        results    = {}
+        converters = {'facecolor'   : upp.get_color, 
+                      'surfacecolor': upp.get_color,
+                      'color'       : upp.get_color
+                      }
         
-        #Parse the cmap and norm
-        cmap_, norm_, *_ = self._parse_cmap(values, cmap, norm)
-        
-        #Set up the mappings
-        sizes     = self.sizes
-        formatter = self.formatter
-        voxels    = self.voxels
+        sizes  = self.sizes
+        voxels = self.voxels
         
         for voxel, value in zip(voxels, values):
             size = sizes[voxel]
             
             #Determine the arguments for the shape
-            facecolor = cmap_(norm_(value))
+            sub_args            = {'name': name, 'value': value}
+            bulk_reaction_args_ = upp.process_kwargs(user_kwargs,
+                                                     [],
+                                                     default_kwargs,
+                                                     sub_args,
+                                                     converters
+                                                     )
             
             #Create the patch
             s      = size/2
             anchor = [i-s for i in voxel]
-            patch  = Rectangle(anchor, size, size, facecolor=facecolor)
+            patch  = Rectangle(anchor, size, size, **bulk_reaction_args_)
                 
             #Plot the patch
             temp = ax.add_patch(patch)
             results[voxel] = temp
-            
-            #Add text
-            if label_voxels:
-                ax.text(*voxel, 
-                        formatter.format(value), 
-                        horizontalalignment='center'
-                        )
-                
-        #Plot the color bar if applicable
-        if colorbar_ax:
-            mpl.colorbar.Colorbar(ax   = colorbar_ax, 
-                                  cmap = cmap, 
-                                  norm = norm_
-                                  )   
             
         return results
     

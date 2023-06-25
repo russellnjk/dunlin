@@ -6,7 +6,6 @@ from numbers            import Number
 from typing             import Literal, Union
 
 import dunlin.utils      as ut
-import dunlin.utils_plot as upp
 from .grid.grid            import RegularGrid, NestedGrid
 from .grid.bidict          import One2One, One2Many
 from .grid.domainstack     import (DomainStack,
@@ -26,12 +25,6 @@ class StateStack(DomainStack):
     This class makes use of SpatialModelData. All tests should involve the use 
     of SpatialModelData instead of raw Python data.
     '''
-    #For plotting
-    functions = {'__array'   : np.array,
-                 '__ones'    : np.ones,
-                 '__zeros'   : np.zeros,
-                 '__float64' : np.float64
-                 }
     
     #Expected mappings and attributes
     grid                  : Union[RegularGrid, NestedGrid]
@@ -61,7 +54,7 @@ class StateStack(DomainStack):
     function_code     : str
     diff_code         : str
     signature         : tuple[str]
-    functions         : dict[str, callable]
+    rhs_functions     : dict[str, callable]
     formatter         : str
     
     def __init__(self, spatial_data: SpatialModelData) -> None:
@@ -93,8 +86,17 @@ class StateStack(DomainStack):
         self._add_parameter_code()
         self._add_function_code()
         
-        self.signature = 'time', 'states', 'parameters'
-        self.formatter = '{:.2f}'
+        #For code excution
+        self.signature        = 'time', 'states', 'parameters'
+        self.rhs_functions    = {'__array'   : np.array,
+                                 '__ones'    : np.ones,
+                                 '__zeros'   : np.zeros,
+                                 '__float64' : np.float64
+                                 }
+        self.rhsdct_functions = self.rhs_functions.copy()
+        
+        #For plotting
+        self.formatter        = '{:.2f}'
     
     def _add_state_code(self) -> None:
         spatial_data      = self.spatial_data
@@ -109,12 +111,14 @@ class StateStack(DomainStack):
             voxels      = domain_type2voxel[domain_type]
             n_voxels    = len(voxels)
             
-            
+            #Get indices
             stop               = idx + n_voxels 
             state2dxidx[state] = idx, stop
             
-            self.state_code += f'\t{state} = states[{idx}:{stop}]\n'
-            self.diff_code  += f'\t{ut.diff(state)} = __zeros({state}.shape, __float64)\n'
+            #Update code
+            state_           = ut.undot(state)
+            self.state_code += f'\t{state_} = states[{idx}:{stop}]\n'
+            self.diff_code  += f'\t{ut.diff(state_)} = __zeros({state}.shape, __float64)\n'
             
             #Update idx
             idx = stop
@@ -124,7 +128,8 @@ class StateStack(DomainStack):
         parameters   = spatial_data.parameters
         
         for i, parameter in enumerate(parameters):
-            self.parameter_code += f'\t{parameter} = parameters[{i}]\n'
+            parameter_ = ut.undot(parameter)
+            self.parameter_code += f'\t{parameter_} = parameters[{i}]\n'
     
     def _add_function_code(self) -> None:
         spatial_data = self.spatial_data
@@ -168,8 +173,8 @@ class StateStack(DomainStack):
         return idx
     
     def get_state_from_array(self, 
-                             state_name: str, 
-                             array: np.array
+                             state_name : str, 
+                             array      : np.array
                              ) -> np.array:
         
         start, stop = self.state2dxidx[state_name]
@@ -209,19 +214,7 @@ class StateStack(DomainStack):
         
         return cmap, norm
     
-    def _plot_bulk(self,
-                   ax             : plt.Axes,
-                   name           : str,
-                   values         : np.array,
-                   domain_type    : Domain_type,
-                   cmap           : str='coolwarm',
-                   norm           : Literal['linear', 'log']='linear',
-                   label_voxels   : bool=True,
-                   colorbar_ax    : plt.Axes=None
-                   ) -> None:
-        
-        results = {}
-        
+    def _parse_cmap(self, values, cmap, norm) -> tuple:
         lb    = np.min(values)
         ub    = np.max(values)
         if callable(cmap):
@@ -241,12 +234,32 @@ class StateStack(DomainStack):
             else:
                 msg = f'norm argument must be "linear" or "log". Received {norm}.'
                 raise ValueError(msg)
+            
+            return cmap_, norm_, lb, ub
+    
+    def _plot_bulk(self,
+                   ax             : plt.Axes,
+                   name           : str,
+                   values         : np.array,
+                   domain_type    : Domain_type,
+                   cmap           : str='coolwarm',
+                   norm           : Literal['linear', 'log']='linear',
+                   label_voxels   : bool=True,
+                   colorbar_ax    : plt.Axes=None
+                   ) -> None:
+        #Create the cache for the results
+        results = {}
         
+        #Parse the cmap and norm
+        cmap_, norm_, *_ = self._parse_cmap(values, cmap, norm)
+        
+        #Set up the mappings
         voxel2domain_type_idx = self.voxel2domain_type_idx
         sizes                 = self.sizes
         voxels                = self.voxel2domain_type.inverse[domain_type]
         formatter             = self.formatter
         
+        #Iterate and plot
         for voxel in voxels:
             size            = sizes[voxel]
             domain_type_idx = voxel2domain_type_idx[voxel][0]
@@ -270,7 +283,8 @@ class StateStack(DomainStack):
                         formatter.format(value), 
                         horizontalalignment='center'
                         )
-        
+                
+        #Plot the color bar if applicable
         if colorbar_ax:
             mpl.colorbar.Colorbar(ax   = colorbar_ax, 
                                   cmap = cmap, 
