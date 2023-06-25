@@ -284,18 +284,15 @@ class MassTransferStack(ReactionStack):
     rhsdct_functions  : dict[str, callable]
     formatter         : str
     
-    surface2domain_type_idx  : dict[Surface, One2One[int, int]]
-    surfacepoint2surface_idx : One2One[tuple[Number], tuple[int, Surface]]
-    surfacepoint_lst         : list[tuple[Number]]
-    surface2tree             : spatial.KDTree
-    global_variables         : set
-    bulk_variables           : dict[str, Domain_type]
-    surface_variables        : dict[str, Surface]
-    variable_code            : str
-    bulk_reactions           : dict[str, Domain_type]
-    surface_reactions        : dict[str, Surface]
-    reaction_code            : str
-    surface_linewidth        : float
+    surface_data      : dict[Surface, dict]
+    global_variables  : set
+    bulk_variables    : dict[str, Domain_type]
+    surface_variables : dict[str, Surface]
+    variable_code     : str
+    bulk_reactions    : dict[str, Domain_type]
+    surface_reactions : dict[str, Surface]
+    reaction_code     : str
+    surface_linewidth : float
     
     domain_type2volume : dict[Domain_type, dict[int, float]]
     advection_terms    : dict[Domain_type, dict[int, dict]]

@@ -60,7 +60,6 @@ class ReactionStack(StateStack):
     formatter         : str
     
     surface_data      : dict[Surface, dict]
-    surface2tree      : spatial.KDTree
     global_variables  : set
     bulk_variables    : dict[str, Domain_type]
     surface_variables : dict[str, Surface]
@@ -235,8 +234,8 @@ class ReactionStack(StateStack):
             #Update surface_datum
             #Add code chunks to surface_datum
             surface_datum['code'] = {'collated': {domain_type0 : collated0,
-                                                          domain_type1 : collated1,
-                                                          }, 
+                                                  domain_type1 : collated1,
+                                                  }, 
                                      'split'   : split,
                                      }
             
@@ -299,7 +298,7 @@ class ReactionStack(StateStack):
             for name in variable.namespace:
                 #Case 1: name is a state
                 if name in states:
-                    domain_type           = state2domain_type[name]
+                    domain_type = state2domain_type[name]
                     domain_types.add(domain_type)
                     
                 #Case 2: name is a bulk variable
@@ -332,7 +331,10 @@ class ReactionStack(StateStack):
     
     def _add_global_variable_code(self, variable) -> None:
         #Update variable code
-        self.variable_code += f'\t{variable.name} = {variable.expr}\n\n'
+        rhs = ut.undot(variable.expr)
+        lhs = ut.undot(variable.name)
+        
+        self.variable_code += f'\t{lhs} = {rhs}\n\n'
     
     def _add_bulk_variable_code(self, variable) -> None:
         return self._add_global_variable_code(variable)
@@ -341,14 +343,14 @@ class ReactionStack(StateStack):
         surface_data = self.surface_data
         
         expr          = variable.expr
-        lhs           = variable.name
+        lhs           = ut.undot(variable.name)
         rhs           = self.sub(expr)
         surface_datum = surface_data[surface]
         
         #Get a mapping that maps the domain_type of a state/bulk variable 
         #to indices in code form
         collated      = surface_datum['code']['collated']
-        rhs           = rhs.format(**collated)
+        rhs           = ut.undot(rhs.format(**collated))
         variable_code = f'\t{lhs} = {rhs}\n'
         
         self.variable_code += variable_code + '\n'
@@ -407,10 +409,10 @@ class ReactionStack(StateStack):
         self.reaction_code += f'\t{reaction.name} = {reaction.rate}\n\n'
         
         #Add the diff code
-        name      = reaction.name
+        name      = ut.undot(reaction.name)
         diff_code = ''
         for state, stoich in reaction.stoichiometry.items():
-            lhs   = ut.diff(state)
+            lhs   = ut.diff(ut.undot(state))
             rhs   = f'{stoich}*{name}' 
             chunk = f'\t{lhs} += {rhs}\n'
             
@@ -424,14 +426,14 @@ class ReactionStack(StateStack):
         
         #Update reaction code
         expr          = reaction.rate
-        lhs           = reaction.name
+        lhs           = ut.undot(reaction.name)
         rhs           = self.sub(expr)
         surface_datum = surface_data[surface]
         
         #Get a mapping that maps the domain_type of a state/bulk variable 
         #to indices in code form
         collated      = surface_datum['code']['collated']
-        rhs           = rhs.format(**collated)
+        rhs           = ut.undot(rhs.format(**collated))
         reaction_code = f'\t{lhs} = {rhs}\n\n'
         
         self.reaction_code += reaction_code 
@@ -444,16 +446,16 @@ class ReactionStack(StateStack):
             for batch in split:
                 #Parse the lhs
                 state_idxs  = batch[domain_type]
-                lhs         = ut.diff(state) + f'[{state_idxs}]'
+                lhs         = ut.diff(ut.undot(state)) + f'[{state_idxs}]'
                 
                 #Parse the rhs
                 state_idxs = ':'.join([str(i) for i in batch['_idxs']])
                 scale      = batch['_scale']
                 volumes    = batch['_volumes'][domain_type]
-                rhs        = f'{stoich}*{reaction.name}[{state_idxs}]'
+                rhs        = f'{stoich}*{ut.undot(reaction.name)}[{state_idxs}]'
                 rhs        = f'{rhs}*{scale}/{volumes}'
                 
-            
+                #Update diff_code
                 diff_code   = f'\t{lhs} += {rhs}\n' 
                 
             self.reaction_code += diff_code + '\n'
@@ -584,7 +586,7 @@ class ReactionStack(StateStack):
                      norm         : Literal['linear', 'log']='linear',
                      label_voxels : bool=True,
                      colorbar_ax  : plt.Axes=None
-                     ) -> None:
+                     ) -> dict:
         #Create the cache for the results
         results = {}
         
