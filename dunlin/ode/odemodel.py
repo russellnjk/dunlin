@@ -20,7 +20,6 @@ class ODEModel:
     '''
     '''
     default_tspan = np.linspace(0, 1000, 21)
-    _df           = ['states', 'parameters']
     _locked       = ['state_names', 'parameter_names', 'functions', 'reactions', 
                      'variables']
     
