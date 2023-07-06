@@ -13,7 +13,7 @@ m0 = {'states'     : {'x0': {'c0': 1},
       'events'     : {'e0': ['time==0', ['x0 = 3']],
                       'e6': ['time==800', ['x0 = 3'], 0, True, 1],
                       },
-      'tspan'      : {'c0': np.linspace(0, 1000, 101)}
+      'tspans'     : {'c0': np.linspace(0, 1000, 101)}
       }
 
 m1 = {'states'    : {'x0': {'c0': 1}
@@ -22,8 +22,6 @@ m1 = {'states'    : {'x0': {'c0': 1}
       'submodels' : {'m0': {'ref': 'M0'
                             },
                      },
-      'extra'     : {'init_m0.x0': ['index', 'm0.x0', '0']
-                     }
       }
 m2 = {'states'    : {'x0': {'c0': 1}
                      },

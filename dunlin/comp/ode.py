@@ -42,19 +42,11 @@ def rename_ev(ev_name, ev_data, child_name, rename, delete):
     f = lambda v: make_child_item(v, child_name, rename, delete)
     g = lambda v: [f(i) for i in v] if ut.islistlike(v) else f(v)
     if ut.isdictlike(ev_data):
-        
         new_data = {k: g(v) for k, v in ev_data.items()}
     elif ut.islistlike(ev_data):
         new_data = [g(v) for v in ev_data]
     
     return new_name, new_data
-
-# def rename_exv(exv_name, exv_data, child_name, rename, delete):
-#     new_name = make_child_item(exv_name, child_name, rename, delete)
-#     f        = lambda v: make_child_item(v, child_name, rename, delete)
-#     new_data = [f(v) for v in exv_data[1:]]
-#     new_data = exv_data[:1] + new_data
-#     return new_name, new_data
     
 required_fields = {'states'     : rename_x,
                    'parameters' : rename_p,

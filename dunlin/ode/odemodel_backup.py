@@ -12,12 +12,11 @@ import dunlin.ode.ode_coder  as odc
 import dunlin.ode.event      as oev
 import dunlin.ode.ivp        as ivp
 import dunlin.utils_plot     as upp
-from .basemodel import BaseModel
 
 #Type hints
 Scenario = Union[str, float, int, tuple]
 
-class ODEModel(BaseModel):
+class ODEModel:
     '''
     '''
     default_tspan = np.linspace(0, 1000, 21)
@@ -39,59 +38,213 @@ class ODEModel(BaseModel):
                  reactions    : dict = None, 
                  rates        : dict = None, 
                  events       : dict = None, 
-                 tspans       : dict = None,
+                 extra        : dict = None, 
+                 tspan        : dict =None,
                  compartments : dict = None, 
                  int_args     : dict = None, 
                  sim_args     : dict = None, 
                  optim_args   : dict = None, 
                  data_args    : dict = None, 
                  meta         : dict = None,
-                 dtype        : str  = 'ode',
+                 dtype        : str   = 'ode',
+                 **kwargs
                  ):
         
-        model_data = dst.ODEModelData(ref        = ref, 
-                                      tspans     = tspans, 
-                                      states     = states,
-                                      parameters = parameters,
-                                      functions  = functions,
-                                      variables  = variables,
-                                      reactions  = reactions,
-                                      rates      = rates,
-                                      events     = events,
-                                      meta       = meta
+        if dtype != 'ode':
+            msg = f'Attempted to instantiate {type(self).__name__} with {dtype} data.'
+            raise TypeError(msg)
+        
+        functions = {} if functions is None else functions
+        variables = {} if variables is None else variables
+        reactions = {} if reactions is None else reactions
+        rates     = {} if rates     is None else rates
+        extra     = {} if extra     is None else extra
+        
+        model_data = dst.ODEModelData(ref, 
+                                      states, 
+                                      parameters, 
+                                      functions, 
+                                      variables, 
+                                      reactions, 
+                                      rates, 
+                                      events, 
+                                      extra, 
                                       )
         
-        super().__init__(model_data, ref, tspans, int_args, dtype)
+        ode = odc.make_ode(model_data)
         
-        model_data = self._model_data
+        #Assign ode attributes
+        self._rhs       = ode.rhs
+        self._events    = oev.make_events(ode.rhsevents)
+        self._extra     = ode.rhsextra
+        self._dct       = ode.rhsdct 
+        self.namespace  = model_data.namespace
+        self.variables  = tuple(variables)
+        self.functions  = tuple([ut.split_functionlike(f)[0] for f in functions])
+        self.reactions  = tuple(reactions)
+        self.extra      = () if extra is None else tuple(model_data['extra'].keys())
         
-        (rhs0, rhs1), (rhsdct0, rhsdct1), events = odc.make_ode_callables(model_data)
+        #Assign data-related attributes
+        self._state_dict     = model_data['states']
+        self._parameter_dict = model_data['parameters']
+        self.ref             = ref
+        self.state_names     = tuple(model_data['states'].keys())
+        self.parameter_names = tuple(model_data['parameters'].keys())
+        self.states          = states
+        self.parameters      = parameters
+        self.int_args        = int_args
+        self.sim_args        = {} if sim_args   is None else sim_args
+        self.optim_args      = {} if optim_args is None else optim_args
+        self.data_args       = {} if data_args  is None else data_args
+        self.tspan           = tspan
+        self.meta            = meta
         
-        self._rhs_functions    = rhs0, rhs1
-        self._rhsdct_functions = rhsdct0, rhsdct1
+    ###########################################################################
+    #Attribute Management
+    ###########################################################################
+    @property
+    def states(self) -> pd.DataFrame:
+        return self._state_dict.df
+    
+    @states.setter
+    def states(self, mapping: Union[dict, pd.DataFrame, pd.Series]) -> None:
+        state_dict = self._state_dict
+        df         = state_dict.mapping2df(mapping)
         
-        #Viewable but not editable by front-end users
-        #To be set once during instantiation and subsequently locked
-        self.states     = tuple(model_data.states)
-        self.parameters = tuple(model_data.parameters)
-        self.functions  = tuple(model_data.functions)
-        self.variables  = tuple(model_data.variables)
-        self.reactions  = tuple(model_data.reactions)
-        self.events     = tuple(model_data.events)
-        self.meta       = model_data.meta
+        self._state_dict.df = df
+    
+    @property
+    def _states(self) -> dict:
+        return self._state_dict.by_index()
+    
+    @property
+    def parameters(self) -> pd.DataFrame:
+        return self._parameter_dict.df
+    
+    @parameters.setter
+    def parameters(self, mapping: Union[dict, pd.DataFrame, pd.Series]) -> None:
+        parameter_dict = self._parameter_dict
+        df         = parameter_dict.mapping2df(mapping)
         
-        #For back-end only
-        #For storing state and parameters
-        self.state_df     = states
-        self.parameter_df = parameters
+        self._parameter_dict.df = df
+    
+    @property
+    def _parameters(self) -> dict:
+        return self._parameter_dict.by_index()
+    
+    def __setattr__(self, attr: str, value: Any) -> None:
+        if attr in self._locked and hasattr(self, attr):
+            raise AttributeError(f'{attr} attribute is locked.')
         
-        #Specific to this class
-        self.optim_args = optim_args
-        self.sim_args   = sim_args
+        elif attr == 'tspan':
+            if value is None:
+                super().__setattr__(attr, {})
+                return
+            elif not ut.isdictlike(value):
+                raise TypeError('tspan must be a dict.')
+            
+            #Check dimensions and type
+            for scenario, v in value.items():
+                arr = np.array(v)
+                if len(arr.shape) != 1:
+                    raise ValueError('tspan for each scenario must be one dimensional.')
+                
+            super().__setattr__(attr, value)
+            
+        else:
+            super().__setattr__(attr, value)
+    
+    def get_tspan(self, scenario: Scenario) -> np.ndarray:
+        tspan = self.tspan 
         
-    def _convert_raw_output(self, t, y, p) -> type:
-        return ODEResult(t, y, p, self)
+        if self.tspan:
+            return tspan.get(scenario, self.default_tspan)
+        else:
+            return self.default_tspan
+            
+    
+    ###########################################################################
+    #Integration
+    ###########################################################################
+    def __call__(self, 
+                 scenario       = None, 
+                 y0             = None, 
+                 p0             = None, 
+                 tspan          = None, 
+                 overlap        = True, 
+                 raw            = False, 
+                 include_events = True,
+                 **int_args
+                 ) -> np.array:
         
+        def _2array(vals, default, variables, name):
+            if vals is None:
+                return default[scenario]
+            elif ut.islistlike(vals):
+                arr = np.array(vals)
+            elif type(vals) == pd.DataFrame:
+                arr = vals.loc[scenario][variables].values
+            elif type(vals) == pd.Series:
+                arr = vals[variables].values
+                
+            elif ut.isdictlike(vals): 
+                arr = np.array([default[scenario][v] for v in variables])
+            else:
+                msg = f'{name} must be an array, dict, DataFrame or Series. Received {type(vals)}'
+                raise TypeError(msg)
+            
+            if len(arr.shape) == 1:
+                return arr
+            else:
+                raise ValueError(f'{name} could not be formatted into a 1-D array.')
+            
+        if tspan is None:
+            tspan = np.array(self.tspan.get(scenario, self.default_tspan))
+        elif type(tspan) == dict:
+            tspan = np.array(tspan[scenario])
+        elif ut.islistlike(tspan):
+            tspan = np.array(tspan)
+        else:
+            raise TypeError(f'tspan must be a dict or array. Received {type(tspan)}')
+        
+        if len(tspan.shape) != 1:
+            raise ValueError('tspan must be 1-D.')
+        
+        #Reassign and/or extract
+        y0 = _2array(y0, self._states, self.state_names, 'states')
+        p0 = _2array(p0, self._parameters, self.parameter_names, 'parameters')
+
+        tspan     = self.get_tspan(scenario) if tspan is None else tspan
+        
+        #Reassign and/or extract
+        events   = self._events
+        int_args = self.int_args if self.int_args else {}
+        
+        t, y, p = ivp.integrate(self._rhs, 
+                                tspan          = tspan, 
+                                y0             = y0, 
+                                p0             = p0, 
+                                events         = events, 
+                                overlap        = overlap, 
+                                include_events = include_events,
+                                **int_args
+                                )
+            
+        if raw:
+            return t, y, p
+        else:
+            return ODEResult(t, y, p, self)
+    
+    def integrate(self, **kwargs):
+        scenarios = list(self.states.index)
+        result    = {}
+        
+        for c in scenarios:
+            kwargs_   = {k: v.get(c) for k, v in kwargs.items()}
+            result[c] = self(c, **kwargs_)
+            
+        return result
+    
     def simulate(self, **kwargs):
         return ODESimResult(self, **kwargs)
         
@@ -106,37 +259,23 @@ class ODEResult:
     ###########################################################################
     #Instantiators
     ###########################################################################
-    def __init__(self, 
-                 t     : np.ndarray, 
-                 y     : np.ndarray, 
-                 p     : np.ndarray, 
-                 model : ODEModel
-                 ):
+    def __init__(self, t: np.ndarray, y: np.ndarray, p: np.ndarray, model: ODEModel):
+        state_names     = model.state_names
+        parameter_names = model.parameter_names
+        to_remove       = set(model.functions)
+        namespace       = model.namespace.difference(to_remove)
+        namespace       = namespace | {ut.diff(x) for x in model.state_names}
         
-        namespace = (model.states 
-                     + model.parameters 
-                     + model.variables 
-                     + model.reactions
-                     + tuple([ut.diff(x) for x in model.states])
-                     + tuple(model.externals)
-                     )
-        namespace = frozenset(namespace)
-        
-        self.t           = t
-        self.y           = dict(zip(model.states,     y))
-        self.p           = dict(zip(model.parameters, p)) 
-        self.internals   = {}
-        self.externals   = {}
-        self.args        = t, y, p
-        self.rhsdct      = model.rhsdct
-        self.rhsexternal = model.externals
-        
-        #Keep track of names for lazy evaluation
-        self.internal_names = frozenset(model.variables  
-                                        + model.reactions 
-                                        + tuple([ut.diff(x) for x in model.states])
-                                        )
-        self.external_names = frozenset(model.externals.keys())
+        self.t               = t
+        self.y               = dict(zip(state_names, y))
+        self.p               = dict(zip(parameter_names, p)) 
+        self._eval_extra     = None
+        self._eval_dct       = None 
+        self.extra           = model._extra
+        self.dct             = model._dct
+        self._args           = [t, y, p]
+        self.namespace       = frozenset(namespace)
+        self.extra_variables = model.extra
         
     ###########################################################################
     #Accessors/Lazy Evaluators
@@ -153,33 +292,28 @@ class ODEResult:
             self._eval_dct = self.dct(*self._args)
         return self._eval_dct
     
-    def __getitem__(self, name: str):
-        if ut.islistlike(name):
-            return [self[i] for i in name]
-        elif name == 'time':
+    def __getitem__(self, var):
+        return self.get(var)
+    
+    def __setitem__(self, var, vals):
+        self.evaluated[var] = vals
+    
+    def get(self, var, default='__error__'):
+        if ut.islistlike(var):
+            return [self.get(v) for v in var]
+        elif var == 'time':
             return self.t
-        elif name in self.y:
-            return self.y[name]
-        elif name in self.p:
-            return self.p[name]
-        elif name in self.internal_names:
-            if not self.internals:
-                self.internals.update( self.rhsdct(*self.args) )
-            return self.internals[name]
-        elif name in self.external_names:
-            if name not in self.externals:
-                self.externals[name] = self.rhsexternal[name](self)
-            return self.externals[name]
+        elif var in self.y:
+            return self.y[var]
+        elif var in self.p:
+            return self.p[var]
+        elif var in self.extra_variables:
+            return self.eval_extra[var]    
+        elif var in self.eval_dct:
+            return self.eval_dct[var]
+        elif default == '__error__':
+            raise ValueError(f'{str(self)} does not contain "{var}"')
         else:
-            raise KeyError(name)
-        
-    def get(self, name: str, default: Any=None) -> Any:
-        if ut.islistlike(name):
-            return [self.get(i) for i in name]
-        
-        try:
-            return self[name]
-        except KeyError:
             return default
     
     def __contains__(self, var):

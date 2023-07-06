@@ -14,12 +14,14 @@ m0 = {'states'    : {'x0': 1,
                      'x3': 'v0'
                      },
       'events'    : {'ev0': {'trigger': 'time==0', 
-                             'assign': {'x2': 1, 
-                                        'x3': 1
-                                        }
+                             'assign': ['x2 = 1', 'x3 = 1']
                              }
                      },
       }
+
+# {'x2': 1, 
+#            'x3': 1
+#            }
 
 #m1 uses m0 entirely
 #Use this to test if child items are created correctly

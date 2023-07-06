@@ -34,22 +34,50 @@ class SpatialModelData(ModelData):
         return cls(**flattened)
     
     def __init__(self,
-                 ref: str, 
-                 states: Union[dict, pd.DataFrame], 
-                 parameters: Union[dict, pd.DataFrame], 
-                 compartments: dict,
-                 geometry: dict,
-                 functions: dict = None, 
-                 variables: dict = None, 
-                 reactions: dict = None, 
-                 rates: dict = None, 
-                 events: dict = None, 
-                 extra: Union[dict, callable] = None,
-                 units: dict = None,
-                 advection: dict = None,
-                 diffusion: dict = None,
-                 boundary_conditions: dict = None
+                 ref                 : str, 
+                 states              : Union[dict, pd.DataFrame], 
+                 parameters          : Union[dict, pd.DataFrame], 
+                 compartments        : dict,
+                 geometry            : dict,
+                 functions           : dict = None, 
+                 variables           : dict = None, 
+                 reactions           : dict = None, 
+                 rates               : dict = None, 
+                 events              : dict = None, 
+                 units               : dict = None,
+                 advection           : dict = None,
+                 diffusion           : dict = None,
+                 boundary_conditions : dict = None,
+                 meta                : dict = None,
+                 int_args            : dict = None,
+                 sim_args            : dict = None,
+                 opt_args            : dict = None
                  ) -> None:
+        
+        #Call the parent constructor to specify which attributes are exportable
+        #This allows the input to be reconstructed assuming no modification
+        #after instantiation
+        super().__init__(['ref', 
+                          'states', 
+                          'parameters', 
+                          'compartments',
+                          ('geometry', 'coordinate_components'),
+                          ('geometry', 'grid_config'),
+                          ('geometry', 'domain_types'),
+                          ('geometry', 'adjacent_domains'),
+                          ('geometry', 'geometry_definitions'),
+                          'functions', 
+                          'variables',
+                          'reactions',
+                          'rates',
+                          'events',
+                          'units',
+                          'meta',
+                          'int_args',
+                          'sim_args',
+                          'opt_args'
+                          ]
+                         )
         
         #kwargs are ignored
         #Set up the data structures
@@ -64,7 +92,6 @@ class SpatialModelData(ModelData):
                                                                        variables,
                                                                        rates, 
                                                                        events, 
-                                                                       extra,
                                                                        units,
                                                                        )
         
@@ -88,15 +115,21 @@ class SpatialModelData(ModelData):
                                                                )
         
         #Assign attributes
-        self.ref        = ref
-        self.states     = xs
-        self.parameters = ps
-        self.functions  = funcs
-        self.variables  = vrbs
-        self.rates      = rts
-        self.events     = evs
-        self.extra      = extra
-        self.units      = units
+        self.ref          = ref
+        self.states       = xs
+        self.parameters   = ps
+        self.compartments = cmpts
+        self.functions    = funcs
+        self.variables    = vrbs
+        self.reactions    = rxns
+        self.rates        = rts
+        self.events       = evs
+        self.extra        = extra
+        self.units        = units
+        self.meta         = meta
+        self.int_args     = int_args
+        self.sim_args     = sim_args
+        self.opt_args     = opt_args
         
         self.coordinate_components = ccds
         self.grid_config           = gcfg
@@ -105,8 +138,6 @@ class SpatialModelData(ModelData):
         self.adjacent_domains      = admns  
         self.geometry_units        = gunits
         
-        self.reactions           = rxns
-        self.compartments        = cmpts
         self.advection           = advs
         self.diffusion           = dfns
         self.boundary_conditions = bcs
@@ -120,13 +151,9 @@ class SpatialModelData(ModelData):
             if repeated:
                 msg = f'The following states appear in both a reaction and rate: {repeated}.'
                 raise ValueError(msg)
-       
-        #Map the reactions to the compartments
-        self.reaction_compartments = None
         
-        #Freeze
+        #Freeze the namespace and save it
         self.namespace = frozenset(namespace)
-        self.freeze()
         
     @staticmethod
     def _init_basic(namespace: set,
@@ -218,35 +245,4 @@ class SpatialModelData(ModelData):
                                      )
         
         return rxns, cmpts, advs, dfns, bcs
-        
-    def to_data(self, recurse=True) -> dict:
-        keys = ['states', 
-                'parameters', 
-                'functions',
-                'variables',
-                'reactions',
-                'rates',
-                'events',
-                'units',
-                'advection',
-                'diffusion',
-                'boundary_conditions'
-                ]
-        data0 = self._to_data(keys, recurse)
-        
-        keys = ['coordinate_components',
-                'grid_config',
-                'domain_types',
-                'adjacent_domains',
-                'geometry_definitions',
-                'geometry_units'
-                ]
-        
-        data1 = self._to_data(keys, recurse)
-        
-        data0[self.ref]['geometry'] = data1[self.ref]
-        
-        return data0
-    
-        
         

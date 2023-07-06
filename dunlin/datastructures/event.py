@@ -111,6 +111,7 @@ class Event(GenericItem):
         self.assign_expr  = assign_expr
         self.trigger      = trigger
         self.assign       = assign
+        self.assignments  = assign
         self.namespace    = tuple(namespace)
         self.delay        = delay
         self.persistent   = persistent

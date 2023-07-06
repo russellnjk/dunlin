@@ -14,4 +14,13 @@ d1 = spldata.to_dunl_dict()
 
 dunl = sfd.write_dunl_code(d1)
 a    = sfd.read_dunl_code(dunl)
-assert a == d0
+
+for k, v in d0.items():
+    if k == 'ref':
+        continue
+    
+    if k == 'states' or k == 'parameters':
+        v_ = {k_: list(v_.values()) for k_, v_ in v.items()}
+        assert a[ref][k] == v_
+    else:
+        assert a[ref][k] == v

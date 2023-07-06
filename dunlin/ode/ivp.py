@@ -10,7 +10,6 @@ def integrate(func,
               p0, 
               events         = (), 
               modify         = None,
-              overlap        = True, 
               include_events = True,
               *rhs_args,
               **kwargs
@@ -96,8 +95,8 @@ def integrate(func,
 #Supporting Functions for Event Handling
 ###############################################################################
 def find_events(r, 
-                events: list, 
-                include_events: bool = True
+                events         : list, 
+                include_events : bool = True
                 ) -> tuple:
     if r.status:
         #Assumes one and only one terminal event took place

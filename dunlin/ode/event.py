@@ -1,42 +1,27 @@
 import numpy as np
 from collections import namedtuple
+from numbers     import Number
 
 ###############################################################################
-#Dunlin Exceptions
+#Classes
 ###############################################################################
 class TriggerError(Exception):
     def __init__(self, trigger_type):
         super().__init__(f'Invalid trigger_type: {trigger_type}')
 
-###############################################################################
-#Main Instantiation Algorithm
-###############################################################################
-evs_tup = namedtuple('rhsevent', 'ref name trigger_func assign_func delay persistent priority')
-
-def make_events(rhsevents: dict[str, evs_tup]):
-    events = [make_event(ev_data) for ev_data in rhsevents.values()]
-    return events
-    
-def make_event(ev_data: evs_tup):
-    ev_obj = Event(name         = ev_data.name, 
-                   trigger_func = ev_data.trigger_func, 
-                   execute      = ev_data.assign_func, 
-                   delay        = ev_data.delay,
-                   persistent   = ev_data.persistent,
-                   priority     = ev_data.priority,
-                   ref          = ev_data.ref
-                   )
-
-    ev_obj._data = ev_data
-    return ev_obj
-    
-###############################################################################
-#Classes
-###############################################################################
 class Event():
     cache = []
     
-    def __init__(self, name='', trigger_func=None, execute=None, delay=0, persistent=True, priority=0, ref=None, _parent=None):
+    def __init__(self, 
+                 name                : str      = '', 
+                 trigger_function    : callable = None, 
+                 assignment_function : callable = None, 
+                 delay               : Number   = 0, 
+                 persistent          : bool     = True, 
+                 priority            : int      = 0, 
+                 ref                 : str      = None, 
+                 _parent             : 'Event'  = None
+                 ):
         #For scipy
         self.terminal  = True
         self.direction = 1
@@ -46,8 +31,8 @@ class Event():
         self.ref    = ref
         
         #For event assignment
-        self.trigger_func = trigger_func
-        self._execute     = execute
+        self.trigger_function = trigger_function
+        self.assignment_function     = assignment_function
         self.delay        = delay
         self.persistent   = persistent
         self.priority     = priority
@@ -66,11 +51,11 @@ class Event():
         return self.__repr__()
     
     def execute(self, t, y, p):
-        new_y, new_p = self._execute(t, y, p)
+        new_y, new_p = self.assignment_function(t, y, p)
         self.record.append([t, new_p])
         
-        curr_r = self.trigger_func(t, y, p)
-        new_r  = self.trigger_func(t, new_y, new_p)
+        curr_r = self.trigger_function(t, y, p)
+        new_r  = self.trigger_function(t, new_y, new_p)
         
         #Undo trigger "flip" if execution causes r to fall further below 0
         if new_r < curr_r:
@@ -88,7 +73,7 @@ class Event():
     def setup(self, t, y, p, events_):
         self.reset()
         
-        r = self.trigger_func(t, y, p)
+        r = self.trigger_function(t, y, p)
         
         if r >= 0:
             new_y, new_p, events_ = self.trigger(t, y, p, events_)
@@ -100,7 +85,7 @@ class Event():
     def delay_protocol(self, t, events_):
         t_           = t + self.delay
         self.timer   = Event(name         = f'{self.name}, {self.delay}', 
-                             trigger_func = lambda t, *args: t - t_,
+                             trigger_function = lambda t, *args: t - t_,
                              execute      = self.execute,
                              _parent      = self
                              )
@@ -108,7 +93,7 @@ class Event():
         events_.append(self.timer)
     
     def __call__(self, t, y, *args):
-        r = self.trigger_func(t, y, *args)
+        r = self.trigger_function(t, y, *args)
         
         return r
     

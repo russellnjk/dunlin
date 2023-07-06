@@ -33,7 +33,7 @@ class Function(GenericItem):
         self.expr_ori  = expr_ori
         self.args      = tuple(args)
         self.namespace = tuple(args_namespace)
-        self.signature = ', '.join(self.args)
+        self.signature = self.args
         
         #Check name and freeze
         self.freeze()

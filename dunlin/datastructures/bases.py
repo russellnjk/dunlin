@@ -179,7 +179,7 @@ class GenericDict(ut.FrozenObject):
     #Export
     ###########################################################################
     def to_data(self) -> dict:
-        dct = {k: v.to_data() for k,v in self.items()}
+        dct = {k: v.to_data() if hasattr(v, 'to_data') else v for k, v in self.items()}
         return dct
     
     def to_dunl(self) -> str:

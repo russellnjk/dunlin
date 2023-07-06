@@ -15,7 +15,7 @@ import dunlin.ode.ivp   as ivp
 #Type hints
 Scenario   = Union[str, float, int, tuple]
 
-class BaseModel (ABC):
+class BaseModel(ABC):
     '''Meant to be used as the parent class for ODE models, spatial models etc.
     
     Provides a framework for:
@@ -33,17 +33,16 @@ class BaseModel (ABC):
     #To be set once during instantiation and subsequently locked
     states     : tuple[str]
     parameters : tuple[str]
-    functions  : frozenset[str]
-    variables  : frozenset[str]
-    reactions  : frozenset[str]
-    events     : frozenset[str]
-    scalars    : frozenset[str]
+    functions  : tuple[str]
+    variables  : tuple[str]
+    reactions  : tuple[str]
+    events     : tuple[str]
     meta       : dict[str, Union[str, Number, tuple[str, Number]]]
     
     #Viewable and editable by front-end users
+    numba      : bool
     tspan      : dict[Scenario, np.array]
     int_args   : dict
-    optim_args : dict
     
     #For back-end only
     #Store the datastructures generated from the raw input
@@ -51,13 +50,9 @@ class BaseModel (ABC):
     
     #For back-end only
     #Required for integration
-    rhs              : callable
-    rhsdct           : callable
-    rhsscalar        : callable
-    _rhs_funcs       : tuple[callable]
-    _rhsdct_funcs    : tuple[callable]
-    _rhsscalar_funcs : tuple[callable]
-    _events          : tuple[oev.Event]
+    _rhs_functions    : tuple[callable]
+    _rhsdct_functions : tuple[callable]
+    _events           : tuple[oev.Event]
     _default_tspan = np.linspace(0, 1000, 21)
     
     #For back-end only
@@ -80,11 +75,9 @@ class BaseModel (ABC):
                'reactions', 
                'events',
                'scalars',
-               'meta',
                '_model_data',
                '_rhs_funcs',
                '_rhsdct_funcs',
-               '_rhsscalar_funcs',
                '_events'
                ]
     
@@ -95,33 +88,48 @@ class BaseModel (ABC):
         return cls(**flattened)
         
     def __init__(self, 
-                 datastructure : callable,
+                 model_data    : Any,
                  ref           : str, 
-                 dtype         : str = 'ode',
-                 **kwargs
+                 tspans        : dict = None,
+                 int_args      : dict = None,
+                 dtype         : str  = 'ode',
+                 events        : list = ()
                  ):
         
         if dtype != self._dtype:
             msg = f'Attempted to instantiate {type(self).__name__} with data labelled as {dtype}.'
             raise TypeError(msg)
         
-        self._model_data = datastructure(ref=ref, **kwargs)
+        self._model_data      = model_data
+        self.ref              = model_data.ref
+        self.numba            = True
+        self.tspans           = tspans
+        self.int_args         = int_args
+        self._state_names     = list(model_data.states)
+        self._parameter_names = list(model_data.parameters)
+        self._events          = events
+        self._externals       = {}
         
+    @property
+    def _dtype(self) -> str:
+        return 'ode'
+    
     ###########################################################################
     #State and Parameter Management
     ###########################################################################
-    def _set_df(self, 
+    def _as_df(self, 
                 name2scenario_values: Union[dict, pd.DataFrame, pd.Series],
                 expected_columns    : tuple[str]
                 ) -> pd.DataFrame:
+        
         if type(name2scenario_values) == dict:
-            df = pd.DataFrame(name2scenario_values).T
+            df = pd.DataFrame(name2scenario_values)
         elif type(name2scenario_values) == pd.DataFrame:
             df = name2scenario_values.copy()
         elif type(name2scenario_values) == pd.Series:
             df = pd.DataFrame([name2scenario_values])
         
-        if df.columns != expected_columns:
+        if any(df.columns != expected_columns):
             msg = ''
             raise ValueError(msg)
         
@@ -137,7 +145,9 @@ class BaseModel (ABC):
                ) -> None:
         
         expected_columns = self._state_names
-        self._set_df(state2scenario_values, expected_columns)
+        df               = self._as_df(state2scenario_values, expected_columns)
+        self._state_df   = df
+        
     
     @property
     def state_dict(self) -> dict:
@@ -153,13 +163,26 @@ class BaseModel (ABC):
                parameter2scenario_values: Union[dict, pd.DataFrame, pd.Series]
                ) -> None:
         
-        expected_columns = self._parameter_names
-        self._set_df(parameter2scenario_values, expected_columns)
+        expected_columns   = self._parameter_names
+        df                 = self._as_df(parameter2scenario_values, expected_columns)
+        self._parameter_df = df
     
     @property
     def parameter_dict(self) -> dict:
         df = self.parameter_df
         return dict(zip(df.index, df.values))
+    
+    @property
+    def externals(self) -> dict:
+        return self._externals
+    
+    def add_external(self, name: str, function: callable) -> None:
+        ut.check_valid_name(name)
+        
+        self._externals[name] = function
+    
+    def pop_external(self, name: str) -> callable:
+        return self._externals.pop(name)
     
     ###########################################################################
     #Time Span Management
@@ -182,7 +205,7 @@ class BaseModel (ABC):
             arr = np.unique(tspan)
             if len(arr.shape) != 1:
                 raise ValueError('tspan for each scenario must be one dimensional.')
-        self.tspans = formatted
+        self._tspans = formatted
             
     def get_tspan(self, scenario: Scenario) -> np.ndarray:
         tspans = self.tspans 
@@ -196,20 +219,38 @@ class BaseModel (ABC):
         if attr in self._locked and hasattr(self, attr):
             msg = f'{attr} attribute has already been set and is locked.'
             raise AttributeError(msg)
-            
+        elif attr == 'int_args' and type(value) != dict:
+            if value is None:
+                super().__setattr__(attr, {})
+            else:
+                msg = 'int_args attribute must be a dict or None.'
+                raise ValueError(msg)
         else:
             super().__setattr__(attr, value)
     
     ###########################################################################
     #Integration
-    ###########################################################################
+    ########################################################################### 
+    @property
+    def rhs(self) -> callable:
+        if self.numba:
+            return self._rhs_functions[1]
+        else:
+            return self._rhs_functions[0]
+    
+    @property
+    def rhsdct(self) -> callable:
+        if self.numba:
+            return self._rhsdct_functions[1]
+        else:
+            return self._rhsdct_functions[0]
+    
     def __call__(self, 
-                 y0             = None, 
-                 p0             = None, 
-                 tspan          = None, 
-                 overlap        = True, 
-                 raw            = False, 
-                 include_events = True,
+                 y0             : np.array, 
+                 p0             : np.array, 
+                 tspan          : np.array, 
+                 raw            : bool = False, 
+                 include_events : bool = True,
                  ) -> np.array:
         #Reassign and/or extract
         events   = self._events
@@ -219,7 +260,6 @@ class BaseModel (ABC):
                                  y0             = y0, 
                                  p0             = p0, 
                                  events         = events, 
-                                 overlap        = overlap, 
                                  include_events = include_events,
                                  **int_args
                                  )
@@ -231,27 +271,45 @@ class BaseModel (ABC):
     @abstractmethod
     def _convert_raw_output(self, t, y, p) -> type:
         pass
-        
+    
     def integrate(self, 
-                  scenario, 
-                  y0, 
-                  p0, 
-                  tspans, 
-                  **kwargs
+                  raw            : bool = False, 
+                  include_events : bool = True,
                   ) -> dict:
+        '''
+        Numerical integration from the front end. If the developer needs to 
+        override y0, p0 or tspan, use the __call__ method instead.
+
+        Parameters
+        ----------
+        raw : bool, optional
+            If True, returns Numpy arrays. If False, returns the integration 
+            results as part of another class designed to package the results. The 
+            default is False.
+        include_events : bool, optional
+            Include overlapping time points for events. The default is True.
+
+        Returns
+        -------
+        dict
+            A dictionary where keys are scenarios and the values are the results 
+            of the numerical integration.
+
+        '''
         result     = {}
         states     = self.state_dict
         parameters = self.parameter_dict
         
-        #Check that scenarios are correct
-        if set(states) != set(parameters):
-            msg = 'Scenarios of states and parameters do not match.'
-            raise ValueError(msg)
-            
+        
         for scenario, y0 in states.items():
             p0    = parameters[scenario]
             tspan = self.get_tspan(scenario)
             
-            result[scenario] = self(y0, p0, tspan, **kwargs)
+            result[scenario] = self(y0, 
+                                    p0, 
+                                    tspan, 
+                                    raw=raw, 
+                                    include_events=include_events
+                                    )
             
         return result

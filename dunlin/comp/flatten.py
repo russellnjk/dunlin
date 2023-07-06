@@ -74,7 +74,7 @@ def delete_rename(child_name      : str,
                 try:
                     new_key, new_value = rename_func(key, value, *args)
                 except Exception as e:
-                    msg = f'Error in renaming data in {field} {key}.'
+                    msg = f'Error in renaming data in {field}: {key}.'
                     msg = f'{msg}\n{e.args[0]}'
                     raise type(e)(msg)
                     

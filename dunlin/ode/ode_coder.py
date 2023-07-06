@@ -1,408 +1,330 @@
 import numpy as np
 import textwrap as tw
 from collections import namedtuple
+from numba       import njit
 
 import dunlin.utils          as ut
 import dunlin.datastructures as dst
 import dunlin.ode.extrafunc  as exf
-from dunlin.ode.event import evs_tup 
+from dunlin.datastructures import ODEModelData
+from dunlin.ode.event import Event
 
-model_args_ = 'time', 'states', 'parameters'
-model_args  = ', '.join(model_args_)
+signature = 'time', 'states', 'parameters'
+model_args  = ', '.join(signature)
 
 ###############################################################################
 #Top Level Algorithm
 ###############################################################################
-ode_tup = namedtuple('ODE', 'rhs rhsdct rhsevents rhsextra')
+ode_tup = namedtuple('ODE', 'rhs rhsdct events')
 
-def make_ode(model_data: dict) -> tuple[callable, callable, callable]:
-    rhs       = make_rhs(model_data)
-    rhsdct    = make_rhsdct(model_data)
-    
-    
-    if model_data.get('events'):
-        rhsevents = make_rhsevents(model_data)
-    else:
-        rhsevents = {}
-    
-    if 'extra' in model_data:
-        rhsextra = make_rhsextra(model_data)
-        # if callable(model_data['extra']):
-        #     rhsextra = model_data['extra']
-        # else:
-        #     rhsextra = make_rhsextra(model_data)
-        
-    else:
-        rhsextra = None
+def make_ode_callables(ode_data: dict) -> tuple[tuple[callable], tuple[callable], tuple[callable]]:
+    rhs    = make_rhs(ode_data)
+    rhsdct = make_rhsdct(ode_data)
+    events = make_events(ode_data)
 
-    return ode_tup(rhs, rhsdct, rhsevents, rhsextra)
+    return ode_tup(rhs, rhsdct, events)
 
 ###############################################################################
-#Function Generation Algorithm
+#Function Generation
 ###############################################################################
-def make_rhs(model_data):
-    code, rhs_name = make_rhs_code(model_data)
-    dct            = ut.code2func(code, rhs_name)
-    rhs            = dct[rhs_name]
-    
-    test_t = 1
-    test_y = np.ones(len(model_data['states']))
-    test_p = np.ones(len(model_data['parameters']))
-    
-    test_func(rhs, test_t, test_y, test_p)
-    
-    code = '@__njit\n' + code
-    dct            = ut.code2func(code, rhs_name)
-    rhs            = dct[rhs_name]
-    rhs.code       = code
-    
-    return rhs
+rhs_functions    = {'__array' : np.array, 
+                    '__min'   : np.minimum, 
+                    '__max'   : np.maximum
+                    }
+rhsdct_functions = rhs_functions.copy()
 
-def make_rhsdct(model_data):
-    code, rhs_name = make_rhsdct_code(model_data)
-    dct            = ut.code2func(code, rhs_name)
-    rhs            = dct[rhs_name]
+def make_rhs(ode_data):
+    global rhs_functions
+    global signature
     
-    test_t = 1
-    test_y = np.ones((len(model_data['states']), 10))
-    test_p = np.ones((len(model_data['parameters']), 10))
+    #Make function definition
+    rhs_name   = 'model_' + ode_data.ref
+    signature_ = ', '.join(signature)
+    definition = f'def {rhs_name}({signature_}):'
     
-    test_func(rhs, test_t, test_y, test_p)
+    #Make return value
+    d_states   = [ut.diff(ut.undot(x)) for x in ode_data.states]
+    d_states   = ', '.join(d_states)
+    return_val = f'\treturn __array([{d_states}])'
     
-    code           = code
-    dct            = ut.code2func(code, rhs_name)
-    rhs            = dct[rhs_name]
-    rhs.code       = code
-    
-    to_return = [*model_data['states'], 
-                 *model_data['parameters'],
-                 *model_data['variables'],
-                 *model_data['reactions'], 
-                 *[ut.diff(x) for x in model_data['states']]
-                 ]
-    
-    rhs.variables = to_return
-    
-    return rhs
-
-def test_func(func, *args, **kwargs):
-    try:
-        return func( *args, **kwargs)
-    except NameError as e:
-        e.args = (ut.dot(e.args[0]),)
-        raise e
-    except Exception:
-        pass
-
-###############################################################################
-#Top Level Code Generation
-###############################################################################
-def make_rhs_code(model_data, undot=True):
-    rhs_name   = 'model_' + model_data['ref']
-    definition = ut.def_func(rhs_name, model_args)
-    
-    #Generate code
+    #Make full code
     code = [definition,
-            xps2code(model_data),
-            funcs2code(model_data), 
-            vrbs2code(model_data), 
-            rxnrts2code(model_data),
-            make_model_return(model_data)
+            states2code(ode_data),
+            parameters2code(ode_data),
+            functions2code(ode_data), 
+            variables2code(ode_data), 
+            reactions2code(ode_data),
+            rates2code(ode_data),
+            return_val
             ]
-    
     code = '\n\n'.join(code)
-    if undot:
-        code = ut.undot(code)
     
-    return code, rhs_name
+    #Execute
+    scope = {}
+    exec(code, rhs_functions, scope)
+    
+    #Extract
+    rhs0      = scope[rhs_name]
+    rhs0.code = code
+    rhs1      = njit(rhs0)
+    rhs1.code = code
+    
+    return rhs0, rhs1
 
-def make_rhsdct_code(model_data):
-    rhs_name   = 'modeldct_' + model_data['ref']
-    outer      = ut.def_func(rhs_name, model_args)
-    definition = outer
+def make_rhsdct(ode_data):
+    global rhsdct_functions
+    global signature
     
-    #Generate code
-    code = [xps2code(model_data),
-            funcs2code(model_data), 
-            vrbs2code(model_data), 
-            rxnrts2code(model_data),
+    #Make function definition
+    rhs_name   = 'model_' + ode_data.ref
+    signature_ = ', '.join(signature)
+    definition = f'def {rhs_name}({signature_}):'
+    
+    #Make return value
+    d_states   = [ut.diff(ut.undot(x)) for x in ode_data.states]
+    d_states   = ', '.join(d_states)
+    return_val = f'\treturn __array([{d_states}])'
+    to_return  = [*ode_data.states, 
+                  *ode_data.parameters,
+                  *ode_data.variables,
+                  *ode_data.reactions, 
+                  *[ut.diff(x) for x in ode_data.states]
+                  ]
+    return_val = ut.undot(', '.join(to_return))
+    return_val = f'\treturn {return_val}'
+    
+    #Make full code
+    code = [definition,
+            states2code(ode_data),
+            parameters2code(ode_data),
+            functions2code(ode_data), 
+            variables2code(ode_data), 
+            reactions2code(ode_data),
+            rates2code(ode_data),
+            return_val
             ]
-    
     code = '\n\n'.join(code)
-    code = definition + '\n' + code
-    code = ut.undot(code)
     
-    code += '\n\n' + make_modeldct_return(model_data)
+    #Execute
+    scope = {}
+    exec(code, rhsdct_functions, scope)
     
-    return code, rhs_name
+    #Extract
+    rhsdct0      = _wrap(scope[rhs_name], to_return)
+    rhsdct0.code = code
+    rhsdct1      = _wrap(njit(scope[rhs_name]), to_return)
+    rhsdct1.code = code
+    
+    return rhsdct0, rhsdct1
 
-###############################################################################
-#Model Definition and Return Value for INTEGRATION
-###############################################################################
-def make_model_return(model_data):
-    dy = [ut.diff(x) for x in model_data['states']]
-    dy = ', '.join(dy)
-    
-    return_value = f'\treturn __np.array([{dy}])'
-    
-    return return_value
-
-def make_modeldct_return(model_data):
-    #Do not use for submodels
-    to_return = [*model_data['states'], 
-                 *model_data['parameters'],
-                 *model_data['variables'],
-                 *model_data['reactions'], 
-                 *[ut.diff(x) for x in model_data['states']]
-                 ]
-    
-    # to_return    = [ut.undot(x) for x in to_return]
-    return_value = '\treturn {' + ', '.join([f'"{x}": {ut.undot(x)} ' for x in to_return]) + '}'
-    
-    return return_value
-
-###############################################################################
-#Code generation for rhs
-###############################################################################
-def update_namespace(namespace, *to_add, unique=True):
-    for i in to_add:
-        if i in namespace and unique:
-            raise ValueError(f'Repeated namespace: {i}')
-        namespace.add(i)
+def _wrap(rhsdct: callable, to_return: list[str]) -> callable:
+    def helper(time, states, parameters):
+        tup = rhsdct(time, states, parameters)
+        dct = dict(zip(to_return, tup))
         
-def xps2code(model_data):
-    global model_args_
+        return dct
+    return helper
+        
+def make_events(ode_data: ODEModelData) -> list[Event]:
+    global signature
+    global rhs_functions
+    
+    events        = ode_data.events
+    event_objects = []
+    
+    if not events:
+        return event_objects
+    
+    mid_code   = [states2code(ode_data),
+                  parameters2code(ode_data),
+                  functions2code(ode_data), 
+                  variables2code(ode_data), 
+                  reactions2code(ode_data),
+                  rates2code(ode_data),
+                  ]
+    mid_code   = '\n\n'.join(mid_code)
+    signature_ = ', '.join(signature)
+    states     = ', '.join([ut.undot(x) for x in ode_data.states    ])
+    parameters = ', '.join([ut.undot(p) for p in ode_data.parameters])
+    
+    for event_name, event in events.items():
+        #Make trigger function
+        trigger_code = trigger2code(event)
+        trigger_name = f'trigger_{ut.undot(event_name)}'
+        
+        trigger_code = [f'def {trigger_name}({signature_}):',
+                        mid_code,
+                        trigger_code
+                        ]
+        trigger_code = '\n\n'.join(trigger_code)
+        
+        scope = {}
+        exec(trigger_code, rhs_functions, scope)
+        
+        trigger_function      = scope[trigger_name]
+        trigger_function.code = trigger_code
+        
+        #Make assignment function
+        assignment_code = assignment2code(event)
+        assignment_name = f'assignment_{ut.undot(event_name)}'
+        new_y           = f'\tnew_y = __array([{states}])'
+        new_p           = f'\tnew_p = __array([{parameters}])' 
+        assignment_code = [f'def {assignment_name}({signature_}):',
+                           mid_code,
+                           assignment_code,
+                           new_y,
+                           new_p,
+                           '\treturn new_y, new_p'
+                           ]
+        assignment_code = '\n\n'.join(assignment_code)
+        
+        scope = {}
+        exec(assignment_code, rhs_functions, scope)
+        
+        assignment_function      = scope[assignment_name]
+        assignment_function.code = assignment_code
+        
+        #Instantiate event
+        event_object = Event(event_name, 
+                             trigger_function, 
+                             assignment_function, 
+                             event.delay, 
+                             event.persistent, 
+                             event.priority, 
+                             ode_data.ref
+                             )
+        #Update results
+        event_objects.append(event_object)
+    
+    event_objects = sorted(event_objects, key=lambda event: event.priority)
+    
+    return event_objects
+
+###############################################################################
+#Code Generation for Integration
+###############################################################################
+def states2code(ode_data: ODEModelData) -> str:
+    global signature
     #Get the signature
-    t, states, parameters = model_args_
+    t, states, parameters = signature
     
-    #Set up namespace cache
-    xs   = model_data[states]
-    ps   = model_data[parameters]
-    code = ''
+    #Make code for states
+    state_names = ode_data.states
+    state_code  = '\t#States\n'
+    diff_code   = '\t#Differentials\n'
     
-    if xs:
-        code += '\t#States\n'# + xs.to_py()
-        temp  = ['\t' + f'{name} = states[{i}]' for i, name in enumerate(xs)]
-        code += '\n'.join(temp)
+    for i, state_name in enumerate(state_names):
+        state_code  += f'\t{state_name} = states[{i}]\n'
+        diff_code   += f'\t{ut.diff(state_name)} = 0\n'
     
-    if ps:
-        code += '\n\t#Parameters\n' 
-        temp  = ['\t' + f'{name} = parameters[{i}]' for i, name in enumerate(ps)]
-        code += '\n'.join(temp)
+    state_code += '\n' + diff_code
+    state_code  = ut.undot(state_code) 
+    return state_code
+
+def parameters2code(ode_data: ODEModelData) -> str:
+    #Make code for parameters
+    parameter_names = ode_data.parameters
+    parameter_code  = '\t#Parameters\n'
+    
+    for i, parameter_name in enumerate(parameter_names):
+        parameter_code += f'\t{parameter_name} = parameters[{i}]\n'
+    
+    parameter_code = ut.undot(parameter_code)
+    return parameter_code
+
+function_template = '\tdef {function_name}({signature}):\n\t\treturn {expr}'
+
+def functions2code(ode_data: ODEModelData):
+    global function_template
+    
+    functions     = ode_data.functions
+    function_code = '\t#Functions\n'
+    
+    if not functions:
+        return function_code
+    
+    for function_name, function in functions.items():
+        signature      = ', '.join(function.signature)
+        function_code += function_template.format(function_name = function_name,
+                                                  signature     = signature,
+                                                  expr          = function.expr
+                                                  )
         
-    return code
+    function_code = ut.undot(function_code)
+    return function_code
 
-def funcs2code(model_data):
-    funcs = model_data.get('functions')
+def variables2code(ode_data: ODEModelData) -> str:
+    variables     = ode_data.variables
+    variable_code = '\t#Variables\n'
     
-    if funcs:
-        code = '\t#Functions\n' #+ funcs.to_py()
-        for name, func in funcs.items():
-            call  = f'{func.name}({func.signature})'
-            expr  = f'return {func.expr}'
-            code += f'\tdef {call}:\n\t\t{expr}\n'
-    else:
-        code = ''
+    if not variables:
+        return variable_code
+
+    for variable_name, variable in variables.items():
+        lhs = f'{variable_name}'
+        rhs = f'{variable.expr}'
         
-    return code
-
-def vrbs2code(model_data):
-    vrbs = model_data.get('variables')
+        variable_code += f'\t{lhs} = {rhs}\n'
     
-    if vrbs:
-        code = '\t#Variables\n'
-        for name, vrb in vrbs.items():
-            code += f'\t{vrb.name} = {vrb.expr}\n'
-    else:
-        code = ''
+    variable_code = ut.undot(variable_code)
+    return variable_code
+
+def rates2code(ode_data: ODEModelData) -> str:
+    rates     = ode_data.rates
+    rate_code = '\t#Rates\n'
+    
+    if not rates:
+        return rate_code
+    
+    for state_name, rate in rates.items():
+        lhs = f'{ut.diff(state_name)}'
+        rhs = f'{rate.expr}'
         
-    return code
+        rate_code += f'\t{lhs} += {rhs}\n'
+    
+    rate_code = ut.undot(rate_code)
+    return rate_code
 
-def rxnrts2code(model_data):
-    #Get the dct of differentials
-    diffs1, rxns_code = _rxns2code(model_data)
-    diffs2            = _rts2code(model_data)
-    diffs             = {**diffs1, **diffs2}
+def reactions2code(ode_data: ODEModelData) -> str:
+    reactions     = ode_data.reactions
+    reaction_code = '\t#Reactions\n'
+      
+    if not reactions:
+        return reaction_code
     
-    #Check
-    repeat = set(diffs1).intersection(diffs2)
-    if repeat:
-        msg  = f'Error in model {model_data["ref"]}\n'
-        msg += f'One or more states appeared in both a rate and reaction: {repeat}'
-        raise ValueError(msg)
-    
-    missing = set(model_data['states']).difference(diffs)
-    if missing:
-        msg  =  f'Error in model {model_data["ref"]}\n'
-        msg += f'One or states is not involved in a rate or reaction: {missing}'
-        raise ValueError(msg)
+    for reaction_name, reaction in reactions.items():
+        rate = reaction.rate
         
-    #Convert to strings
-    diffs  = '\n'.join(diffs.values())
-    diffs  = '\t#Differentials\n' + diffs
-    
-    #Merge with reactions
-    diffs = rxns_code + '\n' + diffs
-    
-    return diffs
-
-def _rts2code(model_data):
-    rts   = model_data.get('rates')
-    diffs = {}
-    if rts:
-        diffs = {state: f'\t{rt.name} = {rt.expr}'  for state, rt in rts.items()}
-
-    return diffs
-
-def _rxns2code(model_data):
-    rxns  = model_data.get('reactions')
-    diffs = {}
-    
-    if rxns:
-        code = '\t#Reactions\n' 
-        diffs = {}
+        #Update reaction code
+        reaction_code += f'\t{reaction_name} = {rate}\n' 
         
-        for name, rxn in rxns.items():
-            code += f'\t{rxn.name} = {rxn.rate}\n'
-            #Create the differentials
-            for state, n in rxn.stoichiometry.items():
-                diffs.setdefault(state, '\t' + ut.diff(state) + ' = ')
-                diffs[state] += f'{n}*{name}'
-                
-    else:
-        code = ''
-       
-    return diffs, code
+        #Update differentials
+        for state_name, n in reaction.stoichiometry.items():
+            lhs = f'{ut.diff(state_name)}'
+            rhs = f'{n}*{reaction_name}'
+            
+            reaction_code += f'\t{lhs} = {rhs}\n' 
+    
+    reaction_code = ut.undot(reaction_code)
+    return reaction_code
 
 ###############################################################################
-#Function and Code Generation for Events
+#Code Generation for Events
 ###############################################################################
-def make_rhsevents(model_data):
-    ref = model_data['ref']
+def trigger2code(event: Event):
     
-    #Create cached values
-    # xps_code  = xps2code(model_data)
-    mid_code = [xps2code(model_data),
-                funcs2code(model_data), 
-                vrbs2code(model_data), 
-                rxnrts2code(model_data),
-                ]
+    trigger_code = f'\treturn {event.trigger_expr}\n'
     
-    mid_code  = '\n\n'.join(mid_code)
-    rhsevents = {}
-    
-    #Make test values
-    test_t = 1
-    test_y = np.ones(len(model_data['states']))
-    test_p = np.ones(len(model_data['parameters']))
-    
-    evs = model_data['events']
-    #Generate function and code
-    for name, ev in evs.items():
-        trigger_name, trigger_code = trigger2code(ev, mid_code, model_data)
-        assign_name, assign_code   = assign2code(ev, mid_code, model_data)
-        trigger_name, assign_name  = ut.undot([trigger_name, assign_name])
-        
-        code = trigger_code + '\n\n' + assign_code
-        code = ut.undot(code)
-        dct  = ut.code2func(code, trigger_name, assign_name)
-        
-        trigger_func      = dct[trigger_name]
-        assign_func       = dct[assign_name]
-        trigger_func.code = trigger_code
-        assign_func.code  = assign_code
-        
-        test_func(trigger_func, test_t, test_y, test_p)
-        test_func(assign_func, test_t, test_y, test_p)
-        rhsevents[name] = evs_tup(ref, name, trigger_func, assign_func,
-                                  ev.delay, ev.persistent, ev.priority
-                                  )
-        
-    return rhsevents
-    
-def trigger2code(ev, mid_code, model_data):
-    global model_args
-    
-    ref        = model_data['ref']
-    func_name  = f'trigger_{ref}_{ev.name}'
-    func_def   = ut.def_func(func_name, model_args)
-    return_val = '\treturn __triggered'
-    trigger    = f'\t__triggered = {ev.trigger_expr}'
-    trigger    = '\t#Trigger\n' + trigger
-    code       = [func_def, mid_code, trigger, return_val ]
-    code       = '\n\n'.join(code)
+    trigger_code = ut.undot(trigger_code)
+    return trigger_code
 
-    return func_name, code
-
-def assign2code(ev, mid_code, model_data):
-    global _args
+def assignment2code(event: Event):
+    assignment_code = '\t#Assignment\n'
     
-    ref        = model_data['ref']
-    func_name  = f'assign_{ref}_{ev.name}'
-    func_def   = ut.def_func(func_name, model_args)
-    assign     = '\n'.join(['\t' + i for i in ev.assign_expr])
-    assign     = '\t#Assign\n' + assign
-    xs         = model_data['states']
-    ps         = model_data['parameters']
-    new_y      = f'\tnew_y = __np.array([{", ".join(xs)}])'
-    new_p      = f'\tnew_p = __np.array([{", ".join(ps)}])'
-    collate    = '\n'.join(['\t#Collate', new_y, new_p])
-    return_val = '\treturn new_y, new_p'
-    code       = '\n\n'.join([func_def, 
-                              mid_code, 
-                              assign, 
-                              collate,
-                              return_val
-                              ])
+    for line in event.assignments:
+        assignment_code += f'\t{line}\n'
     
-    return func_name, code
+    assignment_code = ut.undot(assignment_code)
+    return assignment_code
     
-###############################################################################
-#Extra
-###############################################################################
-def make_rhsextra(model_data):
-    rhs_name, code = make_rhsextra_code(model_data)
-    globalvars     = {**ut.default_globals, **exf.exf}
-    dct            = ut.code2func(code, rhs_name, globalvars=globalvars)
-    rhs            = dct[rhs_name]
-
-    rhs.code  = code
-    rhs.names = list(model_data['extra'])
-    return rhs
-
-def make_rhsextra_code(model_data):
-    rhs_name   = 'extra_' + model_data['ref']
-    definition = ut.def_func(rhs_name, model_args)
-    
-    #Make template
-    template = [definition,
-                xps2code(model_data),
-                funcs2code(model_data), 
-                vrbs2code(model_data), 
-                rxnrts2code(model_data),
-                ]
-    template = '\n\n'.join(template)
-    
-    #Generate assignments
-    assign     = exs2code(model_data)
-    return_val = ', '.join([f'"{i}": {ut.undot(i)}' for i in model_data['extra']])
-    return_val = '\treturn {' + return_val + '}'
-    
-    #Join everything
-    code = '\n\n'.join([template, assign])
-    code = ut.undot(code)
-    code += '\n\n' + return_val
-    
-    return rhs_name, code
-    
-def exs2code(model_data):
-    #Set up caches
-    extras = model_data['extra']
-    code   = '\t#Extra\n' 
-    
-    for name, ex in extras.items():
-        code += f'\t{ex.name} = __{ex.func_name}({ex.signature})\n'
-
-    return code
-
   
