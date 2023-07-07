@@ -10,25 +10,33 @@ import dunlin.utils             as ut
 import dunlin.standardfile.dunl as sfd
 from dunlin.utils.typing import Dflike, Num
 
-class DataValue(ABC):
+class GenericItem(ABC, ut.FrozenObject):
     '''For most items.
     
     Attributes:
-        1. `name`: Most items in models need to be uniquely identified. This 
-        is achieved via the `name` attribute which obeys SBML conventions. 
-        During instantiation, `name` is checked against the `all_namespace` 
-        argument in the constructor. An exception is raised if `name` is in 
-        `ext_namespace`. Certain items may not require a unique identifier. In 
-        this case, the `name` argument should be None.
+        1. `name`: All items in models will have `name` attributes corresponding 
+        SIds in SBML while obeying this package's conventions. Names should be 
+        unique so that each object can be referred to unambiguously. This is 
+        ensured by the `ext_namespace` argument in the constructor; when the 
+        constructor `__init__` is called, an error will occur if the `name` 
+        argument is already in `ext_namespace`.
         
+        2. `namespace`: Many items refer to other items in a model. For example, 
+        a rate law might involve several parameters and molecular concentrations. 
+        To keep track of this, each `GenericItem` has a namespace attribute which 
+        tells the developer what other items are being referred to. The 
+        `__contains__` dunder method accepts a string and checks if that string 
+        is inside namespace.
+        
+        However, not all items require such tracking. In such cases, the `namespace` 
+        attribute should be left as an empy tuple. If the item requires some other 
+        behaviour, the dunder method can be overridden. However, a different 
+        attribute other than `namespace` should be used so as to avoid confusion.
+    
     Export methods:
         1. `to_data` : Returns a dict/list that can be used to re-instantiate 
-        the object.
+        the object not including the `name` argument.
     '''
-    
-    #For formatting numbers when converting to code
-    n_format: callable = sfd.format_num
-    
     @staticmethod
     def format_primitive(x: Union[str, int, float]):
         if ut.isstrlike(x):
@@ -41,59 +49,46 @@ class DataValue(ABC):
         else:
             return float_value
     
-    def __init__(self, all_names: set, name: str, /, **attributes):
-        #Set attributes
-        self.name = name
-    
-        for k, v in attributes.items():
+    def __init__(self, ext_namespace, name, /, **data):
+        for k, v in data.items():
             setattr(self, k, v)
+        
+        if not hasattr(self, 'namespace'):
+            self.namespace = set()
         
         if name is None:
             pass
         elif not ut.is_valid_name(name):
             msg = f'Invalid name {name} provided when instantiating {type(self).__name__} object.'
-            raise NameError(msg)
-        elif name in all_names:
+            raise ValueError(msg)
+        elif name in ext_namespace:
             raise NameError(f'Redefinition of {name}.')
         else:
             #Update the namespace
-            all_names.add(name)
+            ext_namespace.add(name)
+        
+        self.name = name
     
-    ###########################################################################
-    #Attribute Management
-    ###########################################################################
-    def __setattr__(self, attr: str, value: Any) -> None:
-        if hasattr(self, attr):
-            msg = f'Attribute {attr} has already been set and cannot be modified.'
-            raise AttributeError(msg)
-        else:
-            super().__setattr__(attr, value)
-    
-    ###########################################################################
-    #Representation
-    ###########################################################################
-    def __str__(self) -> str:
+    def __str__(self):
         return f'{type(self).__name__}({repr(self.name)})'
     
-    def __repr__(self) -> str:
+    def __repr__(self):
         return str(self)
     
-    ###########################################################################
-    #Export
-    ###########################################################################
+    def __contains__(self, name: str):
+        return name in self.namespace
+    
+    def __getitem__(self, key):
+        return getattr(self, key)
+    
+    def get(self, key, default=None):
+        return getattr(self, key, default)
+    
     @abstractmethod
     def to_data(self) -> Union[list, dict]:
         ...
-    
-    @abstractmethod
-    def to_dunl_code(self) -> str:
-        ...
-    
-    @abstractmethod
-    def __contains__(self, x: Any):
-        ...
-        
-class DataDict(ABC):
+
+class GenericDict(ut.FrozenObject):
     '''
     Allows dict-like access and iteration but bans modification. Also enforces 
     that all items inside it are of the the type specified by the `itype` 
@@ -109,10 +104,8 @@ class DataDict(ABC):
         `__init__` of `itype`.
         
     '''
-    #Intialized in this class
-    _data: dict 
     
-    #Specified in subclass
+    _data: dict 
     itype: type
     
     def __init__(self, 
@@ -120,42 +113,23 @@ class DataDict(ABC):
                  mapping       : dict, 
                  *args
                  ) -> None:
-        
-        #Check mapping and edge cases
-        if type(mapping) != dict:
-            msg = f'Expected a dict. Received {type(mapping)}.'
-            raise TypeError(msg)
-        elif not mapping:
-            self._data = {}
-            return
-        
-        #Instantiate itype for each item in the mapping
         _data = {}
-        for name, kwargs in mapping.items():
-            if type(kwargs) == dict:
-                item = self.itype(ext_namespace, *args, name, **kwargs)
-            
-            elif type(kwargs) == list or type(kwargs) == tuple:
-                item = self.itype(ext_namespace, *args, name, *kwargs)
-            
-            else:
-                msg = f'Mapping values must be of type list or dict. Received {type(kwargs)}.'
-                raise TypeError(msg)
+        
+        if mapping:
+            for name, kwargs in mapping.items():
+                if hasattr(kwargs, 'items'):
+                    item = self.itype(ext_namespace, *args, name, **kwargs)
                 
-            _data[name] = item
+                elif ut.islistlike(kwargs):
+                    item = self.itype(ext_namespace, *args, name, *kwargs)
+                
+                else:
+                    item = self.itype(ext_namespace, *args, name, kwargs)
+                    
+                _data[name] = item
           
         self._data = _data
     
-    ###########################################################################
-    #Attribute Management
-    ###########################################################################
-    def __setattr__(self, attr: str, value: Any) -> None:
-        if hasattr(self, attr):
-            msg = f'Attribute {attr} has already been set and cannot be modified.'
-            raise AttributeError(msg)
-        else:
-            super().__setattr__(attr, value)
-            
     ###########################################################################
     #Access
     ###########################################################################
@@ -187,96 +161,103 @@ class DataDict(ABC):
     #Export
     ###########################################################################
     def to_data(self) -> dict:
-        dct = {k: v.to_data() for k, v in self.items()}
+        dct = {k: v.to_data() if hasattr(v, 'to_data') else v for k, v in self.items()}
         return dct
     
-    def to_dunl_code(self) -> str:
-        chunks = [v.to_dunl_code() for v in self.values()]
-        code   = '\n'.join(chunks)
-        
-        return code
+    def to_dunl(self) -> str:
+        return sfd.write_dict(self.to_data())
     
     ###########################################################################
     #Representation
     ###########################################################################
     def __str__(self):
-        return self.__repr__()
+        return self.to_dunl()
     
     def __repr__(self):
         return f'{type(self).__name__}{tuple(self.keys())}'
- 
-class Table(ABC):
-    '''
-    Base class for tabular data. 
-    '''
-    #Specified in the subclass
-    itype        : str
     
-    #Can be overwritten in the subclass but cannot be modified
-    is_numeric   : bool = True
+class NamespaceDict(GenericDict):
+    '''
+    Extends the GenericDict class with the addition of a `namespace` attribute. 
+    This attribute is used to keep track of namespaces to prevent overlaps. 
+    The user can set their own `namespace` but an empty one will be created 
+    otherwise. The contents of `namespace` depend on the user's needs.
+    '''
+    itype     : type
+    
+    ###########################################################################
+    #Constructor
+    ###########################################################################
+    def __init__(self, 
+                 ext_namespace: set, 
+                 mapping      : dict, 
+                 *args
+                 ) -> None:
+        super().__init__(ext_namespace, mapping, *args)
+        
+        if not hasattr(self, 'namespace'):
+            self.namespace = ()
+
+class TabularDict(ABC, ut.FrozenObject):
+    '''
+    Base class for containers for tabular data. 
+    '''
+    is_numeric   : bool  = True
     can_be_empty : bool = True
     
-    #Can be overwritten in the subclass and can be modifed any time
-    n_format     : callable = sfd.format_num
-    
-    #Underlying data
-    _df: pd.DataFrame
-    
-    def __init__(self, 
-                 all_names : set, 
-                 mapping   : Union[dict, pd.DataFrame], 
-                 ) -> None:
-        
+    @staticmethod
+    def mapping2df(mapping: Dflike, ):
         #Convert to df
         if type(mapping) == pd.DataFrame:
             df = mapping
         elif type(mapping) == pd.Series:
             df = pd.DataFrame(mapping).T
-        elif type(mapping) == dict:
-            df = pd.DataFrame(mapping)
+        elif ut.isdictlike(mapping):
+            temp = dict(mapping)
+            try:
+                df = pd.DataFrame(temp)
+            except:
+                df = pd.DataFrame(pd.Series(temp)).T
+        elif not mapping:
+            df = pd.DataFrame()
         else:
             msg = f"Expected a DataFrame, Series or dict. Received {type(mapping)}"
             raise TypeError(msg)
+    
+        return df
+
+    def __init__(self, 
+                 ext_namespace : set, 
+                 name          : str, 
+                 mapping       : Union[dict, pd.DataFrame], 
+                 n_format      : Callable = sfd.format_num
+                 ) -> None:
+        #Convert to df
+        df = self.mapping2df(mapping)
         
-        #Check for edge case
         if 0 in df.shape and not self.can_be_empty:
-            msg  = 'Error in parsing {self.itype}. '
-            msg += 'The input appears to be empty. '
+            msg  = 'Error in parsing {name}. '
+            msg += 'The resulting DataFrame had shape {df.shape}. '
+            msg += '{name} must have at least one column and one row.'
             raise ValueError(msg)
-        
+            
         #Check names
         names = tuple(df.columns)
-        for name in names:
-            ut.check_valid_name(name) 
-            
-            if type(name) != str:
-                msg  = 'Error in parsing {self.itype}. '
-                msg += 'Keys in {self.itype} must be strings.'
-                raise TypeError(msg)
-            elif not ut.is_valid_name(name):
-                msg = f'Invalid name {name} provided when instantiating {self.itype}.'
-                raise NameError(msg)
-            elif name in all_names:
-                raise NameError(f'Redefinition of {name}.')
-            else:
-                #Update the namespace
-                all_names.add(name)
-         
+        [ut.check_valid_name(name) for name in names]
+        if type(name) != str:
+            raise TypeError('Expected "name" argument to be a string.')
+        
+        repeated = ext_namespace.intersection(names)
+        if repeated:
+            raise NameError(f'Redefinition of {repeated}.')
+        
+        ext_namespace.update(names)
+        
         #Save attributes
-        self._df = df
+        self.name     = name
+        self._df      = df
+        self.n_format = n_format
     
-    ###########################################################################
-    #Attribute Management
-    ###########################################################################
-    def __setattr__(self, attr: str, value: Any) -> None:
-        if attr in {'n_format', '_df'}:
-            super().__setattr__(attr, value)
-        elif hasattr(self, attr):
-            msg = f'Attribute {attr} has already been set and cannot be modified.'
-            raise AttributeError(msg)
-        else:
-            super().__setattr__(attr, value)
-            
     ###########################################################################
     #Representation
     ###########################################################################
@@ -299,7 +280,7 @@ class Table(ABC):
     
     @df.setter
     def df(self, new_df: pd.DataFrame) -> None:
-        names   = self.names
+        names = self.names
         columns = new_df.columns
         if len(set(names).intersection(columns)) != len(columns):
             msg = 'Column names do not match.'
@@ -307,6 +288,20 @@ class Table(ABC):
             raise ValueError(msg)
         
         self._df = new_df[list(names)]
+    
+    def by_index(self) -> dict[Union[Num, str], np.ndarray]:
+        df  = self.df
+        dct = dict(zip(df.index, df.values))
+        return dct
+    
+    def keys(self):
+        return self.df.keys()
+    
+    def values(self):
+        return self.df.values()
+    
+    def items(self):
+        return self.df.items()
     
     def __iter__(self):
         return iter(self.names)
@@ -326,7 +321,7 @@ class Table(ABC):
     def to_data(self) -> dict:
         return self._df.to_dict()
     
-    def to_dunl_code(self) -> str:
+    def to_dunl(self) -> str:
         df = self._df
         if self.is_numeric:
             n_format = self.n_format

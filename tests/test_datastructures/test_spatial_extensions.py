@@ -6,13 +6,12 @@ from dunlin.datastructures.reaction            import Reaction,            React
 from dunlin.datastructures.gridconfig          import GridConfig,          GridConfigDict
 from dunlin.datastructures.domaintype          import DomainType,          DomainTypeDict
 from dunlin.datastructures.geometrydefinition  import GeometryDefinition,  GeometryDefinitionDict
-from dunlin.datastructures.boundarycondition   import BoundaryCondition,   BoundaryConditionDict
+from dunlin.datastructures.boundarycondition   import BoundaryConditions,  BoundaryConditionDict
 from dunlin.datastructures.compartment         import Compartment,         CompartmentDict
 from dunlin.datastructures.masstransfer        import (Advection, AdvectionDict, 
                                                        Diffusion, DiffusionDict
                                                        )
 
-from dunlin.datastructures.boundarycondition   import BoundaryCondition,   BoundaryConditionDict
 from dunlin.datastructures.coordinatecomponent import CoordinateComponentDict
 from dunlin.datastructures.stateparam          import ParameterDict, StateDict
 
@@ -166,27 +165,44 @@ assert data2 == data1 == data0
 ###############################################################################
 #Test BoundaryCondition
 ###############################################################################
-data0 = {'bc0': ['x0c', 0, 'Neumann', ],
+data0 = {'x0c': {'x': {'min': {'value'         : 0, 
+                               'condition_type': 'Neumann'
+                               },
+                       'max': {'value'         : 0, 
+                               'condition_type': 'Neumann'
+                               }
+                       }
+                 }
          }
 
 C = BoundaryConditionDict
 
 #Test instantiation
-F0 = C(ext_namespace, ccd, xs, data0)
+F0 = C(ext_namespace, ccd, xs, ps, data0)
 
-data0_ = {'bc0': ['x0c', 0, 'Neumann', 'x', 'min'],
-          'bc1': ['x0c', 0, 'Neumann', 'x', 'max'],
-          }
+data0 = {'x0c': {'x': {'min': [0, 'Neumann'],
+                       'max': [0, 'Neumann']
+                       }
+                 }
+         }
+
+F0 = C(ext_namespace, ccd, xs, ps, data0)
+
+data0_ = {'x0c': {'x': {'min': [0, 'Neumann'],
+                        'max': [0, 'dna']
+                       }
+                 }
+         }
 
 try:
-    F0 = C(ext_namespace, ccd, xs, data0_)
+    F0 = C(ext_namespace, ccd, xs, ps, data0_)
 except:
     assert True
 else:
     assert False
     
 #Test access
-f0 = F0['bc0']
+f0 = F0['x0c']
 
 #Test export/roundtrip
 data1 = F0.to_data()

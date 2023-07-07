@@ -12,7 +12,7 @@ from .ode import ODEModelData
 
 #For SpatialModel
 from .spatialreaction     import SpatialReaction,    SpatialReactionDict
-from .boundarycondition   import BoundaryCondition,  BoundaryConditionDict
+from .boundarycondition   import BoundaryConditions, BoundaryConditionDict
 from .compartment         import Compartment,        CompartmentDict
 from .masstransfer        import Advection,          AdvectionDict
 from .masstransfer        import Diffusion,          DiffusionDict
