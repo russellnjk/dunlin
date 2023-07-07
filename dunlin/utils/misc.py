@@ -1,30 +1,34 @@
 import re
 from numbers import Number
+from typing  import Union
 
 ###############################################################################
 #Submodels, Differentials and Namespaces
 ###############################################################################
-def undot(x, ignore=lambda x: x[:2] == '__'):
-    if isstrlike(x):
-        def repl(x):
-            variable = x[0]
-            
-            if ignore(variable):
-                return variable
-            else:
-                return variable.replace('.', '__dot__')
+def undot(x, rename: dict=None) -> Union[str, list[str]]:
+    def repl(x):
+        name = x[0]
         
+        if name in rename:
+            return rename[name]
+        else:
+            return name.replace('.', '__dot__')
+        
+    if isstrlike(x):
         return re.sub('[a-zA-Z_]+[\w_]*\.', repl, x)
+    
     elif hasattr(x, '__iter__'):
         return [undot(i) for i in x]
     else:
         return x
     
-def dot(x):
+def dot(x) -> Union[str, list[str]]:
     if isstrlike(x):
         return x.replace('__dot__', '.')
-    else:
+    elif hasattr(x, '__iter__'):
         return [dot(i) for i in x]
+    else:
+        return x
     
 def sub(*x):
     return '.'.join(x)
@@ -113,11 +117,14 @@ def is_valid_name(x):
     except:
         return False
 
-reserved = ['states', 
+reserved = {'states', 
             'parameters', 
             'time', 
             'advection',
             'diffusion',
+            'boundary_condition',
+            'Neumann',
+            'Dirichlet',
             'posterior', 
             'context', 
             'priors', 
@@ -125,7 +132,7 @@ reserved = ['states',
             'all',
             'True', 
             'False'
-            ]
+            }
 
 def check_valid_name(x, allow_reserved=False):
     if not x:

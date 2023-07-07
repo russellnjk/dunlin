@@ -1,2 +1,1 @@
-from .flattenmodel import *
-from .flatten       import flatten
+from .flattenmodel import flatten_model

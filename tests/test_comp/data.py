@@ -17,7 +17,7 @@ m0 = {'states'    : {'x0': {'c0': 1, 'c1': 2},
       'rates'     : {'x2': 'v0',
                      'x3': 'v1'
                      },
-      'events'    : {'ev0': {'trigger': 'time==0', 
+      'events'    : {'ev0': {'trigger': 'x1 < 0.01', 
                              'assign': ['x2 = 1', 
                                         'x3 = 1'
                                         ]

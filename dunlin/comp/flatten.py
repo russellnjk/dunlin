@@ -1,4 +1,69 @@
-from typing import Sequence
+import re
+from numbers import Number
+from typing  import Sequence, Union
+
+import dunlin.utils as ut
+
+
+    
+    
+def dot(x          : Union[dict, list, str, Number], 
+        child_name : str, 
+        rename     : dict, 
+        delete     : set,
+        recurse    : list[bool]
+        ) -> Union[str, list[str], dict]:
+    
+    pattern = '\.{0,1}[a-zA-Z_][\w_]*'
+    def repl(x):
+        name = x[0]
+        if name[0] == '.':
+            return name
+        
+        elif name in ut.reserved:
+            return name
+        
+        elif name in rename:
+            return rename[name]
+        
+        else:
+            return child_name + '.' +name
+    
+    sub = lambda s: re.sub(pattern, repl, s)
+    
+    if type(x) == dict:
+        args = child_name, rename, delete, recurse[1:]
+        if recurse[0]:
+            return {dot(k, *args): dot(v, *args) for k, v in x.items() if k not in delete}
+        else:
+            return {k: dot(v, *args) for k, v in x.items() if k not in delete}
+        
+    elif type(x) == list:
+        if recurse[0]:
+            result = []
+            for i in x:
+                if i in delete:
+                    continue
+                else:
+                    i_ = sub(i)
+                
+                result.append(i_)
+            
+            return result
+        else:
+            return list(x)
+    
+    elif type(x) == str:
+        
+        return sub(x)
+    
+    elif isinstance(x, Number):
+        return x
+    
+    else:
+        msg = f'Ecountered unexpected type {type(x)} when flattening model.'
+        msg = f'The item has value: {x}'
+        raise TypeError(msg)
 
 def flatten(all_data        : dict, 
             required_fields : dict[str, callable], 
@@ -24,16 +89,18 @@ def flatten(all_data        : dict,
         elif child_ref not in all_data:
             raise MissingModel(child_ref)
         
-        #Get child data. Recurse if required
+        #Get child data. This must be done recursively as the child
+        #may contain submodels
         child_data = flatten(all_data, required_fields, child_ref, hierarchy)
         
-        #Delete and replace
-        submodel_data = delete_rename(child_name, child_data, rename, delete, required_fields) 
-
+        #Rename and delete
+        submodel_data = rename_delete(child_name, child_data, rename, delete, required_fields) 
+        
+        #Update the flattened data
         for key in submodel_data:
             flattened.setdefault(key, {}).update(submodel_data[key])
     
-    #Merge and overwrite
+    #Update flattened with the parent data. Overwriting is expected.
     for key, value in parent_data.items():
         if key == 'submodels':
             continue
@@ -44,14 +111,17 @@ def flatten(all_data        : dict,
     
     return flattened
         
-def delete_rename(child_name      : str, 
+def rename_delete(child_name      : str, 
                   child_data      : dict, 
-                  rename          : callable, 
-                  delete          : Sequence, 
-                  required_fields : dict[str, callable]
+                  rename          : dict, 
+                  delete          : set, 
+                  required_fields : dict[str, list[bool]]
                   ) -> dict:
+    
+    delete_ = set(delete)
+    
     #Check that delete and rename are mutually exclusive
-    overlap = set(delete).intersection(rename)
+    overlap = delete_.intersection(rename)
     if overlap:
         msg = f'Overlap between delete and rename: {overlap} '
         raise ValueError(msg)
@@ -59,26 +129,31 @@ def delete_rename(child_name      : str,
     #Iterate through fields
     #Delete and rename
     submodel_data = {}
-    args          = child_name, rename, delete
-    for field, rename_func in required_fields.items():
-        if field not in child_data:
+    
+    for field, recurse in required_fields.items():
+        if type(field) == str:
+            old_value = child_data.get(field, None)
+        else:
+            current = child_data
+            for i in field:
+                current = current.get(i, {})
+                
+            old_value = current
+            
+        if not old_value:
             continue
         
-        submodel_data[field] = {}
-        for key, value in child_data[field].items():
-            #Delete
-            if key in delete:
-                continue
-            #Rename
-            else:
-                try:
-                    new_key, new_value = rename_func(key, value, *args)
-                except Exception as e:
-                    msg = f'Error in renaming data in {field}: {key}.'
-                    msg = f'{msg}\n{e.args[0]}'
-                    raise type(e)(msg)
-                    
-                submodel_data[field][new_key] = new_value
+        new_value = dot(old_value, child_name, rename, delete_, recurse)
+        
+        if type(field) == str:
+            submodel_data[field] = new_value
+        else:
+            current = submodel_data
+            for i in field[:-1]:
+                current = current.setdefault(i, {})
+            
+            current[field[-1]] = new_value
+        
     return submodel_data
 
 class MissingModel(Exception):

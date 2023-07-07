@@ -1,16 +1,13 @@
+from abc    import ABC, abstractclassmethod
 from typing import Any, Union
-
-import dunlin.comp  as cmp
     
-class ModelData:
+class ModelData(ABC):
     '''
     Base class for model data. Contains templated functions for export.
     '''
-    @classmethod
+    @abstractclassmethod
     def from_all_data(cls, all_data, ref):
-        flattened  = cmp.flatten_ode(all_data, ref)
-        
-        return cls(**flattened)
+        ...
     
     def __init__(self, exportable_attributes: list[Union[str, tuple[str]]]):
         self.__exportable_attributes = tuple(exportable_attributes)

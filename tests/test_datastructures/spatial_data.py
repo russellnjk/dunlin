@@ -62,11 +62,16 @@ compartments = {'cytosol' : {'domain_type': 'cytosolic',
                             }
                 }
 
-boundary_conditions = {'bc_C_x_min' : ['C',  1, 'Neumann',   'x', 'min'],
-                       'bc_C_x_max' : ['C', -1, 'Neumann',   'x', 'max'],
-                       'bc_C_y'     : ['C', 0, 'Dirichlet', 'y']
-                       }
+# boundary_conditions = {'bc_C_x_min' : ['C',  1, 'Neumann',   'x', 'min'],
+#                        'bc_C_x_max' : ['C', -1, 'Neumann',   'x', 'max'],
+#                        'bc_C_y'     : ['C', 0, 'Dirichlet', 'y']
+#                        }
 
+boundary_conditions = {'C': {'xmin' : [ 1, 'Neumann'  ],
+                             'xmax' : [-1, 'Neumann'  ],
+                             'ymin' : [ 0, 'Dirichlet']
+                             },
+                       }
 
 coordinate_components = {'x': [0, 4], 
                          'y': [0, 4]

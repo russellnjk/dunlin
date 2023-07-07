@@ -2,6 +2,7 @@ import pandas   as pd
 import warnings
 from typing import Union
 
+import dunlin.comp as cmp
 from .reaction   import ReactionDict
 from .variable   import VariableDict
 from .function   import FunctionDict
@@ -13,6 +14,21 @@ from .stateparam import StateDict, ParameterDict
 from .modeldata  import ModelData
 
 class ODEModelData(ModelData):
+    @classmethod
+    def from_all_data(cls, all_data, ref):
+        required_fields = {'states'     : [True, False, False],
+                           'parameters' : [True, False, False],
+                           'functions'  : [True, False],
+                           'variables'  : [True, True],
+                           'reactions'  : [True, True, True],
+                           'rates'      : [True, True],
+                           'events'     : [True, False, True]
+                           }
+        
+        flattened  = cmp.flatten_model(all_data, ref, required_fields)
+        
+        return cls(**flattened)
+    
     def __init__(self, 
                  ref          : str, 
                  states       : Union[dict, pd.DataFrame], 

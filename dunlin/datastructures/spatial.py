@@ -2,7 +2,6 @@ import pandas as pd
 from typing import Union
 
 import dunlin.comp as cmp
-# from .reaction            import ReactionDict
 from .variable            import VariableDict
 from .function            import FunctionDict
 from .rate                import RateDict
@@ -23,13 +22,24 @@ from .adjacentdomain      import AdjacentDomainDict
 from .geometrydefinition  import GeometryDefinitionDict
 
 from .modeldata    import ModelData
-# from .ode          import ODEModelData
-# from .geometrydata import GeometryData
 
 class SpatialModelData(ModelData):
     @classmethod
     def from_all_data(cls, all_data, ref):
-        flattened  = cmp.flatten_ode(all_data, ref)
+        required_fields = {'states'              : [True, False, False],
+                           'parameters'          : [True, False, False],
+                           'functions'           : [True, False],
+                           'variables'           : [True, True],
+                           'reactions'           : [True, True, True],
+                           'rates'               : [True, True],
+                           'events'              : [True, False, True],
+                           'compartments'        : [True, False, True],
+                           'advection'           : [True, True],
+                           'diffusion'           : [True, True],
+                           'boundary_conditions' : [True, False, False, False],
+                           }
+        
+        flattened  = cmp.flatten_model(all_data, ref, required_fields)
         
         return cls(**flattened)
     

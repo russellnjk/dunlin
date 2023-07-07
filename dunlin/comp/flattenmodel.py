@@ -1,10 +1,12 @@
 from dunlin.comp.flatten import flatten
-from dunlin.comp.ode     import required_fields as ode_required_fields
 
-
-def flatten_ode(all_data, ref):
+def flatten_model(all_data        : dict, 
+                  ref             : str, 
+                  required_fields : dict[str, list[bool]]
+                  ) -> dict:
+    
     #Flatten the model
-    flattened = flatten(all_data, ode_required_fields, ref)
+    flattened = flatten(all_data, required_fields, ref)
     
     flattened['ref'] = ref
     return flattened
