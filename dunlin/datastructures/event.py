@@ -5,7 +5,7 @@ from dunlin.datastructures.bases import DataDict, DataValue
 
 class Event(DataValue):
     @staticmethod
-    def get_trigger_expr(name:str, trigger: str):
+    def get_trigger_expr(name:str, trigger: str) -> str:
         if type(trigger) != str:
             msg = f'Error in instantiating event {name}.'
             msg = f'{msg} Invalid event trigger. Expected a string.'
@@ -29,7 +29,7 @@ class Event(DataValue):
             return f'{lhs.strip()} - {rhs.strip()}'
     
     @staticmethod
-    def get_assign_expr(assign: str):
+    def get_assign_expr(assign: str) -> list[str]:
         #Case 1: The assignment is dict-like
         if ut.isdictlike(assign):
             assign_ = [f'{k} = {v}' for k, v in assign.items()]
@@ -144,7 +144,7 @@ class EventDict(DataDict):
     ###########################################################################
     #Constructor
     ###########################################################################
-    def __init__(self, all_names: set, events: dict) -> None:
+    def __init__(self, all_names: set, events: dict):
         #Make the dict
         super().__init__(all_names, events)
         

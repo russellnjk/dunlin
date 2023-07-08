@@ -53,19 +53,14 @@ advection = {'B' : 'F_B',
              }
 
 compartments = {'cytosol' : {'domain_type': 'cytosolic',
-                             'contains'   : ['A', 'B'],
+                             'states'     : ['A', 'B'],
                              'unit_size'  : 1
                              },
                 'medium' : {'domain_type': 'extracellular',
-                            'contains'   : ['C', 'D'],
+                            'states'     : ['C', 'D'],
                             'unit_size'  : 1
                             }
                 }
-
-# boundary_conditions = {'bc_C_x_min' : ['C',  1, 'Neumann',   'x', 'min'],
-#                        'bc_C_x_max' : ['C', -1, 'Neumann',   'x', 'max'],
-#                        'bc_C_y'     : ['C', 0, 'Dirichlet', 'y']
-#                        }
 
 boundary_conditions = {'C': {'x' : {'min' : [1, 'Neumann'  ],       
                                     'max' : [-1, 'Neumann' ]

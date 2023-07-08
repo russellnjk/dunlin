@@ -29,7 +29,7 @@ class Variable(DataValue):
     ###########################################################################
     #Export
     ###########################################################################
-    def to_dict(self) -> str:
+    def to_dict(self) -> dict:
         dct = {self.name: self.expr_ori}
         return dct
 

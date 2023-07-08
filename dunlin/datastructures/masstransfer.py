@@ -1,6 +1,6 @@
 import pandas as pd
 from numbers import Number
-from typing  import Union
+from typing  import Any, Union
 
 import dunlin.utils as ut
 from dunlin.datastructures.bases import DataDict, DataValue
@@ -9,91 +9,80 @@ from .coordinatecomponent        import CoordinateComponentDict
 from .rate                       import RateDict
 
 class MassTransfer(DataValue):
+    itype : str
+    
     def __init__(self,  
-                 all_names        : set,
-                 coordinate_components: CoordinateComponentDict,
-                 states               : StateDict,
-                 parameters           : ParameterDict,
-                 name                 : str,
-                 species              : str,
-                 *parameter_names    
+                 all_names             : set,
+                 coordinate_components : CoordinateComponentDict,
+                 states                : StateDict,
+                 parameters            : ParameterDict,
+                 state                 : str,
+                 *coefficients_tup,
+                 **coefficients_dct
                  ) -> None:
-       
-        #Check arguments correspond to state/param names
-        if species not in states:
-            msg = f'State {species} is not in model states.'
+        #Check the state
+        if state not in states:
+            msg = f'State {state} is not in model states.'
+            raise NameError(msg)
+            
+        #Parse and check the cofficients
+        if coefficients_tup and coefficients_dct:
+            msg = 'Parameters for mass transfer must be specified as a list or dict but a combination of both.'
+            msg = f'{msg} Received {coefficients_tup} and {coefficients_dct} for {self.itype} for {state}.'
             raise ValueError(msg)
         
+        ndims = len(coordinate_components.axes)
         
-        for i in parameter_names:
-            if ut.isnum(i):
-                continue
-            elif i not in parameters:
-                msg = f'Coefficient {i} is not in parameters.'
+        if coefficients_tup:
+            if len(coefficients_tup) == 1:
+                coefficients = dict(zip('xyz', coefficients_tup*ndims))
+            elif len(coefficients_tup) == ndims:
+                coefficients = dict(zip('xyz', coefficients_tup))
+            else:
+                msg  = f'Expected {ndims}-dimensional coefficient for {self.itype} for {state}. '
+                msg += f'One of the mass transfer coefficient for {state} has length {len(coefficients_tup)}.'
                 raise ValueError(msg)
         
-        #Determine the parameter for each axis
-        if ut.isnum(parameter_names):
-            string = str(parameter_names)
-            values = dict.fromkeys(coordinate_components.axes, string)
-        elif type(parameter_names) == str:
-            values = dict.fromkeys(coordinate_components.axes, parameter_names)
-        elif not ut.islistlike(parameter_names):
-            msg  = 'Expected a string or a list-like container of strings. '
-            msg += f'Received {parameter_names} of type {type(parameter_names).__name__}.'
-            raise ValueError(msg)
-        elif len(parameter_names) == 1:
-            if ut.isnum(parameter_names[0]):
-                string = str(parameter_names[0])
-            else:
-                string = parameter_names[0]
-            values = dict.fromkeys(coordinate_components.axes, string)
-        elif len(parameter_names) == coordinate_components.ndims:
-            strings = [str(i) if ut.isnum(i) else i for i in parameter_names]
-            values  = dict(zip(coordinate_components.axes, strings))
         else:
-            ndims = coordinate_components.ndims
-            msg   = 'Expected either a single parameter for all axes or one parameter '
-            msg  += f'for each axis. Received {parameter_names} for {ndims} dimensions.'
+            if len(coefficients_dct) == ndims:
+                coefficients = dict(coefficients_dct)
+            else:
+                msg  = 'Expected {ndims} coefficient. '
+                msg += 'One of the mass transfer coefficient for {state} has length {len(coefficients_dct)}.'
+                raise ValueError(msg)
+        
+        allowed    = set(parameters.names)
+        received   = [v for v in coefficients.values() if not ut.isnum(v,include_strings=True)]
+        received   = set(received)
+        unexpected = received.difference(allowed)
+        
+        if unexpected:
+            msg  = 'Unexpected coefficients detected for state {state}: {unexpected}'
+            msg += 'Ensure that coefficients are parameters or numbers. '
             raise ValueError(msg)
         
+        
         #Call the parent constructor
-        all_names.add(name)
-        self.name          = name
-        self.species       = species
-        self._coefficients = values
-        self.namespace     = tuple([species, *parameter_names])
-        self._axis_num     = dict(enumerate(coordinate_components.axes, start=1))
+        super().__init__(all_names,
+                         name         = None,
+                         state        = state,
+                         coefficients = coefficients
+                         )
     
-    @property
-    def coefficients(self) -> dict:
-        return self._coefficients
-    
-    def __getitem__(self, axis):
-        if type(axis) == str:
-            return self._coefficients[axis]
-        else:
-            #Use absolute values as mass transfer does not vary with axis direction
-            axis = abs(axis)
-            axis = self._axis_num[abs(axis)]
-            return self._coefficients[axis]
-    
-    def to_data(self) -> Union[Number, list[Number]]:
+    def __getitem__(self, axis: str) -> Union[str, Number]:
+        return self.coefficients[axis]
+        
+    def to_dict(self) -> dict:
         lst = [*self.coefficients.values()]
         
         if len(lst) == 1:
-            return lst[0]
-        
-        u = lst[0]
-        same = True
-        for i in lst[1:]:
-            if i != u:
-                same = False
-        
-        if same:
-            return lst[0]
+            dct = {self.state: lst[0]}
+        elif len(set(lst)) == 1:
+            dct = {self.state: lst[0]}
         else:
-            return lst
+            dct = {self.state: lst}
+        
+        return dct
         
 class MassTransferDict(DataDict):
     itype: type
@@ -101,10 +90,9 @@ class MassTransferDict(DataDict):
     def __init__(self, 
                  all_names         : set,
                  coordinate_components : CoordinateComponentDict,
-                 rates                 : RateDict,
                  states                : StateDict,
                  parameters            : ParameterDict,
-                 mapping               : Union[dict, pd.DataFrame],
+                 mapping               : Union[dict, list, str, Number],
                  ) -> None:
         
         super().__init__(all_names, 
@@ -113,72 +101,46 @@ class MassTransferDict(DataDict):
                          states, 
                          parameters
                          )
-        
-        namespace = set()
-        seen      = set()
-        for mt_species, mt in self.items():
-            if mt_species in seen:
-                msg = f'Redefinition of mass transfer coefficients for {mt_species}.'
-                raise ValueError(msg)
-            else:
-                seen.add(mt_species)
-                
-            namespace.update(mt.namespace)
-        
-        self.namespace = tuple(namespace)
     
-    def find(self, state, axis):
-        try:
-            mt = self[state]
-        except KeyError:
-            return 0
-        except Exception as e:
-            raise e
+    def __getitem__(self, 
+                    key: tuple[str, Union[str, Number]]
+                    ) -> Union[str, Number]:
+        state, axis = key
         
-        return mt[axis]
+        if type(axis) == str:
+            pass
+        elif isinstance(axis, Number):
+            axis = 'xyz'[axis-1]
+        else:
+            msg = f'Axis must be a string or a number. Received {type(axis)}.'
+            raise ValueError(msg)
+        
+        return self._data[state][axis]
+        
+    def get(self,
+            state   : str, 
+            axis    : Union[str, Number],
+            default : Any                = None
+            ) -> Union[None, str, Number]:
+        
+        if type(axis) == str:
+            pass
+        elif isinstance(axis, Number):
+            axis = 'xyz'[axis-1]
+        else:
+            msg = f'Axis must be a string or a number. Received {type(axis)}.'
+            raise ValueError(msg)
+        
+        return self._data.get(state, {}).get(axis, default)
     
 class Advection(MassTransfer):
-    def __init__(self, 
-                 all_names         : set,
-                 coordinate_components : CoordinateComponentDict,
-                 states                : StateDict,
-                 parameters            : ParameterDict,
-                 species               : str,
-                 *parameter_names    
-                 ) -> None:
-        name = ut.adv(species)
-        
-        super().__init__(all_names, 
-                         coordinate_components, 
-                         states, 
-                         parameters, 
-                         name, 
-                         species, 
-                         *parameter_names
-                         )
+    itype = 'advection'
 
 class AdvectionDict(MassTransferDict):
     itype = Advection
 
 class Diffusion(MassTransfer):
-    def __init__(self, 
-                 all_names         : set,
-                 coordinate_components : CoordinateComponentDict,
-                 states                : StateDict,
-                 parameters            : ParameterDict,
-                 species               : str,
-                 *parameter_names    
-                 ) -> None:
-        name = ut.dfn(species)
-        
-        super().__init__(all_names, 
-                         coordinate_components, 
-                         states, 
-                         parameters, 
-                         name, 
-                         species, 
-                         *parameter_names
-                         )
+    itype = 'diffusion'
 
 class DiffusionDict(MassTransferDict):
     itype = Diffusion

@@ -10,13 +10,13 @@ class BoundaryConditions(DataValue):
     '''Boundary conditions for one state
     ''' 
     def __init__(self,
-                 all_names         : set,
+                 all_names             : set,
                  coordinate_components : CoordinateComponentDict,
                  states                : StateDict,
                  parameters            : ParameterDict,
                  state                 : str,
                  **boundary_conditions,
-                 ) -> None:
+                 ):
         
         #Check the state
         if state not in states:
@@ -70,14 +70,12 @@ class BoundaryConditions(DataValue):
         #Call the parent constructor            
         super().__init__(all_names, 
                          None, 
+                         state      = state,
                          conditions = temp
                          )
-        
-        #Freeze
-        self.freeze()
     
-    def to_data(self) -> list:
-        return self.conditions
+    def to_dict(self) -> dict:
+        return {self.state: self.conditions}
 
 class BoundaryConditionDict(DataDict):
     itype = BoundaryConditions
@@ -90,19 +88,47 @@ class BoundaryConditionDict(DataDict):
                  mapping               : dict
                  ) -> None:
         super().__init__(all_names, mapping, coordinate_components, states, parameters)
-
-        #Freeze
-        self.freeze()
     
-    def get(self, state, axis, bound) -> Union[None, dict]:
+    def __getitem__(self,
+                    key : tuple[str, Union[str, Number], str]
+                    ) -> dict:
+        state, axis, bound = key
+        
+        if type(axis) == str:
+            pass
+        elif isinstance(axis, Number):
+            axis = 'xyz'[axis-1]
+        else:
+            msg = f'Axis must be a string or a number. Received {type(axis)}.'
+            raise ValueError(msg)
+        
+        boundary_condition = self._data[state].conditions[axis][bound]
+        if boundary_condition:
+            boundary_condition = dict(zip(['value', 'condition_type'], boundary_condition))
+        return boundary_condition
+    
+    def get(self, 
+            state : str,
+            axis  : Union[str, Number],
+            bound : str
+            ) -> Union[None, dict]:
         '''
         This function returns None if the corresponding boundary condition 
         cannot be found.
         '''
         
-        if isinstance(axis, Number):
-            axis = {'x': 1, 'y': 2, 'z': 3}[axis]
-        
-        boundary_condition = self.get(state, {}).get(axis, {}).get(bound)
-        boundary_condition = dict(zip(['value', 'condition_type'], boundary_condition))
+        if type(axis) == str:
+            pass
+        elif isinstance(axis, Number):
+            axis = 'xyz'[axis-1]
+        else:
+            msg = f'Axis must be a string or a number. Received {type(axis)}.'
+            raise ValueError(msg)
+            
+        boundary_condition = self._data.get(state, None)
+        if boundary_condition:
+            boundary_condition = boundary_condition.conditions.get(axis, {}).get(bound)
+            
+            if boundary_condition:
+                boundary_condition = dict(zip(['value', 'condition_type'], boundary_condition))
         return boundary_condition
