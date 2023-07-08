@@ -3,17 +3,17 @@ import pandas as pd
 import dunlin.utils             as ut
 from .bases               import Table
 from .coordinatecomponent import CoordinateComponentDict
-from .domaintype          import DomainTypeDict
+from .domain              import DomainDict
 
 class AdjacentDomainDict(Table):
     itype      = 'AdjacentDomains'
     is_numeric = False
     
     def __init__(self, 
-                 ext_namespace: set,
-                 coordinate_components: CoordinateComponentDict,
-                 domain_types: DomainTypeDict,
-                 mapping: dict,
+                 ext_namespace         : set,
+                 coordinate_components : CoordinateComponentDict,
+                 domain_types          : DomainDict,
+                 mapping               : dict,
                  ) -> None:
         
         seen        = set()

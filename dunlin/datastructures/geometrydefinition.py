@@ -3,13 +3,13 @@ from typing import Literal
 import dunlin.utils             as ut
 from .bases               import DataValue, DataDict
 from .coordinatecomponent import CoordinateComponentDict
-from .domaintype          import DomainTypeDict
+from .domain              import DomainDict
 
 class GeometryDefinition(DataValue):
     def __init__(self,
                  all_names: set(),
                  coordinate_components: CoordinateComponentDict,
-                 domain_types: DomainTypeDict,
+                 domain_types: DomainDict,
                  name: str,
                  definition: Literal['csg', 'analytic', 'sampledfield'],
                  domain_type: str,
@@ -161,7 +161,7 @@ class GeometryDefinitionDict(DataDict):
     def __init__(self, 
                  all_names: set, 
                  coordinate_components: CoordinateComponentDict,
-                 domain_types: DomainTypeDict, 
+                 domain_types: DomainDict, 
                  mapping: dict
                  ) -> None:
             

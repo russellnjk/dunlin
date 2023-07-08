@@ -4,8 +4,6 @@ import dunlin.utils                    as ut
 import dunlin.datastructures.exception as exc
 from dunlin.datastructures.bases import DataDict, DataValue
 from .stateparam                 import StateDict
-from .reaction                   import ReactionDict 
-from .domaintype                 import DomainTypeDict
 
 class Compartment(DataValue):
     '''
@@ -40,6 +38,14 @@ class Compartment(DataValue):
         compartments and domain types. States have a one-to-one mapping with 
         compartments. The resulting datastructures are much simpler and easier 
         to understand.
+        
+        2. Does not accept a parameter for number of dimensions i.e. 
+        spatialDimensions. The number of dimensions is inferred from the internal 
+        point. 
+        
+        3. Does not implement SpatialSymbolReference for domain types. This is 
+        not something that should change with time so as to avoid unecessary 
+        complexity.
     '''
     def __init__(self,
                  all_names         : set,

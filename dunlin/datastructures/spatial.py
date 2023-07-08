@@ -16,7 +16,7 @@ from .masstransfer        import AdvectionDict, DiffusionDict
 
 from .coordinatecomponent import CoordinateComponentDict
 from .gridconfig          import GridConfigDict
-from .domaintype          import DomainTypeDict
+from .domain              import DomainDict
 from .adjacentdomain      import AdjacentDomainDict
 from .geometrydefinition  import GeometryDefinitionDict
 
@@ -200,7 +200,7 @@ class SpatialModelData(ModelData):
         
         ccds   = CoordinateComponentDict(coordinate_components)
         gcfg   = GridConfigDict(namespace, ccds, grid_config)
-        dmnts  = DomainTypeDict(namespace, ccds, domain_types)
+        dmnts  = DomainDict(namespace, ccds, domain_types)
         admns  = AdjacentDomainDict(namespace, ccds, dmnts, adjacent_domains)
         gdefs  = GeometryDefinitionDict(namespace, ccds, dmnts, geometry_definitions)
         gunits = UnitsDict(namespace, units)
@@ -212,7 +212,7 @@ class SpatialModelData(ModelData):
                            states: StateDict,
                            parameters: ParameterDict,
                            rates: RateDict,
-                           domain_types: DomainTypeDict,
+                           domain_types: DomainDict,
                            coordinate_components: CoordinateComponentDict,
                            compartments: dict,
                            reactions: dict,

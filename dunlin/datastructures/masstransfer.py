@@ -31,7 +31,7 @@ class MassTransfer(DataValue):
             msg = f'{msg} Received {coefficients_tup} and {coefficients_dct} for {self.itype} for {state}.'
             raise ValueError(msg)
         
-        ndims = len(coordinate_components.axes)
+        ndims = coordinate_components.ndims
         
         if coefficients_tup:
             if len(coefficients_tup) == 1:
