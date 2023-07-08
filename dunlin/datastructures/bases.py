@@ -1,13 +1,16 @@
 import numpy  as np
 import pandas as pd
-from abc    import ABC, abstractmethod
-from typing import (Any, Callable, Optional, Union, 
-                    ItemsView, KeysView, ValuesView, Iterable
-                    )
+from abc      import ABC, abstractmethod
+from datetime import datetime
+from numbers  import Number
+from typing   import (Any, Callable, Optional, Union, 
+                      ItemsView, KeysView, ValuesView, Iterable
+                      )
 
 
 import dunlin.utils             as ut
 import dunlin.standardfile.dunl as sfd
+from dunlin.standardfile.dunl    import writeelement as we
 from dunlin.utils.typing import Dflike, Num
 
 class DataValue(ABC):
@@ -27,21 +30,21 @@ class DataValue(ABC):
     '''
     
     #For formatting numbers when converting to code
-    n_format: callable = sfd.format_num
+    n_format: Callable = sfd.format_num
     
     @staticmethod
-    def format_primitive(x: Union[str, int, float]):
+    def primitive2string(x: Union[str, int, float]):
         if ut.isstrlike(x):
             return x.strip()
         
         float_value = float(x)
         int_value   = int(x)
         if float_value == int_value:
-            return int_value
+            return str(int_value)
         else:
-            return float_value
+            return str(float_value)
     
-    def __init__(self, all_names: set, name: str, /, **attributes):
+    def __init__(self, all_names: set, name: str, **attributes):
         #Set attributes
         self.name = name
     
@@ -82,16 +85,12 @@ class DataValue(ABC):
     #Export
     ###########################################################################
     @abstractmethod
-    def to_data(self) -> Union[list, dict]:
+    def to_dict(self) -> dict:
         ...
     
-    @abstractmethod
-    def to_dunl_code(self) -> str:
-        ...
-    
-    @abstractmethod
-    def __contains__(self, x: Any):
-        ...
+    def to_dunl_elements(self) -> str:
+        dct = self.to_dict()
+        return we.write_dict(dct)
         
 class DataDict(ABC):
     '''
@@ -137,6 +136,9 @@ class DataDict(ABC):
             
             elif type(kwargs) == list or type(kwargs) == tuple:
                 item = self.itype(ext_namespace, *args, name, *kwargs)
+            
+            elif isinstance(kwargs, (Number, str, datetime)):
+                item = self.itype(ext_namespace, *args, name, kwargs)
             
             else:
                 msg = f'Mapping values must be of type list or dict. Received {type(kwargs)}.'
@@ -186,12 +188,14 @@ class DataDict(ABC):
     ###########################################################################
     #Export
     ###########################################################################
-    def to_data(self) -> dict:
-        dct = {k: v.to_data() for k, v in self.items()}
+    def to_dict(self) -> dict:
+        dct = {}
+        for v in self.values():
+            dct.update(v.to_dict())
         return dct
     
-    def to_dunl_code(self) -> str:
-        chunks = [v.to_dunl_code() for v in self.values()]
+    def to_dunl_elements(self) -> str:
+        chunks = [v.to_dunl_elements() for v in self.values()]
         code   = '\n'.join(chunks)
         
         return code
@@ -215,9 +219,6 @@ class Table(ABC):
     #Can be overwritten in the subclass but cannot be modified
     is_numeric   : bool = True
     can_be_empty : bool = True
-    
-    #Can be overwritten in the subclass and can be modifed any time
-    n_format     : callable = sfd.format_num
     
     #Underlying data
     _df: pd.DataFrame
@@ -284,7 +285,7 @@ class Table(ABC):
         return self.to_dunl()
     
     def __repr__(self) -> str:
-        return f'{type(self).__name__}{tuple(self.keys())}'
+        return f'{type(self).__name__}{tuple(self.names)}'
     
     ###########################################################################
     #Access/Modification
@@ -323,14 +324,14 @@ class Table(ABC):
     ###########################################################################
     #Export
     ###########################################################################
-    def to_data(self) -> dict:
-        return self._df.to_dict()
+    def to_dict(self) -> dict:
+        return self._df.to_dict('list')
     
-    def to_dunl_code(self) -> str:
+    def to_dunl_elements(self, n_format: Callable=sfd.format_num) -> str:
+        #kwargs are ignored
+        
         df = self._df
         if self.is_numeric:
-            n_format = self.n_format
-            
             return sfd.write_numeric_df(df, n_format)
         
         else:

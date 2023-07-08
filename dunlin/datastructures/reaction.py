@@ -1,21 +1,25 @@
-import dunlin.utils                    as ut
-import dunlin.datastructures.exception as exc
-from dunlin.datastructures.bases import NamespaceDict, GenericItem
+from numbers import Number
+from typing import Union
 
-class Reaction(GenericItem):
+import dunlin.utils as ut
+from dunlin.datastructures.bases import DataDict, DataValue
+
+class Reaction(DataValue):
     ###########################################################################
     #Preprocessing
     ###########################################################################
     @classmethod
-    def eqn2stoich(cls, eqn):
-        #An example eqn is a + 2*b -> c
+    def equation2stoich(cls, equation):
+        #An example equation is a + 2*b -> c
         #Split the reaction
         try:
-            rcts, prds = eqn.split('->')
+            rcts, prds = equation.split('->')
             rcts       = rcts.strip()
             prds       = prds.strip()
         except:
-            raise exc.InvalidDefinition('reaction equation', '<reactants> -> <products>', eqn)
+            msg = 'Invalid reaction. The expected format is <reactants> -> <products>.'
+            msg = f'{msg} Received: {equation}'
+            raise ValueError(msg)
         
         #Get the stoichiometry
         if rcts:
@@ -55,7 +59,9 @@ class Reaction(GenericItem):
                 raise e
                 
             if ut.str2num(n) < 0:
-                    raise exc.InvalidDefinition('stoichiometry', received=n)
+                msg = 'Invalid stoichiometry. Coefficient must be positive.'
+                msg = f'{msg} Received: {n}'
+                raise ValueError(msg)
                     
         if invert_sign:
             return x, f'-{n}'
@@ -63,119 +69,84 @@ class Reaction(GenericItem):
             return x, f'+{n}'
     
     @staticmethod
-    def get_rxn_rate(fwd: str, rev: str=None) -> tuple[str, set]:
-        fwd = str(fwd)
-        rev = None if rev is None else str(rev)
-        try:
-            rate   = fwd.strip() + ' - ' + rev.strip() if rev else fwd.strip()
-            
-            if not rate:
-                raise Exception()
-                
-        except:
-            raise exc.InvalidDefinition('reaction rate', received=rate)
+    def get_rxn_rate(rate: Union[str, Number]) -> tuple[str, set]:
+        rate = str(rate).strip()
         
-        variables = ut.get_namespace(rate)
+        if not rate:
+            msg = 'Invalid reaction rate. .'
+            msg = f'{msg} Received: {rate}'
+            raise ValueError(msg)
         
-        return rate, variables
+        namespace = ut.get_namespace(rate)
+        
+        return rate, namespace
     
     ###########################################################################
     #Constructor
     ###########################################################################
     def __init__(self, 
-                 ext_namespace: set, 
-                 name         : str, 
-                 eqn          : str, 
-                 fwd          : str, 
-                 rev          : str=None 
+                 all_names : set, 
+                 name      : str, 
+                 equation  : str, 
+                 rate      : str, 
+                 bounds    : list[Number, Number]=None
                  ) -> None:
         
-        #An example eqn is a + 2*b -> c
-        stoich, rcts, prds = self.eqn2stoich(eqn)
+        #An example equation is a + 2*b -> c
+        stoich, rcts, prds = self.equation2stoich(equation)
         
         #Parse the reaction rates
-        rate, rxn_variables = self.get_rxn_rate(fwd, rev)
-        rxn_variables.update(stoich)
+        rate, rxn_namespace = self.get_rxn_rate(rate)
         
-        #Get namespace
-        fwd_namespace = ut.get_namespace(fwd)
-        rev_namespace = ut.get_namespace(rev)
-        eqn_namespace = set(stoich)
+        #Check namespaces
+        undefined = rxn_namespace.difference(all_names)
+        if undefined:
+            raise NameError(f'Undefined namespace: {undefined}.')
         
-        namespace = set.union(fwd_namespace, rev_namespace, eqn_namespace)
+        #Parse the bounds
+        bounds_ = None if bounds is None else tuple(bounds)
         
-        if ext_namespace:
-            undefined = namespace.difference(ext_namespace)
-            if undefined:
-                raise NameError(f'Undefined namespace: {undefined}.')
-            
         #It is now safe to call the parent's init
-        super().__init__(ext_namespace, 
+        super().__init__(all_names, 
                          name, 
-                         eqn            = eqn,
-                         _stoichiometry = stoich,
-                         rate           = rate,
-                         namespace      = tuple(namespace),
-                         fwd_namespace  = tuple(fwd_namespace),
-                         rev_namespace  = tuple(rev_namespace),
-                         eqn_namespace  = tuple(eqn_namespace),
-                         fwd            = str(fwd),
-                         rev            = None if rev is None else str(rev),  
-                         reactants      = tuple(rcts),
-                         products       = tuple(prds)
+                         equation      = equation,
+                         stoichiometry = stoich,
+                         rate          = str(rate),
+                         reactants     = frozenset(rcts),
+                         products      = frozenset(prds),
+                         states        = frozenset(rcts+prds),
+                         bounds        = bounds_
                          )
         
-        #Freeze
-        self.freeze()
-        
-    ###########################################################################
-    #Access
-    ###########################################################################
-    @property
-    def stoichiometry(self) -> dict[str, str]:
-        return self._stoichiometry
-    
     ###########################################################################
     #Export
     ###########################################################################
-    def to_data(self) -> dict:
-        #Needs to be changed for export
-        dct = {}
-        for attr in ['eqn', 'fwd', 'rev']:
-            value = getattr(self, attr)
+    def to_dict(self) -> dict:
+        dct = {'equation': self.equation,
+               'rate' : ut.try2num(self.rate)
+               }
+        
+        if self.bounds:
+            dct['bounds'] = list(self.bounds)
             
-            if value is not None:
-                value = ut.try2num(value)
-                
-                if type(value) == tuple:
-                    value = list(value)
-                    
-                dct[attr] = value
-                
+        dct = {self.name: dct}
         return dct
-
-class ReactionDict(NamespaceDict):  
+    
+class ReactionDict(DataDict):  
     itype = Reaction
     
     ###########################################################################
     #Constructor
     ###########################################################################
-    def __init__(self, ext_namespace: set, reactions: dict) -> None:
-        namespace     = set()
-        
+    def __init__(self, all_names: set, reactions: dict) -> None:
         #Make the dict
-        super().__init__(ext_namespace, reactions)
+        super().__init__(all_names, reactions)
         
         states = set()
         
-        for rxn_name, rxn in self.items():
-            namespace.update(rxn.namespace)
+        for rxn in self.values():
             states.update(list(rxn.stoichiometry))
         
         #Save attributes
-        self.namespace = tuple(namespace)
-        self.states    = tuple(states)
+        self.states    = frozenset(states)
         
-        #Freeze
-        self.freeze()
-    

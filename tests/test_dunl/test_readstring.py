@@ -1,6 +1,5 @@
 import addpath
-import dunlin as dn
-import dunlin.standardfile.dunl.readstring as rst
+import readstring as rst
 
 ###############################################################################
 #Test Parsing Individual Values

@@ -3,7 +3,6 @@ from .function  import Function,      FunctionDict
 from .reaction  import Reaction,      ReactionDict
 from .variable  import Variable,      VariableDict
 from .rate      import Rate,          RateDict
-from .extra     import ExtraVariable, ExtraDict
 from .event     import Event,         EventDict 
 
 from .stateparam import StateDict, ParameterDict

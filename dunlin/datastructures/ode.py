@@ -7,7 +7,6 @@ from .reaction   import ReactionDict
 from .variable   import VariableDict
 from .function   import FunctionDict
 from .rate       import RateDict
-from .extra      import ExtraDict
 from .event      import EventDict 
 from .unit       import UnitsDict
 from .stateparam import StateDict, ParameterDict

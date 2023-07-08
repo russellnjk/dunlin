@@ -4,9 +4,9 @@ from typing  import Callable, Literal
 
 import dunlin.utils as ut
 import dunlin.standardfile.dunl as sfd
-from dunlin.datastructures.bases import GenericItem, GenericDict, TabularDict
+from dunlin.datastructures.bases import Table
     
-class CoordinateComponentDict(TabularDict):
+class CoordinateComponentDict(Table):
     def __init__(self, mapping: dict, n_format: Callable=sfd.format_num):
         _data = {}
         
@@ -39,9 +39,6 @@ class CoordinateComponentDict(TabularDict):
         self._df      = pd.DataFrame(_data)
         self.n_format = n_format
         
-        #Freeze
-        self.freeze()
-    
     @property
     def ndims(self) -> int:
         return len(self._df.columns)

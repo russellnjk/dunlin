@@ -5,7 +5,6 @@ import dunlin.comp as cmp
 from .variable            import VariableDict
 from .function            import FunctionDict
 from .rate                import RateDict
-from .extra               import ExtraDict
 from .event               import EventDict 
 from .unit                import UnitsDict
 

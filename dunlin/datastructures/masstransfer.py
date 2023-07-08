@@ -3,14 +3,14 @@ from numbers import Number
 from typing  import Union
 
 import dunlin.utils as ut
-from dunlin.datastructures.bases import GenericItem, NamespaceDict
+from dunlin.datastructures.bases import DataDict, DataValue
 from .stateparam                 import ParameterDict, StateDict
 from .coordinatecomponent        import CoordinateComponentDict
 from .rate                       import RateDict
 
-class MassTransfer(GenericItem):
+class MassTransfer(DataValue):
     def __init__(self,  
-                 ext_namespace        : set,
+                 all_names        : set,
                  coordinate_components: CoordinateComponentDict,
                  states               : StateDict,
                  parameters           : ParameterDict,
@@ -58,15 +58,12 @@ class MassTransfer(GenericItem):
             raise ValueError(msg)
         
         #Call the parent constructor
-        ext_namespace.add(name)
+        all_names.add(name)
         self.name          = name
         self.species       = species
         self._coefficients = values
         self.namespace     = tuple([species, *parameter_names])
         self._axis_num     = dict(enumerate(coordinate_components.axes, start=1))
-        
-        #Freeze
-        self.freeze()
     
     @property
     def coefficients(self) -> dict:
@@ -98,11 +95,11 @@ class MassTransfer(GenericItem):
         else:
             return lst
         
-class MassTransferDict(NamespaceDict):
+class MassTransferDict(DataDict):
     itype: type
     
     def __init__(self, 
-                 ext_namespace         : set,
+                 all_names         : set,
                  coordinate_components : CoordinateComponentDict,
                  rates                 : RateDict,
                  states                : StateDict,
@@ -110,7 +107,7 @@ class MassTransferDict(NamespaceDict):
                  mapping               : Union[dict, pd.DataFrame],
                  ) -> None:
         
-        super().__init__(ext_namespace, 
+        super().__init__(all_names, 
                          mapping, 
                          coordinate_components, 
                          states, 
@@ -129,7 +126,6 @@ class MassTransferDict(NamespaceDict):
             namespace.update(mt.namespace)
         
         self.namespace = tuple(namespace)
-        self.freeze()
     
     def find(self, state, axis):
         try:
@@ -143,7 +139,7 @@ class MassTransferDict(NamespaceDict):
     
 class Advection(MassTransfer):
     def __init__(self, 
-                 ext_namespace         : set,
+                 all_names         : set,
                  coordinate_components : CoordinateComponentDict,
                  states                : StateDict,
                  parameters            : ParameterDict,
@@ -152,7 +148,7 @@ class Advection(MassTransfer):
                  ) -> None:
         name = ut.adv(species)
         
-        super().__init__(ext_namespace, 
+        super().__init__(all_names, 
                          coordinate_components, 
                          states, 
                          parameters, 
@@ -166,7 +162,7 @@ class AdvectionDict(MassTransferDict):
 
 class Diffusion(MassTransfer):
     def __init__(self, 
-                 ext_namespace         : set,
+                 all_names         : set,
                  coordinate_components : CoordinateComponentDict,
                  states                : StateDict,
                  parameters            : ParameterDict,
@@ -175,7 +171,7 @@ class Diffusion(MassTransfer):
                  ) -> None:
         name = ut.dfn(species)
         
-        super().__init__(ext_namespace, 
+        super().__init__(all_names, 
                          coordinate_components, 
                          states, 
                          parameters, 

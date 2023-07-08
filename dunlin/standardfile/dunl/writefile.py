@@ -1,9 +1,6 @@
 from typing import Union
 
-from .writecode import (write_dunl_code, 
-                        get_indent_type,
-                        set_indent_type
-                        )
+from .writecode import write_dunl_code
 import dunlin.standardfile.dunl.readdunl as rd
 
 ###############################################################################

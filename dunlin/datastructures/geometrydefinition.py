@@ -1,13 +1,13 @@
 from typing import Literal
 
 import dunlin.utils             as ut
-from .bases               import GenericItem, GenericDict
+from .bases               import DataValue, DataDict
 from .coordinatecomponent import CoordinateComponentDict
 from .domaintype          import DomainTypeDict
 
-class GeometryDefinition(GenericItem):
+class GeometryDefinition(DataValue):
     def __init__(self,
-                 ext_namespace: set(),
+                 all_names: set(),
                  coordinate_components: CoordinateComponentDict,
                  domain_types: DomainTypeDict,
                  name: str,
@@ -43,7 +43,7 @@ class GeometryDefinition(GenericItem):
             raise NotImplementedError(f'{definition} no implemented yet.')
         
         #Call the parent constructor
-        super().__init__(ext_namespace,
+        super().__init__(all_names,
                          name, 
                          order=order, 
                          definition=definition, 
@@ -51,10 +51,6 @@ class GeometryDefinition(GenericItem):
                          _args=kwargs,
                          **args
                          )
-        
-        #Freeze
-        self.freeze()
-        
     @classmethod
     def define_csg(cls, kwargs, ndims):
         if list(kwargs) != ['node']:
@@ -159,17 +155,17 @@ class GeometryDefinition(GenericItem):
         
         return dct
     
-class GeometryDefinitionDict(GenericDict):
+class GeometryDefinitionDict(DataDict):
     itype = GeometryDefinition
     
     def __init__(self, 
-                 ext_namespace: set, 
+                 all_names: set, 
                  coordinate_components: CoordinateComponentDict,
                  domain_types: DomainTypeDict, 
                  mapping: dict
                  ) -> None:
             
-        super().__init__(ext_namespace, mapping, coordinate_components, domain_types)
+        super().__init__(all_names, mapping, coordinate_components, domain_types)
         
         #Check order (ordinal) and sort
         seen       = set()

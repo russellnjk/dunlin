@@ -1,11 +1,12 @@
 import pandas as pd
 
 import dunlin.utils             as ut
-from .bases               import TabularDict
+from .bases               import Table
 from .coordinatecomponent import CoordinateComponentDict
 from .domaintype          import DomainTypeDict
 
-class AdjacentDomainDict(TabularDict):
+class AdjacentDomainDict(Table):
+    itype      = 'AdjacentDomains'
     is_numeric = False
     
     def __init__(self, 

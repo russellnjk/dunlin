@@ -2,12 +2,12 @@ from numbers import Number
 from typing import Union
 
 import dunlin.utils as ut
-from .bases               import GenericItem, GenericDict
+from .bases               import DataDict, DataValue
 from .coordinatecomponent import CoordinateComponentDict
 
-class GridConfig(GenericItem):
+class GridConfig(DataValue):
     def __init__(self,
-                 ext_namespace: set, 
+                 all_names: set, 
                  coordinate_components: CoordinateComponentDict,
                  name: str,
                  config: Union[dict, tuple], 
@@ -82,10 +82,7 @@ class GridConfig(GenericItem):
         #Call the parent constructor
         _spans = [list(spans[axis]) for axis in coordinate_components.axes]
         _config = [step, *_spans]
-        super().__init__(ext_namespace, name, _config=_config, _children=list(children))
-        
-        #Freeze
-        self.freeze()
+        super().__init__(all_names, name, _config=_config, _children=list(children))
     
     @property
     def ndims(self) -> int:
@@ -106,11 +103,11 @@ class GridConfig(GenericItem):
             dct['children'] = self.children
         return dct
     
-class GridConfigDict(GenericDict):
+class GridConfigDict(DataDict):
     itype = GridConfig
     
     def __init__(self, 
-                 ext_namespace        : set,
+                 all_names        : set,
                  coordinate_components: CoordinateComponentDict, 
                  mapping              : dict
                  ) -> None:

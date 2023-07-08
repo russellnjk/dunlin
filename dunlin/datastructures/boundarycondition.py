@@ -2,15 +2,15 @@ from numbers import Number
 from typing  import Union
 
 import dunlin.utils as ut
-from .bases               import GenericItem, GenericDict
+from .bases               import DataDict, DataValue
 from .coordinatecomponent import CoordinateComponentDict
 from .stateparam          import StateDict, ParameterDict
 
-class BoundaryConditions(GenericItem):
+class BoundaryConditions(DataValue):
     '''Boundary conditions for one state
     ''' 
     def __init__(self,
-                 ext_namespace         : set,
+                 all_names         : set,
                  coordinate_components : CoordinateComponentDict,
                  states                : StateDict,
                  parameters            : ParameterDict,
@@ -68,7 +68,7 @@ class BoundaryConditions(GenericItem):
                 temp.setdefault(axis, {})[bound] = [value, condition_type]
                 
         #Call the parent constructor            
-        super().__init__(ext_namespace, 
+        super().__init__(all_names, 
                          None, 
                          conditions = temp
                          )
@@ -79,17 +79,17 @@ class BoundaryConditions(GenericItem):
     def to_data(self) -> list:
         return self.conditions
 
-class BoundaryConditionDict(GenericDict):
+class BoundaryConditionDict(DataDict):
     itype = BoundaryConditions
     
     def __init__(self,
-                 ext_namespace         : set,
+                 all_names         : set,
                  coordinate_components : CoordinateComponentDict,
                  states                : StateDict,
                  parameters            : ParameterDict, 
                  mapping               : dict
                  ) -> None:
-        super().__init__(ext_namespace, mapping, coordinate_components, states, parameters)
+        super().__init__(all_names, mapping, coordinate_components, states, parameters)
 
         #Freeze
         self.freeze()

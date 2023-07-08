@@ -1,10 +1,10 @@
 from typing import KeysView, ValuesView, ItemsView, Iterable
 
 import dunlin.utils as ut
-from .bases               import GenericItem, GenericDict
+from .bases               import DataDict, DataValue
 from .coordinatecomponent import CoordinateComponentDict
 
-class DomainType(GenericItem):
+class DomainType(DataValue):
     '''
     Differences with SBML Spatial:
         1. Does not accept a parameter for number of dimensions i.e. 
@@ -15,7 +15,7 @@ class DomainType(GenericItem):
         should change with time so as to avoid unecessary complexity.
     '''
     def __init__(self,
-                 ext_namespace: set, 
+                 all_names: set, 
                  coordinate_components: CoordinateComponentDict,
                  name: str,
                  **domains: dict[str, list],
@@ -54,19 +54,16 @@ class DomainType(GenericItem):
             _domains[domain_name] = tuple(internal_point)
         
         #Call the parent constructor
-        super().__init__(ext_namespace, name, _domains=_domains, ndims=ndims)
+        super().__init__(all_names, name, _domains=_domains, ndims=ndims)
         
-        #Freeze
-        self.freeze()
-    
     @property
     def domains(self) -> dict:
         return self._domains
 
-    def to_data(self) -> dict:
-        d = {k: list(v) for k, v in self.domains.items()}
-        
-        return d
+    def to_dict(self) -> dict:
+        d   = {k: list(v) for k, v in self.domains.items()}
+        dct = {self.name: d}
+        return dct
     
     def keys(self) -> KeysView:
         return self._domains.keys()
@@ -80,16 +77,16 @@ class DomainType(GenericItem):
     def __iter__(self) -> Iterable:
         return iter(self._domains)
 
-class DomainTypeDict(GenericDict):
+class DomainTypeDict(DataDict):
     itype = DomainType
     
     def __init__(self, 
-                 ext_namespace: set,
+                 all_names: set,
                  coordinate_components: CoordinateComponentDict,
                  mapping: dict
                  ) -> None:
         
-        super().__init__(ext_namespace, mapping, coordinate_components)
+        super().__init__(all_names, mapping, coordinate_components)
         
         seen_domains         = set()
         seen_internal_points = set()

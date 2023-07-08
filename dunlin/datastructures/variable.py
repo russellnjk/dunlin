@@ -1,66 +1,48 @@
-from typing import Sequence, Union
+from typing import Union
 
 import dunlin.utils as ut
-from dunlin.datastructures.bases      import NamespaceDict, GenericItem
-from dunlin.datastructures.stateparam import StateDict, ParameterDict
+from dunlin.datastructures.bases import DataDict, DataValue
 
-class Variable(GenericItem):
+class Variable(DataValue):
     ###########################################################################
     #Constructor
     ###########################################################################
     def __init__(self, 
-                 ext_namespace : set, 
-                 name          : str, 
-                 expr          : Union[str, int, float]
+                 all_names : set, 
+                 name      : str, 
+                 expr      : Union[str, int, float]
                  ) -> None:
         #Parse expression and check
-        expr_ori  = self.format_primitive(expr)
-        expr      = str(expr).strip()
-        namespace = ut.get_namespace(expr, allow_reserved=True)
-        undefined = namespace.difference(ext_namespace)
+        expr_str  = self.primitive2string(expr)
+        namespace = ut.get_namespace(expr_str, allow_reserved=True)
+        undefined = namespace.difference(all_names)
         if undefined:
             raise NameError(f'Undefined namespace: {undefined}.')
         
         #It is now safe to call the parent's init
-        super().__init__(ext_namespace, name)
-        
-        #Save attributes
-        self.expr      = expr
-        self.expr_ori  = expr_ori
-        self.namespace = tuple(namespace)
-        
-        #Freeze
-        self.freeze()
+        super().__init__(all_names, 
+                         name     = name,
+                         expr     = expr_str,
+                         expr_ori = expr
+                         )
     
     ###########################################################################
     #Export
     ###########################################################################
-    def to_data(self) -> str:
-        return self.expr_ori
+    def to_dict(self) -> str:
+        dct = {self.name: self.expr_ori}
+        return dct
 
-class VariableDict(NamespaceDict):
+class VariableDict(DataDict):
     itype = Variable
     
     ###########################################################################
     #Constructor
     ###########################################################################
     def __init__(self, 
-                 ext_namespace : set, 
-                 variables     : dict,
+                 all_names : set, 
+                 variables : dict,
                  ) -> None:
-        namespace = set()
-
         #Make the dict
-        super().__init__(ext_namespace, variables)
+        super().__init__(all_names, variables)
         
-        for variable_name, variable in self.items():
-            namespace.update(variable.namespace)
-        
-        #Save attributes
-        self.namespace = tuple(namespace)
-        
-        #Freeze
-        self.freeze()
-    
-
-

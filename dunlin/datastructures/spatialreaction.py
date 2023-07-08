@@ -1,6 +1,6 @@
 import re
 
-from dunlin.datastructures.bases       import NamespaceDict
+from dunlin.datastructures.bases       import DataDict
 from dunlin.datastructures.reaction    import Reaction
 from dunlin.datastructures.compartment import CompartmentDict
 
@@ -9,7 +9,7 @@ class SpatialReaction(Reaction):
     #Constructor
     ###########################################################################
     def __init__(self, 
-                 ext_namespace: set,
+                 all_names: set,
                  compartments : CompartmentDict,
                  name         : str, 
                  eqn          : str, 
@@ -19,7 +19,7 @@ class SpatialReaction(Reaction):
                  ) -> None:
         
         #Call the parent constructor and unfreeze
-        super().__init__(ext_namespace, 
+        super().__init__(all_names, 
                          name, 
                          eqn, 
                          fwd, 
@@ -44,32 +44,29 @@ class SpatialReaction(Reaction):
         self.domain_type2state = domain_type2state
         self.local             = local
         
-        #Freeze
-        self.freeze()
-    
-    def to_data(self) -> dict:
-        data = super().to_data()
+    def to_dict(self) -> dict:
+        dct = super().to_data()
         
         if self.local:
-            data['local'] = True
+            dct[self.name]['local'] = True
         
-        return data
+        return dct
 
-class SpatialReactionDict(NamespaceDict):
+class SpatialReactionDict(DataDict):
     itype = SpatialReaction
     
     ###########################################################################
     #Constructor
     ###########################################################################
     def __init__(self, 
-                 ext_namespace : set, 
+                 all_names : set, 
                  compartments  : CompartmentDict,
                  reactions     : dict
                  ) -> None:
         namespace = set()
         
         #Make the dict
-        super().__init__(ext_namespace, reactions, compartments)
+        super().__init__(all_names, reactions, compartments)
         
         states = set()
         

@@ -1,74 +1,62 @@
-from typing import Union
+from numbers import Number
+from typing  import Union
 
-import dunlin.utils                       as ut
-from dunlin.datastructures.bases import NamespaceDict, GenericItem
+import dunlin.utils as ut
+from dunlin.datastructures.bases import DataDict, DataValue
+from .stateparam                 import StateDict
 
-class Rate(GenericItem):
+class Rate(DataValue):
     ###########################################################################
     #Constructor
     ###########################################################################
-    def __init__(self, ext_namespace: set, name: str, expr: Union[str, int, float]):
-        #Check that the state is in ext_namespace
-        if name not in ext_namespace:
-            raise NameError(f'Encountered a Rate for an undefined namespace: {name}')
+    def __init__(self, 
+                 all_names : set, 
+                 states    : StateDict,
+                 state     : str, 
+                 expr      : Union[str, Number]
+                 ):
         
-        ut.check_valid_name(name)
+        #Check that the state is in all_names
+        if state not in states:
+            raise NameError(f'Encountered a rate for an undefined state: {state}.')
         
         #Parse expression and check
-        expr_ori  = self.format_primitive(expr)
-        expr      = str(expr).strip()
-        namespace = ut.get_namespace(expr)
-        undefined = namespace.difference(ext_namespace)
+        expr_str  = self.primitive2string(expr)
+        namespace = ut.get_namespace(expr_str)
+        undefined = namespace.difference(all_names)
         if undefined:
-            raise NameError(f'Undefined namespace: {undefined}.')
-            
-        #Use the derivate, not the state name as this object's name
-        d_name = ut.diff(name)
-        
-        #Mimic the parent constructor
-        self.name = d_name
-        
-        if d_name in ext_namespace:
-            raise NameError(f'Redefinition of {d_name}.')
-        else:
-            #Update the namespace
-            ext_namespace.add(d_name)
+            msg = f'Encountered undefined items in rate for {state}: {undefined}.'
+            raise NameError(msg)
             
         #Save attributes
-        self.expr      = expr
-        self.expr_ori  = expr_ori
-        self.namespace = tuple(namespace)
-        self.state     = name
-        
-        #Freeze
-        self.freeze()
-    
+        super().__init__(all_names, 
+                         name     = None, 
+                         expr     = expr_str, 
+                         expr_ori = expr, 
+                         state    = state
+                         )
+
     ###########################################################################
     #Export
     ###########################################################################
-    def to_data(self) -> str:
-        return self.expr_ori
+    def to_dict(self) -> dict:
+        dct = {self.state: self.expr_ori}
+        return dct
     
-class RateDict(NamespaceDict):
+class RateDict(DataDict):
     itype = Rate
     
     ###########################################################################
     #Constructor
     ###########################################################################
-    def __init__(self, ext_namespace: set, rates: dict) -> None:
-        namespace = set()
-        
+    def __init__(self, 
+                 all_names : set, 
+                 states    : StateDict, 
+                 rates     : dict
+                 ) -> None:
         #Make the dict
-        super().__init__(ext_namespace, rates)
-        
-        states = []
-        for rate_name, rate in self.items():
-            namespace.update(rate.namespace)
-            states.append(rate.state)
-        
+        super().__init__(all_names, rates, states)
+       
         #Save attributes
-        self.namespace = tuple(namespace)
-        self.states    = tuple(states)
-        #Freeze
-        self.freeze()
-
+        self.states = frozenset(self.keys())
+        

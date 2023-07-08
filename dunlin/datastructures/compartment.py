@@ -2,14 +2,14 @@ from numbers import Number
 
 import dunlin.utils                    as ut
 import dunlin.datastructures.exception as exc
-from dunlin.datastructures.bases import NamespaceDict, GenericItem
+from dunlin.datastructures.bases import DataDict, DataValue
 from .stateparam                 import StateDict
 from .reaction                   import ReactionDict 
 from .domaintype                 import DomainTypeDict
 
-class Compartment(GenericItem):
+class Compartment(DataValue):
     def __init__(self,
-                 ext_namespace: set,
+                 all_names: set,
                  name         : str,
                  domain_type  : str,
                  contains     : list[str],
@@ -40,16 +40,13 @@ class Compartment(GenericItem):
             raise ValueError(msg)
         
         #Call the parent constructor
-        super().__init__(ext_namespace, 
+        super().__init__(all_names, 
                          name, 
-                         domain_type=domain_type,
-                         namespace=tuple(contains_),
-                         unit_size=unit_size,
+                         domain_type = domain_type,
+                         namespace   = tuple(contains_),
+                         unit_size   = unit_size,
                          )
         
-        #Freeze
-        self.freeze()
-    
     def to_data(self) -> dict:
         dct = {'domain_type': self.domain_type,
                'contains'   : list(self.namespace),
@@ -57,19 +54,20 @@ class Compartment(GenericItem):
         if self.unit_size != 1:
             dct['unit_size'] = self.unit_size
         
+        dct = {self.name: dct}
         return dct
 
-class CompartmentDict(NamespaceDict):
+class CompartmentDict(DataDict):
     itype = Compartment
     
     def __init__(self, 
-                 ext_namespace: set, 
+                 all_names: set, 
                  states       : StateDict,
                  domain_types : DomainTypeDict,
                  mapping      : dict
                  ) -> None:
         
-        super().__init__(ext_namespace, mapping)
+        super().__init__(all_names, mapping)
         
         allowed           = set(states.keys()) 
         seen              = set()
@@ -127,11 +125,10 @@ class CompartmentDict(NamespaceDict):
             msg = f'Compartments not assigned for {missing}.'
             raise ValueError(msg)
         
-        #Update and freeze
+        #Update
         self.namespace               = tuple(namespace)
         self.state2compartment       = state2compartment
         self.domain_type2state       = domain_type2state
         self.state2domain_type       = state2domain_type
         self.domain_type2compartment = domain_type2compartment
-        self.freeze()
-      
+        

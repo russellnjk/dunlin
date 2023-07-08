@@ -6,8 +6,8 @@ from dunlin.datastructures.function import Function, FunctionDict
 from dunlin.datastructures.reaction import Reaction, ReactionDict
 from dunlin.datastructures.variable import Variable, VariableDict
 from dunlin.datastructures.rate     import Rate,     RateDict
-from dunlin.datastructures.extra    import ExtraVariable, ExtraDict
 from dunlin.datastructures.event    import Event,    EventDict
+from dunlin.datastructures.stateparam import StateDict, ParameterDict
 
 ###############################################################################
 #Test function
@@ -15,14 +15,14 @@ from dunlin.datastructures.event    import Event,    EventDict
 data0 = {'f0': ['x', 'y', 'x+y'],
          'f1': ['y', 'y-1']
          }
-ext_namespace = ()
+all_names = ()
 C = FunctionDict
 
 #Test instantiation
-F0 = C(set(ext_namespace), data0)
+F0 = C(set(all_names), data0)
 
 try:
-    F0 = C(set(ext_namespace + ('f0',)), data0)
+    F0 = C(set(all_names + ('f0',)), data0)
 except:
     assert True
 else:
@@ -32,31 +32,31 @@ else:
 f0 = F0['f0']
 
 #Test export/roundtrip
-data1 = F0.to_data()
-dunl = F0.to_dunl()
+data1 = F0.to_dict()
+dunl = F0.to_dunl_elements()
 data2 = rdn.read_dunl_code(';A\n' + dunl)['A']
 assert data2 == data1 == data0
 
 ###############################################################################
 #Test reaction
 ###############################################################################
-data0 = {'f0' : ['a -> b', 'k0*a', 'k1*b', (-10, 10)],
-         'f1' : {'eqn' : 'b -> c', 'fwd' : 'k2*b'}
+data0 = {'f0' : ['a -> b', 'k0*a - k1*b', [-10, 10]],
+         'f1' : {'equation' : 'b -> c', 'rate' : 'k2*b'}
          }
-ext_namespace = ('a', 'b', 'c', 'k0', 'k1', 'k2')
+all_names = ('a', 'b', 'c', 'k0', 'k1', 'k2')
 C = ReactionDict
 
 #Test instantiation
-F0 = C(set(ext_namespace), data0)
+F0 = C(set(all_names), data0)
 try:
-    F0 = C(set(ext_namespace[1:]), data0)
+    F0 = C(set(all_names[1:]), data0)
 except:
     assert True
 else:
     assert False
 
 try:
-    F0 = C(set(ext_namespace + ('f0',)), data0)
+    F0 = C(set(all_names + ('f0',)), data0)
 except:
     assert True
 else:
@@ -66,8 +66,8 @@ else:
 f0 = F0['f0']
 
 #Test export/roundtrip
-data1 = F0.to_data()
-dunl = F0.to_dunl()
+data1 = F0.to_dict()
+dunl = F0.to_dunl_elements()
 data2 = rdn.read_dunl_code(';A\n' + dunl)['A']
 assert data2['f1'] == data1['f1'] == data0['f1']
 
@@ -77,19 +77,19 @@ assert data2['f1'] == data1['f1'] == data0['f1']
 data0 = {'f0': 1,
          'f1': '(x + y)/2'
          }
-ext_namespace = ('x', 'y')
+all_names = ('x', 'y')
 C = VariableDict
 
-F0 = C(set(ext_namespace), data0)
+F0 = C(set(all_names), data0)
 try:
-    F0 = C(set(ext_namespace[1:]), data0)
+    F0 = C(set(all_names[1:]), data0)
 except:
     assert True
 else:
     assert False
 
 try:
-    F0 = C(set(ext_namespace + ('f0',)), data0)
+    F0 = C(set(all_names + ('f0',)), data0)
 except:
     assert True
 else:
@@ -98,8 +98,8 @@ else:
 f0 = F0['f0']
 
 #Test export/roundtrip
-data1 = F0.to_data()
-dunl = F0.to_dunl()
+data1 = F0.to_dict()
+dunl = F0.to_dunl_elements()
 data2 = rdn.read_dunl_code(';A\n' + dunl)['A']
 assert data2 == data1 == data0
 
@@ -109,51 +109,22 @@ assert data2 == data1 == data0
 data0 = {'f0': '-k0*f0',
          'f1': '-k1*f1'
          }
-ext_namespace = ('f0', 'f1', 'k0', 'k1')
+all_names = set()
 C = RateDict
 
-F0 = C(set(ext_namespace), data0)
+states = StateDict(all_names, {'f0': [0], 'f1': [0]})
+all_names.update(['k0', 'k1']) 
+
+F0 = C(set(all_names), states, data0)
 try:
-    F0 = C(set(ext_namespace[1:]),data0)
+    F0 = C(set(all_names[1:]),data0)
 except:
     assert True
 else:
     assert False
 
 try:
-    F0 = C(set(ext_namespace + (ut.diff('f0'),)), data0)
-except:
-    assert True
-else:
-    assert False
-    
-f0 = F0['f0']
-
-#Test export/roundtrip
-data1 = F0.to_data()
-dunl = F0.to_dunl()
-data2 = rdn.read_dunl_code(';A\n' + dunl)['A']
-assert data2 == data1 == data0
-
-##############################################################################
-#Test rate
-##############################################################################
-data0 = {'f0': '-k0*f0',
-         'f1': '-k1*f1'
-         }
-ext_namespace = ('f0', 'f1', 'k0', 'k1')
-C = RateDict
-
-F0 = C(set(ext_namespace), data0)
-try:
-    F0 = C(set(ext_namespace[1:]), data0)
-except:
-    assert True
-else:
-    assert False
-
-try:
-    F0 = C(set(ext_namespace + (ut.diff('f0'),)), data0)
+    F0 = C(set(all_names + (ut.diff('f0'),)), data0)
 except:
     assert True
 else:
@@ -162,40 +133,8 @@ else:
 f0 = F0['f0']
 
 #Test export/roundtrip
-data1 = F0.to_data()
-dunl = F0.to_dunl()
-data2 = rdn.read_dunl_code(';A\n' + dunl)['A']
-assert data2 == data1 == data0
-
-##############################################################################
-#Test extra
-##############################################################################
-data0 = {'f0': ['index', 'x0', -1],
-         'f1': ['index', 'x1',  0]
-         }
-ext_namespace = ('x0', 'x1')
-C = ExtraDict
-
-F0 = C(set(ext_namespace), data0)
-try:
-    F0 = C(set(ext_namespace[1:]), data0)
-except:
-    assert True
-else:
-    assert False
-
-try:
-    F0 = C(set(ext_namespace + ('f0',)), data0)
-except:
-    assert True
-else:
-    assert False
-    
-f0 = F0['f0']
-
-#Test export/roundtrip
-data1 = F0.to_data()
-dunl = F0.to_dunl()
+data1 = F0.to_dict()
+dunl = F0.to_dunl_elements()
 data2 = rdn.read_dunl_code(';A\n' + dunl)['A']
 assert data2 == data1 == data0
 
@@ -214,19 +153,19 @@ data0 = {'f0': {'trigger'    : 'time > 10',
                 }
          }
 
-ext_namespace = ('x0', 'x1')
+all_names = ('x0', 'x1')
 C = EventDict
 
-F0 = C(set(ext_namespace), data0)
+F0 = C(set(all_names), data0)
 try:
-    F0 = C(set(ext_namespace[1:]), data0)
+    F0 = C(set(all_names[1:]), data0)
 except:
     assert True
 else:
     assert False
 
 try:
-    F0 = C(set(ext_namespace + ('f0',)), data0)
+    F0 = C(set(all_names + ('f0',)), data0)
 except:
     assert True
 else:
@@ -235,8 +174,8 @@ else:
 f0 = F0['f0']
 
 #Test export/roundtrip
-data1 = F0.to_data()
-dunl = F0.to_dunl()
+data1 = F0.to_dict()
+dunl = F0.to_dunl_elements()
 data2 = rdn.read_dunl_code(';A\n' + dunl)['A']
 assert data2 == data1 == data0
 
