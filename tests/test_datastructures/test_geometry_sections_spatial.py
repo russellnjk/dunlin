@@ -37,7 +37,7 @@ else:
 f0 = F0['x']
 
 #Test export/roundtrip
-data1 = F0.to_data()
+data1 = F0.to_dict()
 dunl = F0.to_dunl_elements()
 data2 = rdn.read_dunl_code(';A\n' + dunl)['A']
 assert data2 == data1 == data0
@@ -91,7 +91,7 @@ else:
 f0 = F0['dmnt0']
 
 #Test export/roundtrip
-data1 = F0.to_data()
+data1 = F0.to_dict()
 dunl = F0.to_dunl_elements()
 data2 = rdn.read_dunl_code(';A\n' + dunl)['A']
 assert data2 == data1 == data0 
@@ -121,7 +121,7 @@ else:
 f0 = F0['interface']
 
 #Test export/roundtrip
-data1 = F0.to_data()
+data1 = F0.to_dict()
 dunl = F0.to_dunl_elements()
 data2 = rdn.read_dunl_code(';A\n' + dunl)['A']
 assert data2 == data1 == data0
@@ -162,7 +162,7 @@ else:
 f0 = F0['gr0']
 
 #Test export/roundtrip
-data1 = F0.to_data()
+data1 = F0.to_dict()
 dunl = F0.to_dunl_elements()
 data2 = rdn.read_dunl_code(';A\n' + dunl)['A']
 assert data2 == data1 == data0 
@@ -237,7 +237,7 @@ else:
 f0 = F0['hemisphere']
 
 #Test export/roundtrip
-data1 = F0.to_data()
+data1 = F0.to_dict()
 dunl = F0.to_dunl_elements()
 data2 = rdn.read_dunl_code(';A\n' + dunl)['A']
 assert data2 == data1 == data0 

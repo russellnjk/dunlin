@@ -3,10 +3,14 @@ import dunlin                            as dn
 import dunlin.utils                      as ut
 import dunlin.standardfile.dunl.readdunl as rdn
 from dunlin.datastructures.reaction            import Reaction,            ReactionDict
-from dunlin.datastructures.gridconfig          import GridConfig,          GridConfigDict
+from dunlin.datastructures.gridconfig          import GridConfig          #GridConfigDict
 from dunlin.datastructures.geometrydefinition  import GeometryDefinition,  GeometryDefinitionDict
 from dunlin.datastructures.boundarycondition   import BoundaryConditions,  BoundaryConditionDict
+
 from dunlin.datastructures.compartment         import Compartment,         CompartmentDict
+from dunlin.datastructures.domain              import Domain,              DomainDict
+from dunlin.datastructures.adjacentdomain      import AdjacentDomainDict
+
 from dunlin.datastructures.masstransfer        import (Advection, AdvectionDict, 
                                                        Diffusion, DiffusionDict
                                                        )
@@ -14,6 +18,45 @@ from dunlin.datastructures.masstransfer        import (Advection, AdvectionDict,
 from dunlin.datastructures.coordinatecomponent import CoordinateComponentDict
 from dunlin.datastructures.stateparam          import ParameterDict, StateDict
 
+###############################################################################
+#Test Coordinate Component
+###############################################################################
+data0 = {'x': [0, 10],
+         'y': [0, 10],
+         'z': [0, 10]
+         }
+
+C = CoordinateComponentDict
+
+#Test instantiation
+F0 = C(data0)
+
+data0_ = {'x': [0, 10],
+          'y': [0, 10],
+          'w': [0, 10]
+          }
+try:
+    F0 = C(data0_)
+except:
+    assert True
+else:
+    assert False
+    
+#Test access
+f0 = F0['x']
+
+#Test export/roundtrip
+data1 = F0.to_dict()
+dunl = F0.to_dunl_elements()
+data2 = rdn.read_dunl_code(';A\n' + dunl)['A']
+assert data2 == data1 == data0
+
+ccd = F0
+all_names = set()
+
+###############################################################################
+#Create stuff for downstream tests
+###############################################################################
 data0 = {'x': [0, 10],
          'y': [0, 10]
          }
@@ -73,6 +116,135 @@ data1 = F0.to_dict()
 dunl = F0.to_dunl_elements()
 data2 = rdn.read_dunl_code(';A\n' + dunl)['A']
 assert data2 == data1 == data0 
+
+###############################################################################
+#Create Stuff for downstream tests
+###############################################################################
+compartments = F0
+
+###############################################################################
+#Test Domain
+###############################################################################
+data0 = {'dmn0': {'compartment'    : 'cpt0',
+                  'internal_point' : [2, 2]
+                   },
+         'dmn1': {'compartment'    : 'cpt1',
+                  'internal_point' : [2, 3]
+                  },
+          }
+
+C = DomainDict
+
+#Test instantiation
+F0 = C(all_names, ccd, compartments, data0)
+
+data0_ = {'dmn0': {'compartment'    : 'cpt0',
+                  'internal_point' : [2, 2, 2]
+                   },
+          'dmn1': {'compartment'    : 'cpt1',
+                   'internal_point' : [2, 3]
+                   },
+          }
+
+try:
+    F0 = C(set(), ccd, data0_)
+except:
+    assert True
+else:
+    assert False
+
+#Test access
+f0 = F0['dmn0']
+
+#Test export/roundtrip
+data1 = F0.to_dict()
+dunl = F0.to_dunl_elements()
+data2 = rdn.read_dunl_code(';A\n' + dunl)['A']
+assert data2 == data1 == data0 
+
+###############################################################################
+#Create Stuff for downstream tests
+###############################################################################
+dmns = F0
+
+###############################################################################
+#Test AdjacentDomains
+###############################################################################
+data0 = {'interface': ['dmn0', 'dmn1']}
+
+C = AdjacentDomainDict
+
+#Test instantiation
+F0 = C(all_names, ccd, dmns, data0)
+
+data0_ = {'interface': ['dmn0', 'dmn2']}
+
+try:
+    F0 = C(all_names, ccd, dmns, data0_)
+except:
+    assert True
+else:
+    assert False
+    
+#Test access
+f0 = F0['interface']
+
+#Test export/roundtrip
+data1 = F0.to_dict()
+dunl = F0.to_dunl_elements()
+data2 = rdn.read_dunl_code(';A\n' + dunl)['A']
+assert data2 == data1 == data0
+
+###############################################################################
+#Test GridConfig
+###############################################################################
+data0 = {'step'     : 0.02,
+         'min'      : [0,   0],
+         'max'      : [10, 10],
+         'children' : {'gr0': {'step': 0.01,
+                               'min' : [4, 4],
+                               'max' : [6, 6]
+                               }
+                       }
+         }
+# data0 = {'gr_main': {'config' : [0.02, [0, 10], [0, 10], [0, 10]], 'children': ['gr0']},
+#          'gr0'    : {'config' : [0.01, [4, 6],  [4, 6],  [4, 6]]}
+#          }
+
+C = GridConfig
+
+#Test instantiation
+F0 = C(all_names, name=None, coordinate_components=ccd,**data0)
+
+data0_ = {'gr_main': {'config' : [0.02, [0, 10], [0, 10], ], 'children': ['gr0']},
+          'gr0'    : {'config' : [0.01, [4, 6], [4, 6],   [4, 6]]}
+          }
+try:
+    F0 = C(set(), ccd, data0_)
+except:
+    assert True
+else:
+    assert False
+
+data0_ = {'gr_main': {'config' : [0.02, [0, 10], [0, 10], [0, 10]], 'children': ['gg']},
+          'gr0'    : {'config' : [0.01, [4, 6],  [4, 6],  [4, 6]]}
+          }
+try:
+    F0 = C(set(), ccd, data0_)
+except:
+    assert True
+else:
+    assert False
+    
+#Test access
+f0 = F0['gr0']
+
+#Test export/roundtrip
+data1 = F0.to_dict()
+dunl = F0.to_dunl_elements()
+data2 = rdn.read_dunl_code(';A\n' + dunl)['A']
+assert data2 == data1 == data0 
+
 
 ###############################################################################
 #Test Advection
@@ -183,4 +355,4 @@ data1 = F0.to_dict()
 dunl = F0.to_dunl_elements()
 data2 = rdn.read_dunl_code(';A\n' + dunl)['A']
 assert data2 == data1 == data0
-    
+

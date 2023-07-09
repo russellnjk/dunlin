@@ -15,7 +15,7 @@ from .boundarycondition   import BoundaryConditions, BoundaryConditionDict
 from .compartment         import Compartment,        CompartmentDict
 from .masstransfer        import Advection,          AdvectionDict
 from .masstransfer        import Diffusion,          DiffusionDict
-from .gridconfig          import GridConfig,         GridConfigDict
+from .gridconfig          import GridConfig#,         GridConfigDict
 from .domain              import Domain,             DomainDict
 from .geometrydefinition  import GeometryDefinition, GeometryDefinitionDict
 

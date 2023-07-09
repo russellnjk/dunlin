@@ -209,6 +209,28 @@ class DataDict(ABC):
     def __repr__(self):
         return f'{type(self).__name__}{tuple(self.keys())}'
  
+class Tree(DataValue):
+    recurse_at : str
+    def __init__(self, all_names: set, name: str, *args, **attributes):
+        
+        recurse_at = self.recurse_at
+        
+        if attributes.get(recurse_at):
+            children = {}
+            for child_name, child_attributes in attributes[recurse_at].items():
+                children[child_name] = type(self)(all_names, 
+                                                  child_name,
+                                                  *args,
+                                                  **child_attributes
+                                                  )
+            
+        else:
+            children = None
+        
+        attributes_ = {**attributes, recurse_at: children}
+        
+        super().__init__(all_names, name, **attributes_)
+    
 class Table(ABC):
     '''
     Base class for tabular data. 

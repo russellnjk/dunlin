@@ -15,7 +15,7 @@ from .compartment         import CompartmentDict
 from .masstransfer        import AdvectionDict, DiffusionDict
 
 from .coordinatecomponent import CoordinateComponentDict
-from .gridconfig          import GridConfigDict
+from .gridconfig          import GridConfig
 from .domain              import DomainDict
 from .adjacentdomain      import AdjacentDomainDict
 from .geometrydefinition  import GeometryDefinitionDict

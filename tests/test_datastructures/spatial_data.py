@@ -83,6 +83,10 @@ domain_types = {'extracellular' : {'medium' : [0.5, 0.3]},
                 'cytosolic'     : {'cytosol': [1.5, 1.2]}
                 }
 
+domains = {'medium': {'compartment': 'medium'},
+           
+           }
+
 adjacent_domains = {'membrane': ['cytosol', 'medium']
                     }
 

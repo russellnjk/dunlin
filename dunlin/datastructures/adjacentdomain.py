@@ -1,67 +1,58 @@
 import pandas as pd
 
 import dunlin.utils             as ut
-from .bases               import Table
+from .bases               import DataValue, DataDict
 from .coordinatecomponent import CoordinateComponentDict
 from .domain              import DomainDict
 
-class AdjacentDomainDict(Table):
-    itype      = 'AdjacentDomains'
-    is_numeric = False
-    
-    def __init__(self, 
-                 ext_namespace         : set,
+class AdjacentDomain(DataValue):
+    def __init__(self,
+                 all_names             : set,
                  coordinate_components : CoordinateComponentDict,
-                 domain_types          : DomainDict,
-                 mapping               : dict,
-                 ) -> None:
+                 domains               : DomainDict,
+                 domain_pairs          : dict,
+                 name                  : str,
+                 *domain_pair          : list[str, str]                
+                 ):
         
-        seen        = set()
-        all_domains = domain_types.domains
-        data        = {}
+        domain_pair_ = frozenset(domain_pair)
         
-        for name, value in mapping.items():
-            #Check name
-            if not ut.is_valid_name(name):
-                msg = f'Invalid name provided for adjacent domains: {name}'
-                raise ValueError(msg)
-            elif name in ext_namespace:
-                msg = f'Repeat of namespace {name}.'
-                raise ValueError(msg)
-            
-            #Check value
-            if not ut.islistlike(value):
-                msg  = 'Expected a list-like pair of adjacent domains. '
-                msg += f'Received {value}'
-                raise ValueError(msg)
-            elif len(value) != 2:
-                msg = 'Expected 2 domains. Received {value}'
-                raise ValueError(msg)
-            
-            dmn0, dmn1 = value
-            
-            if dmn0 not in all_domains:
-                a   = [i.name for i in all_domains]
-                msg = f'Unexpected domain {dmn0}. Expected one of {a}.'
-                raise ValueError(msg)
-            elif dmn1 not in all_domains:
-                a   = [i.name for i in all_domains]
-                msg = f'Unexpected domain {dmn0}. Expected one of {a}.'
-                raise ValueError(msg)
-            
-            temp = dmn0, dmn1
-            if temp in seen:
-                msg = f'Repeat of adjacent domains {temp}.'
-                raise ValueError(msg)
-            seen.add(temp)
-            
-            #Update
-            data[name] = list(temp)
+        if domain_pair_ in domain_pairs:
+            msg  = f'Repeated domain pair found: {domain_pair}.'
+            msg += f'This pair was found in {name} and {domain_pairs[domain_pair_]}.'
+            raise ValueError(msg)
         
-        #Convert to df
-        self.name     = 'adjacent_domains'
-        self._df      = pd.DataFrame(data)
-        self.n_format = None
+        super().__init__(all_names,
+                         name,
+                         domain_pair     = domain_pair_,
+                         domain_pair_ori = domain_pair
+                         )
+        
+        domain_pairs[domain_pair_] = name
     
-    def to_data(self) -> dict:
-        return self.df.to_dict('list')
+    def to_dict(self) -> dict:
+        dct = {self.name: list(self.domain_pair_ori)}
+        
+        return dct
+    
+class AdjacentDomainDict(DataDict):
+    itype = AdjacentDomain
+    
+    def __init__(self,
+                 all_names             : set,
+                 coordinate_components : CoordinateComponentDict,
+                 domains               : DomainDict,
+                 mapping               : dict[str, list[str, str]],
+                 ):
+        
+        domain_pairs = {}
+        
+        super().__init__(all_names, 
+                         mapping, 
+                         coordinate_components, 
+                         domains, 
+                         domain_pairs
+                         )
+        
+        self.domain_pairs = domain_pairs
+    
