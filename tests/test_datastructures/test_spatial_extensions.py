@@ -120,7 +120,7 @@ assert data2 == data1 == data0
 ###############################################################################
 #Create Stuff for downstream tests
 ###############################################################################
-compartments = F0
+cpts = F0
 
 ###############################################################################
 #Test Domain
@@ -136,7 +136,7 @@ data0 = {'dmn0': {'compartment'    : 'cpt0',
 C = DomainDict
 
 #Test instantiation
-F0 = C(all_names, ccd, compartments, data0)
+F0 = C(all_names, ccd, cpts, data0)
 
 data0_ = {'dmn0': {'compartment'    : 'cpt0',
                   'internal_point' : [2, 2, 2]
@@ -245,6 +245,60 @@ dunl = F0.to_dunl_elements()
 data2 = rdn.read_dunl_code(';A\n' + dunl)['A']
 assert data2 == data1 == data0 
 
+###############################################################################
+#Test GeometryDefinition
+###############################################################################
+square  = ['translate', 5, 5, 'square']
+circle  = ['translate', 5, 5, 'circle']
+myshape = ['difference', circle, square]
+tank    = ['translate', 5, 5,  
+           ['scale', 10, 10, 'square']
+           ]
+
+data0 = {'myshape': {'geometry_type': 'csg',
+                     'compartment'  : 'cpt0',
+                     'order'        : 1,
+                     'definition'   : myshape
+                     },
+          'tank'  : {'geometry_type': 'csg',
+                     'compartment'  : 'cpt0',
+                     'order'        : 0,
+                     'definition'   : tank
+                     }
+          }
+
+C = GeometryDefinitionDict
+
+#Test instantiation
+F0 = C(all_names, ccd, cpts, data0)
+
+data0_ = {'myshape': {'geometry_type': 'csg',
+                      'compartment'  : 'cpt0',
+                      'order'        : 1,
+                      'definition'   : myshape
+                      },
+          'tank'   : {'geometry_type': 'csg',
+                      'compartment'  : 'cpt0',
+                      'order'        : 1,
+                      'definition'   : tank
+                      }
+          }
+
+try:
+    F0 = C(all_names, ccd, cpts, data0)
+except:
+    assert True
+else:
+    assert False
+
+#Test access
+f0 = F0['myshape']
+
+#Test export/roundtrip
+data1 = F0.to_dict()
+dunl = F0.to_dunl_elements()
+data2 = rdn.read_dunl_code(';A\n' + dunl)['A']
+assert data2 == data1 == data0 
 
 ###############################################################################
 #Test Advection

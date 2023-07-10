@@ -172,7 +172,7 @@ assert data2 == data1 == data0
 ###############################################################################
 #Test GeometryDefinition
 ###############################################################################
-sphere     = ['sphere', ['translate', 5, 5, 5]]
+sphere     = ['translate', 5, 5, 5, 'sphere']
 cube       = ['cube',   ['translate', 5, 5, 6]]
 hemisphere = ['difference', sphere, cube]
 tank       = ['cube', ['scale', 10, 10, 10], ['translate', 5, 5, 5]]

@@ -221,6 +221,7 @@ class Primitive(CSGObject):
                 points     = [pt0, pt1]
                 new_points = rotate2D(points, *args)
                 new_vector = new_points[1] - new_points[0]
+                
                 new_center      = rotate2D([center], *args)[0]
                 new_axes        = axes
                 new_orientation = np.arctan2(new_vector[1], new_vector[0])

@@ -13,6 +13,14 @@ import dunlin.standardfile.dunl as sfd
 from dunlin.standardfile.dunl    import writeelement as we
 from dunlin.utils.typing import Dflike, Num
 
+'''
+Base classes to use:
+    1. Table: The data is of a tabular nature. 
+    2. DataDicts with DataValue: The data is a collection of dict/list-like 
+    items.
+    3. Tree: The data is dict-like and recursive
+    
+'''
 class DataValue(ABC):
     '''For most items.
     
