@@ -1,73 +1,46 @@
+import re
 from numbers import Number
 from typing import Union
 
 import dunlin.utils as ut
 from dunlin.datastructures.bases import DataDict, DataValue
+from dunlin.datastructures.stateparam import StateDict
 
 class Reaction(DataValue):
     ###########################################################################
     #Preprocessing
     ###########################################################################
-    @classmethod
-    def equation2stoich(cls, equation):
+    @staticmethod
+    def equation2stoich(equation: str) -> tuple[dict, set, set]:
         #An example equation is a + 2*b -> c
         #Split the reaction
         try:
-            rcts, prds = equation.split('->')
-            rcts       = rcts.strip()
-            prds       = prds.strip()
+            lhs, rhs = equation.split('->')
         except:
             msg = 'Invalid reaction. The expected format is <reactants> -> <products>.'
             msg = f'{msg} Received: {equation}'
             raise ValueError(msg)
         
-        #Get the stoichiometry
-        if rcts:
-            rcts_stoich = [cls.get_stoich(chunk, invert_sign=True) for chunk in rcts.split('+')]
-        else:
-            rcts_stoich = []
+        stoichiometry = {}
+        reactants     = set()
+        products      = set()
         
-        if prds:
-            prds_stoich = [cls.get_stoich(chunk, invert_sign=False) for chunk in prds.split('+')]
-        else:
-            prds_stoich = []
+        def repl(match, is_positive):
+            coefficient = ut.str2num(match[1])
+            state       = match[2]
             
-        rcts = []
-        prds = []
-        stoich = {}
-        for species, coeff in rcts_stoich:
-            rcts.append(species)
-            stoich[species] = coeff
+            if is_positive:
+                stoichiometry[state] = coefficient
+                reactants.add(state)
+            else:
+                stoichiometry[state] = -coefficient
+                products.add(state)
         
-        for species, coeff in prds_stoich:
-            prds.append(species)
-            stoich[species] = coeff
-            
-        return stoich, rcts, prds
-        
-    @staticmethod
-    def get_stoich(rct: str, invert_sign: bool =False) -> tuple[str, str]:
-        rct_ = rct.strip().split('*')
-
-        if len(rct_) == 1:
-            n, x = 1, rct_[0].strip()
-        else:
-            try:
-                n, x = rct_[0].strip(), rct_[1].strip()
-                    
-            except Exception as e:
-                raise e
-                
-            if ut.str2num(n) < 0:
-                msg = 'Invalid stoichiometry. Coefficient must be positive.'
-                msg = f'{msg} Received: {n}'
-                raise ValueError(msg)
-                    
-        if invert_sign:
-            return x, f'-{n}'
-        else:
-            return x, f'+{n}'
-    
+        pattern = '[0-9]*\**([a-zA-Z]\w*)'
+        re.match(pattern, lhs)
+        re.match(pattern, rhs)
+        return stoichiometry, reactants, products
+       
     @staticmethod
     def get_rxn_rate(rate: Union[str, Number]) -> tuple[str, set]:
         rate = str(rate).strip()
@@ -85,23 +58,34 @@ class Reaction(DataValue):
     #Constructor
     ###########################################################################
     def __init__(self, 
-                 all_names : set, 
-                 name      : str, 
-                 equation  : str, 
-                 rate      : str, 
-                 bounds    : list[Number, Number]=None
+                 all_names  : set, 
+                 states     : StateDict, 
+                 states_set : set,
+                 name       : str, 
+                 equation   : str, 
+                 rate       : str, 
+                 bounds     : list[Number, Number]=None
                  ) -> None:
         
         #An example equation is a + 2*b -> c
-        stoich, rcts, prds = self.equation2stoich(equation)
+        stoichiometry, reactants, products = self.equation2stoich(equation)
         
         #Parse the reaction rates
         rate, rxn_namespace = self.get_rxn_rate(rate)
+        
+        #Collect the namespace
+        rxn_namespace.update(stoichiometry)
         
         #Check namespaces
         undefined = rxn_namespace.difference(all_names)
         if undefined:
             raise NameError(f'Undefined namespace: {undefined}.')
+        
+        all_states = states.names
+        difference = set(stoichiometry).difference(all_states)
+        if difference:
+            msg = f'Stoichiometry for {name} contains unexpected states: {difference}.'
+            raise ValueError(msg)
         
         #Parse the bounds
         bounds_ = None if bounds is None else tuple(bounds)
@@ -110,13 +94,15 @@ class Reaction(DataValue):
         super().__init__(all_names, 
                          name, 
                          equation      = equation,
-                         stoichiometry = stoich,
+                         stoichiometry = stoichiometry,
                          rate          = str(rate),
-                         reactants     = frozenset(rcts),
-                         products      = frozenset(prds),
-                         states        = frozenset(rcts+prds),
+                         reactants     = frozenset(reactants),
+                         products      = frozenset(products),
+                         states        = frozenset(reactants|products),
                          bounds        = bounds_
                          )
+        
+        states_set.update(stoichiometry)
         
     ###########################################################################
     #Export
@@ -138,15 +124,17 @@ class ReactionDict(DataDict):
     ###########################################################################
     #Constructor
     ###########################################################################
-    def __init__(self, all_names: set, reactions: dict) -> None:
+    def __init__(self, 
+                 all_names : set, 
+                 states    : StateDict,
+                 reactions : dict
+                 ) -> None:
+        
+        states_set = set()
+        
         #Make the dict
-        super().__init__(all_names, reactions)
-        
-        states = set()
-        
-        for rxn in self.values():
-            states.update(list(rxn.stoichiometry))
+        super().__init__(all_names, reactions, states, states_set)
         
         #Save attributes
-        self.states    = frozenset(states)
+        self.states    = frozenset(states_set)
         

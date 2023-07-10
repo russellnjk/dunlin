@@ -43,11 +43,13 @@ assert data2 == data1 == data0
 data0 = {'f0' : ['a -> b', 'k0*a - k1*b', [-10, 10]],
          'f1' : {'equation' : 'b -> c', 'rate' : 'k2*b'}
          }
-all_names = ('a', 'b', 'c', 'k0', 'k1', 'k2')
+
+all_names = {'k0', 'k1', 'k2'}
 C = ReactionDict
+xs = StateDict(all_names, {'a': [0], 'b': [0], 'c': [0]})
 
 #Test instantiation
-F0 = C(set(all_names), data0)
+F0 = C(set(all_names), xs, data0)
 try:
     F0 = C(set(all_names[1:]), data0)
 except:
@@ -153,9 +155,8 @@ data0 = {'f0': {'trigger'    : 'time > 10',
                 }
          }
 
-all_names = ('x0', 'x1')
+all_names = {'x0', 'x1'}
 C = EventDict
-
 F0 = C(set(all_names), data0)
 try:
     F0 = C(set(all_names[1:]), data0)

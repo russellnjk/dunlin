@@ -1,7 +1,7 @@
 import re
 
 from dunlin.datastructures.bases       import DataDict
-from dunlin.datastructures.reaction    import Reaction
+from dunlin.datastructures.reaction    import Reaction, ReactionDict
 from dunlin.datastructures.compartment import CompartmentDict
 
 class SpatialReaction(Reaction):
@@ -9,14 +9,14 @@ class SpatialReaction(Reaction):
     #Constructor
     ###########################################################################
     def __init__(self, 
-                 all_names: set,
+                 all_names    : set,
                  compartments : CompartmentDict,
                  name         : str, 
                  eqn          : str, 
                  fwd          : str, 
                  rev          : str=None,
                  local        : bool=False
-                 ) -> None:
+                 ):
         
         #Call the parent constructor and unfreeze
         super().__init__(all_names, 
@@ -59,26 +59,12 @@ class SpatialReactionDict(DataDict):
     #Constructor
     ###########################################################################
     def __init__(self, 
-                 all_names : set, 
-                 compartments  : CompartmentDict,
-                 reactions     : dict
+                 all_names    : set, 
+                 compartments : CompartmentDict,
+                 reactions    : dict
                  ) -> None:
-        namespace = set()
         
         #Make the dict
         super().__init__(all_names, reactions, compartments)
         
-        states = set()
         
-        for rxn_name, rxn in self.items():
-            namespace.update(rxn.namespace)
-            states.update(list(rxn.stoichiometry))
-           
-        #Save attributes
-        self.namespace            = tuple(namespace)
-        self.states               = tuple(states)
-        
-        #Freeze
-        self.freeze()
-    
-    

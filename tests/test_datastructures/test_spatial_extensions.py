@@ -3,7 +3,7 @@ import dunlin                            as dn
 import dunlin.utils                      as ut
 import dunlin.standardfile.dunl.readdunl as rdn
 from dunlin.datastructures.reaction            import Reaction,            ReactionDict
-from dunlin.datastructures.gridconfig          import GridConfig          #GridConfigDict
+from dunlin.datastructures.gridconfig          import GridConfig          
 from dunlin.datastructures.geometrydefinition  import GeometryDefinition,  GeometryDefinitionDict
 from dunlin.datastructures.boundarycondition   import BoundaryConditions,  BoundaryConditionDict
 
