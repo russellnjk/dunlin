@@ -46,7 +46,7 @@ def write_dict(dct            : dict,
                                 multiline_dict = multiline_dict, 
                                 _level         = _level+1
                                 )
-        
+            
         elif type(value) in [list, tuple]:
             value_ = write_list(value)
         
@@ -64,7 +64,7 @@ def write_dict(dct            : dict,
     else:
         if multiline_dict:
             indent = '\t'*_level
-            code   = f'[\n{indent}' + f',\n{indent}'.join(chunks) + f'\n{indent}],'
+            code   = f'[\n{indent}' + f',\n{indent}'.join(chunks) + f'\n{indent}]'
         
         else:
             code = '[' + ', '.join(chunks) + ']'

@@ -2,11 +2,11 @@ import addpath
 import dunlin                            as dn
 import dunlin.utils                      as ut
 import dunlin.standardfile.dunl.readdunl as rdn
-from dunlin.datastructures.function   import Function, FunctionDict
-from dunlin.datastructures.reaction   import Reaction, ReactionDict
-from dunlin.datastructures.variable   import Variable, VariableDict
-from dunlin.datastructures.rate       import Rate,     RateDict
-from dunlin.datastructures.event      import Event,    EventDict
+from dunlin.datastructures.function   import Function,  FunctionDict
+from dunlin.datastructures.reaction   import Reaction,  ReactionDict
+from dunlin.datastructures.variable   import Variable,  VariableDict
+from dunlin.datastructures.rate       import Rate,      RateDict
+from dunlin.datastructures.event      import Event,     EventDict
 from dunlin.datastructures.stateparam import StateDict, ParameterDict
 
 ###############################################################################
@@ -40,8 +40,16 @@ assert data2 == data1 == data0
 ###############################################################################
 #Test reaction
 ###############################################################################
-data0 = {'f0' : ['a -> b', 'k0*a - k1*b', [-10, 10]],
-         'f1' : {'equation' : 'b -> c', 'rate' : 'k2*b'}
+data0 = {'f0' : {'stoichiometry': {'a': -1,
+                                   'b': 1,
+                                   },
+                 'rate'         : 'k0*a - k1*b'
+                 },
+         'f1' : {'stoichiometry' : {'a' :  1,
+                                    'b' : -1
+                                    }, 
+                 'rate' : 'k2*b'
+                 }
          }
 
 all_names = {'k0', 'k1', 'k2'}

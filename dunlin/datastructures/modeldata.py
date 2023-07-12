@@ -16,7 +16,7 @@ class ModelData(ABC):
     #Representation
     ###########################################################################
     def __str__(self):
-        #Will not work if to_data has not been implemented or without ref attribute 
+        #Will not work if to_dict has not been implemented or without ref attribute 
         s =  f'{type(self).__name__}'
         return s
     
@@ -48,7 +48,7 @@ class ModelData(ABC):
     ###########################################################################
     #Export
     ###########################################################################
-    def to_data(self, recurse=True) -> dict:
+    def to_dict(self, recurse=True) -> dict:
         def is_empty(x):
             try:
                 len(x)
@@ -68,9 +68,9 @@ class ModelData(ABC):
             if is_empty(value):
                 continue
             
-            #Recursively call to_data if necessary
-            if recurse and hasattr(value, 'to_data'):    
-                value = value.to_data()
+            #Recursively call to_dict if necessary
+            if recurse and hasattr(value, 'to_dict'):    
+                value = value.to_dict()
             
             #Assign the attribute and value
             if type(attribute) == str:
@@ -85,6 +85,6 @@ class ModelData(ABC):
         return data
                 
     def to_dunl_dict(self) -> dict:
-        data = self.to_data(recurse=False)
+        data = self.to_dict(recurse=False)
         ref  = data.pop('ref')
         return {ref: data}

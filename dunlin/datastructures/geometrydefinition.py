@@ -183,7 +183,7 @@ class GeometryDefinitionDict(DataDict):
                  all_names             : set, 
                  coordinate_components : CoordinateComponentDict,
                  compartments          : CompartmentDict, 
-                 mapping: dict
+                 mapping               : dict
                  ):
         
         order2geometrydefinition = {}

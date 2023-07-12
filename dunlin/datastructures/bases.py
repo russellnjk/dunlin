@@ -202,7 +202,8 @@ class DataDict(ABC):
             dct.update(v.to_dict())
         return dct
     
-    def to_dunl_elements(self) -> str:
+    def to_dunl_elements(self, **kwargs) -> str:
+        #Currently ignores kwargs
         chunks = [v.to_dunl_elements() for v in self.values()]
         code   = '\n'.join(chunks)
         
@@ -355,7 +356,12 @@ class Table(ABC):
     #Export
     ###########################################################################
     def to_dict(self) -> dict:
-        return self._df.to_dict('list')
+        df = self._df
+        if all(df.index == list(range(0, len(df.index )))):
+            return df.to_dict('list')
+        else:
+            return df.to_dict()
+            
     
     def to_dunl_elements(self, n_format: Callable=sfd.format_num) -> str:
         #kwargs are ignored
@@ -366,4 +372,5 @@ class Table(ABC):
         
         else:
             return sfd.write_non_numeric_df(df)
+
 

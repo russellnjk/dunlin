@@ -80,10 +80,16 @@ data0 = {'k0': [0.05], 'k1': [0.005],
          }
 ps    = ParameterDict(all_names, data0)
 
-data0 = {'trans': ['x0c -> x0e', 'k0*x0c', 'k0*x0e'],
-         'syn'  : ['-> x0c', 'k1']
+data0 = {'trans': {'stoichiometry' : {'x0c' : -1,
+                                      'x0e' : 1
+                                      },
+                   'rate'          : 'k0*x0c - k0*x0e'
+                   },
+         'syn'  : {'stoichiometry': {'x0c': 1},
+                   'rate'         : 'k1'
+                   }
          }
-rxns  = ReactionDict(all_names, data0)
+rxns  = ReactionDict(all_names, xs, data0)
 
 ###############################################################################
 #Test Compartment

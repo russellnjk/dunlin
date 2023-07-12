@@ -9,7 +9,7 @@ from .event               import EventDict
 from .unit                import UnitsDict
 
 from .stateparam          import StateDict, ParameterDict
-from .spatialreaction     import SpatialReactionDict
+from .reaction            import ReactionDict
 from .boundarycondition   import BoundaryConditionDict
 from .compartment         import CompartmentDict
 from .masstransfer        import AdvectionDict, DiffusionDict

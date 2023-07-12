@@ -58,18 +58,32 @@ class Reaction(DataValue):
     #Constructor
     ###########################################################################
     def __init__(self, 
-                 all_names  : set, 
-                 states     : StateDict, 
-                 states_set : set,
-                 name       : str, 
-                 equation   : str, 
-                 rate       : str, 
-                 bounds     : list[Number, Number]=None
+                 all_names     : set, 
+                 states        : StateDict, 
+                 states_set    : set,
+                 name          : str, 
+                 stoichiometry : dict[str, Number],
+                 rate          : str, 
+                 bounds        : list[Number, Number]=None,
                  ) -> None:
+            
+        reactants      = set()
+        products       = set()
+        stoichiometry_ = {}
         
-        #An example equation is a + 2*b -> c
-        stoichiometry, reactants, products = self.equation2stoich(equation)
-        
+        for state, coefficient in stoichiometry.items():
+            
+            if not isinstance(coefficient, Number):
+                msg = f'Reaction {name} contains a non-numeric stoichiometric coefficient for state {state}: {coefficient}.'
+                raise TypeError(msg)
+            
+            stoichiometry_[state] = coefficient
+            
+            if coefficient > 0:
+                reactants.add(state)
+            else:
+                products.add(state)
+                
         #Parse the reaction rates
         rate, rxn_namespace = self.get_rxn_rate(rate)
         
@@ -93,8 +107,7 @@ class Reaction(DataValue):
         #It is now safe to call the parent's init
         super().__init__(all_names, 
                          name, 
-                         equation      = equation,
-                         stoichiometry = stoichiometry,
+                         stoichiometry = stoichiometry_,
                          rate          = str(rate),
                          reactants     = frozenset(reactants),
                          products      = frozenset(products),
@@ -108,8 +121,8 @@ class Reaction(DataValue):
     #Export
     ###########################################################################
     def to_dict(self) -> dict:
-        dct = {'equation': self.equation,
-               'rate' : ut.try2num(self.rate)
+        dct = {'stoichiometry' : self.stoichiometry,
+               'rate'          : ut.try2num(self.rate)
                }
         
         if self.bounds:
