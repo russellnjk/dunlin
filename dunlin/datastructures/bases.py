@@ -362,7 +362,6 @@ class Table(ABC):
         else:
             return df.to_dict()
             
-    
     def to_dunl_elements(self, n_format: Callable=sfd.format_num) -> str:
         #kwargs are ignored
         
