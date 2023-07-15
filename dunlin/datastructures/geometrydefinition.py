@@ -9,6 +9,28 @@ from .domain              import DomainDict
 
 
 class GeometryDefinition(DataValue):
+    '''
+    This class differs from its SBML counterpart in several ways.
+        1. Compartments
+        Dunlin merges domain types and compartments. Geometry definitions are 
+        thus associated with compartments instead of domain types. 
+        2. The `definition` attribute
+        Different types of geometry definitions have differents data formats. For 
+        example, CSG in SBML spatial makes use of CSGNodes which are obviously 
+        not used in analytical geometry definitions.
+        
+        To deal with these differences, this class simply uses the `definition` 
+        argument to contain this data when calling the constructor. Thus, there 
+        is no one format or type associated with the `definition` argument.
+        
+        For CSG, the `definition` argument must be
+            A. A string corresponding to a primitive shape.
+            B. A list corresponding to a shape generated from operations and 
+            transformations of primitive shapes.
+            
+            An example is as follows: ['transpose', 1, 2, ['scale', 2, 2, 'square']]
+        
+    '''
     def __init__(self,
                  all_names                : set(),
                  coordinate_components    : CoordinateComponentDict,

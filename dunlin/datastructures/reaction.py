@@ -7,40 +7,55 @@ from dunlin.datastructures.bases import DataDict, DataValue
 from dunlin.datastructures.stateparam import StateDict
 
 class Reaction(DataValue):
+    '''
+    This class differs from its SBML counterpart in several ways:
+        1. Reversibility
+        In SBML, reversibility is explicitly specified by an attribute. However, 
+        this is unecessary as the reaction rate already contains this information; 
+        it is assumed that the user provides appropriate parameter values which 
+        lead to sensible reaction rate calculations.
+        
+        2. Local reactions
+        In SBML spatial, the reaction with the isLocal attribute set to True must 
+        also have a compartment attribute defined. Dunlin implements compartments 
+        differently from SBML so these two attributes are not used. Reactions 
+        that take places at surfaces (i.e. the boundary between two Dunlin 
+        compartments) will have units of flux. In conjunction with the size of 
+        the voxel, the flux will be used to be calculate the change in concentration 
+        in that voxel.
+        
+    '''
     ###########################################################################
     #Preprocessing
     ###########################################################################
     @staticmethod
-    def equation2stoich(equation: str) -> tuple[dict, set, set]:
-        #An example equation is a + 2*b -> c
-        #Split the reaction
-        try:
-            lhs, rhs = equation.split('->')
-        except:
-            msg = 'Invalid reaction. The expected format is <reactants> -> <products>.'
-            msg = f'{msg} Received: {equation}'
-            raise ValueError(msg)
+    def parse_equation(name: str, equation: str) -> tuple[dict, set, set]:
+        #An example equation is -a -2*b +c
+        msg = 'Equation parsing not implemented yet.'
+        raise NotImplementedError(msg)
         
-        stoichiometry = {}
-        reactants     = set()
-        products      = set()
+    @staticmethod
+    def parse_stoichiometry(name: str, stoichiometry: dict) -> tuple[dict, set, set]:
+        reactants      = set()
+        products       = set()
+        stoichiometry_ = {}
         
-        def repl(match, is_positive):
-            coefficient = ut.str2num(match[1])
-            state       = match[2]
+        for state, coefficient in stoichiometry.items():
             
-            if is_positive:
-                stoichiometry[state] = coefficient
+            if not isinstance(coefficient, Number):
+                msg = f'Reaction {name} contains a non-numeric stoichiometric coefficient for state {state}: {coefficient}.'
+                raise TypeError(msg)
+            
+            stoichiometry_[state] = coefficient
+            
+            if coefficient > 0:
                 reactants.add(state)
             else:
-                stoichiometry[state] = -coefficient
                 products.add(state)
+                
         
-        pattern = '[0-9]*\**([a-zA-Z]\w*)'
-        re.match(pattern, lhs)
-        re.match(pattern, rhs)
-        return stoichiometry, reactants, products
-       
+        return stoichiometry_, reactants, products
+    
     @staticmethod
     def get_rxn_rate(rate: Union[str, Number]) -> tuple[str, set]:
         rate = str(rate).strip()
@@ -66,24 +81,12 @@ class Reaction(DataValue):
                  rate          : str, 
                  bounds        : list[Number, Number]=None,
                  ) -> None:
-            
-        reactants      = set()
-        products       = set()
-        stoichiometry_ = {}
         
-        for state, coefficient in stoichiometry.items():
-            
-            if not isinstance(coefficient, Number):
-                msg = f'Reaction {name} contains a non-numeric stoichiometric coefficient for state {state}: {coefficient}.'
-                raise TypeError(msg)
-            
-            stoichiometry_[state] = coefficient
-            
-            if coefficient > 0:
-                reactants.add(state)
-            else:
-                products.add(state)
-                
+        if type(stoichiometry) == dict:
+            stoichiometry_, reactants, products = self.parse_stoichiometry(name, stoichiometry)
+        elif type(stoichiometry) == str:
+            stoichiometry_, reactants, products = self.parse_equation(name, stoichiometry)
+        
         #Parse the reaction rates
         rate, rxn_namespace = self.get_rxn_rate(rate)
         

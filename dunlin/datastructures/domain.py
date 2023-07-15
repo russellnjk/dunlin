@@ -1,5 +1,4 @@
 from numbers import Number
-from typing  import Iterable
 
 import dunlin.utils as ut
 from .bases               import DataDict, DataValue
