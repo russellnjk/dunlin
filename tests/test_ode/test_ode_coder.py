@@ -4,11 +4,11 @@ import addpath
 import dunlin.utils as ut
 import dunlin.comp as cmp
 import dunlin.datastructures as dst
+from dunlin.datastructures import ODEModelData
 from dunlin.ode.ode_coder import *
 from data import all_data
 
-ode_data = cmp.flatten_ode(all_data, 'M0')
-ode_data = dst.ODEModelData(**ode_data)
+ode_data = ODEModelData.from_all_data(all_data, 'M0')
 
 state_code     = states2code(ode_data)
 parameter_code = parameters2code(ode_data)
@@ -70,8 +70,7 @@ assert np.all(dct[ut.diff('x0')] == [-1, -1])
 ###############################################################################
 #Test High Level
 ###############################################################################
-ode_data = cmp.flatten_ode(all_data, 'M0')
-ode_data = dst.ODEModelData(**ode_data)
+ode_data = ODEModelData.from_all_data(all_data, 'M0')
 
 (rhs, _), (rhsdct, _), events = make_ode_callables(ode_data)
 
@@ -114,8 +113,7 @@ assert np.all(dct[ut.diff('x0')] == [-1, -1])
 #Hierarchical Model
 ###############################################################################
 #Try on hierarchical model
-ode_data = cmp.flatten_ode(all_data, 'M1')
-ode_data = dst.ODEModelData(**ode_data)
+ode_data = ODEModelData.from_all_data(all_data, 'M1')
 
 (rhs, _), (rhsdct, _), events = make_ode_callables(ode_data)
 

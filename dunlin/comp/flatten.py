@@ -42,6 +42,13 @@ def dot(x          : Union[dict, list, str, Number],
         if recurse[0]:
             result = []
             for i in x:
+                if not isinstance(i, (Number, str)):
+                    msg  = 'Encountered an unexpected type when flattening model.'
+                    msg += ' Elements in lists must be strings and numbers.'
+                    msg += ' Otherwise, use a dictionary.'
+                    msg += f' Received: {x}'
+                    raise TypeError(msg)
+                    
                 if i in delete:
                     continue
                 else:

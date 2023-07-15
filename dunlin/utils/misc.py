@@ -9,7 +9,9 @@ def undot(x, rename: dict=None) -> Union[str, list[str]]:
     def repl(x):
         name = x[0]
         
-        if name in rename:
+        if not rename:
+            return name.replace('.', '__dot__')
+        elif name in rename:
             return rename[name]
         else:
             return name.replace('.', '__dot__')

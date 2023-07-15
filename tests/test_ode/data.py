@@ -1,12 +1,16 @@
-m0 = {'states'    : {'x0': 1, 
-                     'x1': 0, 
-                     'x2': 0,
-                     'x3': 0
+m0 = {'states'    : {'x0': [1], 
+                     'x1': [0], 
+                     'x2': [0],
+                     'x3': [0]
                      },
-      'parameters': {'p0': 0.01, 
-                     'p1': 0.01
+      'parameters': {'p0': [0.01], 
+                     'p1': [0.01]
                      },
-      'reactions' : {'r0': ['x0 -> 2*x1', 'p0*x0']
+      'reactions' : {'r0': {'stoichiometry' : {'x0': -1, 
+                                               'x1':  2
+                                               }, 
+                            'rate'          : 'p0*x0'
+                            }
                      },
       'functions' : {'f0': ['a', 'b', 'a*b']},
       'variables' : {'v0': '-f0(p1, x2)'},

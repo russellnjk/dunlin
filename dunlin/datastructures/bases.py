@@ -265,7 +265,12 @@ class Table(ABC):
         elif type(mapping) == pd.Series:
             df = pd.DataFrame(mapping).T
         elif type(mapping) == dict:
-            df = pd.DataFrame(mapping)
+            try:
+                df = pd.DataFrame(mapping)
+            except Exception:
+                msg  = 'Could not convert input data for {self.itype} into a DataFrame.'
+                msg += 'You must ensure that your data can be directly passed into constructor for DataFrame.'
+                raise ValueError(msg)
         else:
             msg = f"Expected a DataFrame, Series or dict. Received {type(mapping)}"
             raise TypeError(msg)

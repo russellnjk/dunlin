@@ -21,7 +21,7 @@ class ODEModelData(ModelData):
                            'parameters' : [True, False, False],
                            'functions'  : [True, False],
                            'variables'  : [True, True],
-                           'reactions'  : [True, True, True],
+                           'reactions'  : [True, False, True, False],
                            'rates'      : [True, True],
                            'events'     : [True, False, True]
                            }
