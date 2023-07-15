@@ -10,7 +10,6 @@ from .stateparam import StateDict, ParameterDict
 from .ode import ODEModelData
 
 #For SpatialModel
-from .spatialreaction     import SpatialReaction,    SpatialReactionDict
 from .boundarycondition   import BoundaryConditions, BoundaryConditionDict
 from .compartment         import Compartment,        CompartmentDict
 from .masstransfer        import Advection,          AdvectionDict

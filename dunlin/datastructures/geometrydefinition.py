@@ -18,7 +18,7 @@ class GeometryDefinition(DataValue):
                  geometry_type            : Literal['csg', 'analytic', 'sampledfield', 'parametric'],
                  compartment              : str,
                  order                    : int,
-                 definition               : Any
+                 definition               : Any,
                  ) -> None:
         
         #Check compartment
@@ -46,22 +46,23 @@ class GeometryDefinition(DataValue):
             msg  = f'Invalid geometry_type {geometry_type}. Allowed values are: {temp}.'
             raise ValueError(msg)
         
-        #Parse the definition
-        method = getattr(self, '_parse_' + geometry_type, None)
-        
-        if not method:
+        #Parse and copy the definition
+        if geometry_type == 'csg':
+            definition_ = self._parse_csg(name, definition, coordinate_components)
+
+        else:
             msg  = f'Geometry type {geometry_type} not implemented yet. '
             msg += 'This should change in future versions.'
             raise NotImplementedError(msg)
         
-        definition_copy = method(name, definition, coordinate_components)
+        
         
         #Call the parent constructor
         super().__init__(all_names,
                          name, 
                          order         = order, 
                          compartment   = compartment,
-                         definition    = definition_copy, 
+                         definition    = definition_, 
                          geometry_type = geometry_type
                          )
         
@@ -71,9 +72,10 @@ class GeometryDefinition(DataValue):
     def _parse_csg(cls, 
                    name                  : str,
                    definition            : Union[list, str], 
-                   coordinate_components : CoordinateComponentDict
+                   coordinate_components : CoordinateComponentDict,
                    ) -> Union[list, str]:
-        
+    
+
         #Determine which primitives, operators and transformations are allowed
         ndims           = coordinate_components.ndims
         transformations = {'translate', 'scale', 'rotate'}

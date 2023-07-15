@@ -9,7 +9,7 @@ class ModelData(ABC):
     def from_all_data(cls, all_data, ref):
         ...
     
-    def __init__(self, exportable_attributes: list[Union[str, tuple[str]]]):
+    def _set_exportable_attributes(self, exportable_attributes: list[Union[str, tuple[str]]]):
         self.__exportable_attributes = tuple(exportable_attributes)
         
     ###########################################################################

@@ -1,5 +1,5 @@
 from numbers import Number
-from typing  import KeysView, ValuesView, ItemsView, Iterable
+from typing  import Iterable
 
 import dunlin.utils as ut
 from .bases               import DataDict, DataValue
@@ -37,7 +37,8 @@ class Domain(DataValue):
         
         #Check compartment
         if compartment not in compartments:
-            msg = f'Domain {name} was assigned to an undefined compartment: {compartment}.'
+            msg  = f'Error in {type(self).__name__} {name}.'
+            msg += f' Domain {name} was assigned to an undefined compartment: {compartment}.'
             raise ValueError(msg)
         
         domain2compartment[name] = compartment
@@ -46,19 +47,27 @@ class Domain(DataValue):
         spans = list(coordinate_components.spans.values())
         ndims = coordinate_components.ndims
         if len(internal_point) != coordinate_components.ndims:
-            msg  = f'Expected an internal point with {ndims} coordinates.'
+            msg  = f'Error in {type(self).__name__} {name}.'
+            msg += f' Expected an internal point with {ndims} coordinates.'
             msg += f' Received {internal_point}'
             raise ValueError(msg)
         
         for i, span in zip(internal_point, spans):
             if i <= span[0] or i >= span[1]:
-                msg  = 'Internal point must be lie inside coordinate components.'
+                msg  = f'Error in {type(self).__name__} {name}.'
+                msg += 'Internal point must be lie inside coordinate components.'
                 msg += ' Spans: {spans}. Received {internal_point}'
                 raise ValueError(msg)
         
         if tuple(internal_point) in internal_points:
-            msg = f'Repeated internal points {internal_point}.'
+            msg  = f'Error in {type(self).__name__} {name}.'
+            msg += f' Repeated internal points {internal_point}.'
             raise ValueError(msg)
+        
+        if any([not isinstance(i, Number) for i in internal_point]):
+            msg  = f'Error in {type(self).__name__} {name}.'
+            msg += 'Internal point can ony contain numbers.'
+            raise TypeError(msg)
             
         #Call the parent constructor
         super().__init__(all_names, 
@@ -66,6 +75,8 @@ class Domain(DataValue):
                          compartment    = compartment, 
                          internal_point = tuple(internal_point)
                          )
+        
+        internal_points[tuple(internal_point)] = name
 
     def to_dict(self) -> dict:
         dct = {'compartment'    : self.compartment,
@@ -85,7 +96,7 @@ class DomainDict(DataDict):
                  ):
         
         domain2compartment = {}
-        internal_points    = set()
+        internal_points    = {}
         super().__init__(all_names,
                          mapping, 
                          coordinate_components, 
@@ -93,6 +104,6 @@ class DomainDict(DataDict):
                          domain2compartment,
                          internal_points
                          )
-        
+        self.internal_points = internal_points
         
         

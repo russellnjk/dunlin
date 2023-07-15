@@ -78,22 +78,22 @@ class ODEModelData(ModelData):
         #Call the parent constructor to specify which attributes are exportable
         #This allows the input to be reconstructed assuming no modification
         #after instantiation
-        super().__init__(['ref', 
-                          'states', 
-                          'parameters', 
-                          'functions', 
-                          'variables',
-                          'reactions',
-                          'rates',
-                          'events',
-                          'units',
-                          'compartments',
-                          'meta',
-                          'int_args',
-                          'sim_args',
-                          'opt_args'
-                          ]
-                         )
+        super()._set_exportable_attributes(['ref', 
+                                            'states', 
+                                            'parameters', 
+                                            'functions', 
+                                            'variables',
+                                            'reactions',
+                                            'rates',
+                                            'events',
+                                            'units',
+                                            'compartments',
+                                            'meta',
+                                            'int_args',
+                                            'sim_args',
+                                            'opt_args'
+                                            ]
+                                           )  
         
         #Set up the core data structures
         all_names = self._init_core(ref,
@@ -120,15 +120,15 @@ class ODEModelData(ModelData):
         self.all_names = frozenset(all_names)
     
     def _init_core(self, 
-                   ref          : str, 
-                   states       : Union[dict, pd.DataFrame], 
-                   parameters   : Union[dict, pd.DataFrame], 
-                   functions    : dict = None, 
-                   variables    : dict = None, 
-                   reactions    : dict = None, 
-                   rates        : dict = None, 
-                   events       : dict = None, 
-                   units        : dict = None,
+                   ref        : str, 
+                   states     : Union[dict, pd.DataFrame], 
+                   parameters : Union[dict, pd.DataFrame], 
+                   functions  : dict = None, 
+                   variables  : dict = None, 
+                   reactions  : dict = None, 
+                   rates      : dict = None, 
+                   events     : dict = None, 
+                   units      : dict = None,
                    ) -> set:
         
         #Set up the data structures

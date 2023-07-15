@@ -364,7 +364,6 @@ class Table(ABC):
             
     def to_dunl_elements(self, n_format: Callable=sfd.format_num) -> str:
         #kwargs are ignored
-        
         df = self._df
         if self.is_numeric:
             return sfd.write_numeric_df(df, n_format)
