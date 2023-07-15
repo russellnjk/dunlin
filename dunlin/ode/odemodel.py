@@ -26,8 +26,7 @@ class ODEModel(BaseModel):
     
     @classmethod
     def from_data(cls, all_data: dict, ref: str) -> 'ODEModel':
-        flattened = cmp.flatten_ode(all_data, ref)
-        
+        flattened = cmp.flatten_model(all_data, ref, dst.ODEModelData.required_fields)
         return cls(**flattened)
     
     def __init__(self, 
@@ -60,7 +59,6 @@ class ODEModel(BaseModel):
                                       events     = events,
                                       meta       = meta
                                       )
-        
         super().__init__(model_data, ref, tspans, int_args, dtype)
         
         model_data = self._model_data

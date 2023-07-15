@@ -84,6 +84,7 @@ def make_rhsdct(ode_data):
     d_states   = [ut.diff(ut.undot(x)) for x in ode_data.states]
     d_states   = ', '.join(d_states)
     return_val = f'\treturn __array([{d_states}])'
+
     to_return  = [*ode_data.states, 
                   *ode_data.parameters,
                   *ode_data.variables,
@@ -302,6 +303,10 @@ def reactions2code(ode_data: ODEModelData) -> str:
         for state_name, n in reaction.stoichiometry.items():
             lhs = f'{ut.diff(state_name)}'
             rhs = f'{n}*{reaction_name}'
+            
+            if reaction.bounds:
+                lb, ub = reaction.bounds
+                rhs    = f'__min(ub, __max(lb, {rhs}))'
             
             reaction_code += f'\t{lhs} = {rhs}\n' 
     

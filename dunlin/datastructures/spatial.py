@@ -43,23 +43,23 @@ class SpatialModelData(ODEModelData):
     case for ODEModelData.
         
     '''
+    
+    required_fields = {'states'              : [True, False, False],
+                       'parameters'          : [True, False, False],
+                       'functions'           : [True, False],
+                       'variables'           : [True, True],
+                       'reactions'           : [True, False, True, True],
+                       'rates'               : [True, True],
+                       'events'              : [True, False, True],
+                       'compartments'        : [True, True],
+                       'advection'           : [True, True],
+                       'diffusion'           : [True, True],
+                       'boundary_conditions' : [True, False, False, False],
+                       }
+    
     @classmethod
     def from_all_data(cls, all_data, ref):
-        required_fields = {'states'              : [True, False, False],
-                           'parameters'          : [True, False, False],
-                           'functions'           : [True, False],
-                           'variables'           : [True, True],
-                           'reactions'           : [True, True, True],
-                           'rates'               : [True, True],
-                           'events'              : [True, False, True],
-                           'compartments'        : [True, True],
-                           'advection'           : [True, True],
-                           'diffusion'           : [True, True],
-                           'boundary_conditions' : [True, False, False, False],
-                           }
-        
-        flattened  = cmp.flatten_model(all_data, ref, required_fields)
-        
+        flattened  = cmp.flatten_model(all_data, ref, cls.required_fields)
         return cls(**flattened)
     
     def __init__(self,

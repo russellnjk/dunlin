@@ -23,10 +23,6 @@ m0 = {'states'    : {'x0': [1],
                      },
       }
 
-# {'x2': 1, 
-#            'x3': 1
-#            }
-
 #m1 uses m0 entirely
 #Use this to test if child items are created correctly
 m1 = {'states'    : {'x0' : 0

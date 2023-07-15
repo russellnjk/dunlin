@@ -7,8 +7,16 @@ m0 = {'states'     : {'x0': {'c0': 1},
       'parameters' : {'p0': {'c0': 0.01},
                       'p1': {'c0': 0.01}
                       },
-      'reactions'  : {'r0': ['x0 -> x1', 'p0*x0'],
-                      'r1': ['x1 -> x2', 'p1*x1']
+      'reactions'  : {'r0': {'stoichiometry': {'x0' : -1,
+                                               'x1' :  1
+                                               },
+                             'rate'         : 'p0*x0'
+                             },
+                      'r1': {'stoichiometry': {'x1' : -1,
+                                               'x2' :  1
+                                               },
+                             'rate'         : 'p1*x1'
+                             },
                       },
       'events'     : {'e0': ['time==0', ['x0 = 3']],
                       'e6': ['time==800', ['x0 = 3'], 0, True, 1],

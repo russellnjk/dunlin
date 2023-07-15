@@ -15,19 +15,18 @@ from .stateparam import StateDict, ParameterDict
 from .modeldata  import ModelData
 
 class ODEModelData(ModelData):
+    required_fields = {'states'     : [True, False, False],
+                       'parameters' : [True, False, False],
+                       'functions'  : [True, False],
+                       'variables'  : [True, True],
+                       'reactions'  : [True, False, True, False],
+                       'rates'      : [True, True],
+                       'events'     : [True, False, True]
+                       }
+    
     @classmethod
     def from_all_data(cls, all_data, ref):
-        required_fields = {'states'     : [True, False, False],
-                           'parameters' : [True, False, False],
-                           'functions'  : [True, False],
-                           'variables'  : [True, True],
-                           'reactions'  : [True, False, True, False],
-                           'rates'      : [True, True],
-                           'events'     : [True, False, True]
-                           }
-        
-        flattened  = cmp.flatten_model(all_data, ref, required_fields)
-        
+        flattened  = cmp.flatten_model(all_data, ref, cls.required_fields)
         return cls(**flattened)
     
     @classmethod
@@ -69,6 +68,7 @@ class ODEModelData(ModelData):
                  events       : dict = None, 
                  units        : dict = None,
                  compartments : dict = None,
+                 tspans       : dict = None,
                  meta         : dict = None,
                  int_args     : dict = None,
                  sim_args     : dict = None,
@@ -115,7 +115,6 @@ class ODEModelData(ModelData):
         self.sim_args     = self.deep_copy('sim_args', sim_args)
         self.opt_args     = self.deep_copy('opt_args', opt_args)
          
-        
         #Freeze all_names and save it
         self.all_names = frozenset(all_names)
     
@@ -129,20 +128,22 @@ class ODEModelData(ModelData):
                    rates      : dict = None, 
                    events     : dict = None, 
                    units      : dict = None,
+                   tspans     : dict = None
                    ) -> set:
         
         #Set up the data structures
         all_names = set()
         
-        self.ref          = ref
-        self.states       = StateDict(all_names, states)
-        self.parameters   = ParameterDict(all_names, parameters)
-        self.functions    = FunctionDict(all_names, functions)
-        self.variables    = VariableDict(all_names, variables)
-        self.reactions    = ReactionDict(all_names, self.states, reactions)
-        self.rates        = RateDict(all_names, self.states, rates)
-        self.events       = EventDict(all_names, events)
-        self.units        = None if units is None else UnitsDict(self.states, parameters, units)
+        self.ref        = ref
+        self.states     = StateDict(all_names, states)
+        self.parameters = ParameterDict(all_names, parameters)
+        self.functions  = FunctionDict(all_names, functions)              
+        self.variables  = VariableDict(all_names, variables)              
+        self.reactions  = ReactionDict(all_names, self.states, reactions) 
+        self.rates      = RateDict(all_names, self.states, rates)         
+        self.events     = EventDict(all_names, events)                    
+        self.units      = UnitsDict(self.states, parameters, units) if units     else None
+        self.tspans     = self.deep_copy('tspans', tspans)
         
         #Check no overlap between rates and reactions
         if self.rates and self.reactions:

@@ -129,7 +129,7 @@ class DataDict(ABC):
                  ) -> None:
         
         #Check mapping and edge cases
-        if type(mapping) != dict:
+        if type(mapping) != dict and mapping is not None:
             msg = f'Expected a dict. Received {type(mapping)}.'
             raise TypeError(msg)
         elif not mapping:
@@ -318,7 +318,7 @@ class Table(ABC):
     #Representation
     ###########################################################################
     def __str__(self) -> str:
-        return self.to_dunl()
+        return f'{type(self).__name__}{tuple(self.names)}'
     
     def __repr__(self) -> str:
         return f'{type(self).__name__}{tuple(self.names)}'
