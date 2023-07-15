@@ -59,11 +59,16 @@ class ODEModel(BaseModel):
                                       events     = events,
                                       meta       = meta
                                       )
-        super().__init__(model_data, ref, tspans, int_args, dtype)
         
-        model_data = self._model_data
+        (rhs0, rhs1), (rhsdct0, rhsdct1), event_objects = odc.make_ode_callables(model_data)
         
-        (rhs0, rhs1), (rhsdct0, rhsdct1), events = odc.make_ode_callables(model_data)
+        super().__init__(model_data = model_data, 
+                         ref        = ref, 
+                         tspans     = tspans, 
+                         int_args   = int_args, 
+                         dtype      = dtype, 
+                         events     = event_objects
+                         )
         
         self._rhs_functions    = rhs0, rhs1
         self._rhsdct_functions = rhsdct0, rhsdct1

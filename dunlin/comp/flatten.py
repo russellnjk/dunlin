@@ -10,9 +10,63 @@ import dunlin.utils as ut
 def dot(x          : Union[dict, list, str, Number], 
         child_name : str, 
         rename     : dict, 
-        delete     : set,
+        delete     : set[str],
         recurse    : list[bool]
-        ) -> Union[str, list[str], dict]:
+        ) -> Union[list, dict]:
+    '''
+    This function recursively performs rename/delete operations on the 
+    argument `x`. As the names imply, the `rename` and `delete` arguments 
+    specify the information related to renaming and deletion. When a list or 
+    dictionary is encountered in `x`, the function is called recursively with 
+    that list/dictionary. 
+    
+    The behaviour of the function at each level is controlled by the `recurse` 
+    argument. At each level, only the first value in `recurse` is used; the 
+    remainder (i.e. `recurse[1:]`) is passed to the next level of recursion.
+    
+    Assume that `x` is a dictionary with multiple layers. If the first value of 
+    `recurse `is `True`, the rename/delete operations are applied to the 
+    first layer. Otherwise the first layer remains the same. If the second value 
+    of `recurse` is `True`, the rename/delete operations are also applied to 
+    the second layer. You get the idea. This also means that the length of 
+    `recurse` must equal the depth of the deepest branch of `x`. 
+    
+    Lists are parsed in a similar way but they are treated as values in 
+    dictionaries; each element in the list is passed into the next recursion 
+    level with `recurse[1:]`. In other words `x=["a", "b", "c"]` requires 
+    `recurse` to have a length of 2, similar to `x={"t": "a", "u": "b", "v": "c"}`. 
+    However, the first value no longer matters since the list has no keys. 
+    
+    It is not possible to use `recurse` in a way to create unique behaviour for 
+    each branch of the dictionary. Introducing such a feature would complicate
+    the algorithm unecessarily. Downstream development should work with data 
+    formats that only require uniform rules for level of nesting.
+    
+    From the front-end, x can only be a dictionary or list. However, during 
+    recursion, strings and numbers will also be passed in. These two types of 
+    data will always be renamed.
+    
+    Parameters
+    ----------
+    x : Union[dict, list]
+        The container containing child data which has keys and values that 
+        require renaming/deletion before integrating with the parent model.
+    child_name : str
+        Needed to generate detailed error messages.
+    rename : dict
+        Maps a name in the data (if found) to a new name during substitution.
+    delete : set
+        A set of names not to include when flattening.
+    recurse : list[bool]
+        Determines the levels of recurions where renaming/deletion are to be 
+        carried out.
+
+    Returns
+    -------
+    (Union[list, dict])
+        A dictionary or list with the elements renamed/deleted.
+
+    '''
     
     pattern = '\.{0,1}[a-zA-Z_][\w_]*'
     def repl(x):
@@ -33,35 +87,28 @@ def dot(x          : Union[dict, list, str, Number],
     
     if type(x) == dict:
         args = child_name, rename, delete, recurse[1:]
+
         if recurse[0]:
             return {dot(k, *args): dot(v, *args) for k, v in x.items() if k not in delete}
         else:
             return {k: dot(v, *args) for k, v in x.items() if k not in delete}
         
     elif type(x) == list:
-        if recurse[0]:
-            result = []
-            for i in x:
-                if not isinstance(i, (Number, str)):
-                    msg  = 'Encountered an unexpected type when flattening model.'
-                    msg += ' Elements in lists must be strings and numbers.'
-                    msg += ' Otherwise, use a dictionary.'
-                    msg += f' Received: {x}'
-                    raise TypeError(msg)
-                    
-                if i in delete:
-                    continue
-                else:
-                    i_ = sub(i)
-                
-                result.append(i_)
+        args   = child_name, rename, delete, recurse[1:]
+        result = []
+        for i in x:
+            if not isinstance(i, (Number, str, list, tuple, dict)):
+                msg  = 'Encountered an unexpected type when flattening model.'
+                msg += f' Received: {x}'
+                raise TypeError(msg)    
+            else:
+                i_ = dot(i, *args)
             
-            return result
-        else:
-            return list(x)
+            result.append(i_)
+         
+        return result
     
     elif type(x) == str:
-        
         return sub(x)
     
     elif isinstance(x, Number):

@@ -29,7 +29,8 @@ def make_ode_callables(ode_data: dict) -> tuple[tuple[callable], tuple[callable]
 ###############################################################################
 rhs_functions    = {'__array' : np.array, 
                     '__min'   : np.minimum, 
-                    '__max'   : np.maximum
+                    '__max'   : np.maximum,
+                    '__zeros' : np.zeros
                     }
 rhsdct_functions = rhs_functions.copy()
 
@@ -96,7 +97,7 @@ def make_rhsdct(ode_data):
     
     #Make full code
     code = [definition,
-            states2code(ode_data),
+            states2code(ode_data, array=True),
             parameters2code(ode_data),
             functions2code(ode_data), 
             variables2code(ode_data), 
@@ -204,7 +205,7 @@ def make_events(ode_data: ODEModelData) -> list[Event]:
 ###############################################################################
 #Code Generation for Integration
 ###############################################################################
-def states2code(ode_data: ODEModelData) -> str:
+def states2code(ode_data: ODEModelData, array:bool=False) -> str:
     global signature
     #Get the signature
     t, states, parameters = signature
@@ -216,7 +217,10 @@ def states2code(ode_data: ODEModelData) -> str:
     
     for i, state_name in enumerate(state_names):
         state_code  += f'\t{state_name} = states[{i}]\n'
-        diff_code   += f'\t{ut.diff(state_name)} = 0\n'
+        if array:
+            diff_code   += f'\t{ut.diff(state_name)} = __zeros(len({state_name}))\n'
+        else:
+            diff_code   += f'\t{ut.diff(state_name)} = 0\n'
     
     state_code += '\n' + diff_code
     state_code  = ut.undot(state_code) 

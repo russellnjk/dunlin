@@ -194,7 +194,8 @@ class BaseModel(ABC):
     @tspans.setter
     def tspans(self, scenario2tspan: dict) -> None:
         if scenario2tspan is None:
-            self._tspan = {}
+            self._tspans = {}
+            return
         
         elif not ut.isdictlike(scenario2tspan):
             raise TypeError('tspan must be a dict or None.')

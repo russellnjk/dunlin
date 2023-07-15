@@ -31,11 +31,11 @@ class Event():
         self.ref    = ref
         
         #For event assignment
-        self.trigger_function = trigger_function
-        self.assignment_function     = assignment_function
-        self.delay        = delay
-        self.persistent   = persistent
-        self.priority     = priority
+        self.trigger_function    = trigger_function
+        self.assignment_function = assignment_function
+        self.delay               = delay
+        self.persistent          = persistent
+        self.priority            = priority
         
         #For tracking 
         self.triggered    = False
