@@ -300,19 +300,19 @@ def reactions2code(ode_data: ODEModelData) -> str:
     for reaction_name, reaction in reactions.items():
         rate = reaction.rate
         
+        if reaction.bounds:
+            lb, ub = reaction.bounds
+            rate   = f'__min(ub, __max(lb, {rate}))'
+            
         #Update reaction code
         reaction_code += f'\t{reaction_name} = {rate}\n' 
-        
+
         #Update differentials
         for state_name, n in reaction.stoichiometry.items():
             lhs = f'{ut.diff(state_name)}'
             rhs = f'{n}*{reaction_name}'
             
-            if reaction.bounds:
-                lb, ub = reaction.bounds
-                rhs    = f'__min(ub, __max(lb, {rhs}))'
-            
-            reaction_code += f'\t{lhs} = {rhs}\n' 
+            reaction_code += f'\t{lhs} += {rhs}\n' 
     
     reaction_code = ut.undot(reaction_code)
     return reaction_code

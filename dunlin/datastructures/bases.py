@@ -139,18 +139,22 @@ class DataDict(ABC):
         #Instantiate itype for each item in the mapping
         _data = {}
         for name, kwargs in mapping.items():
-            if type(kwargs) == dict:
-                item = self.itype(ext_namespace, *args, name, **kwargs)
-            
-            elif type(kwargs) == list or type(kwargs) == tuple:
-                item = self.itype(ext_namespace, *args, name, *kwargs)
-            
-            elif isinstance(kwargs, (Number, str, datetime)):
-                item = self.itype(ext_namespace, *args, name, kwargs)
-            
-            else:
-                msg = f'Mapping values must be of type list or dict. Received {type(kwargs)}.'
-                raise TypeError(msg)
+            try:
+                if type(kwargs) == dict:
+                    item = self.itype(ext_namespace, *args, name, **kwargs)
+                
+                elif type(kwargs) == list or type(kwargs) == tuple:
+                    item = self.itype(ext_namespace, *args, name, *kwargs)
+                
+                elif isinstance(kwargs, (Number, str, datetime)):
+                    item = self.itype(ext_namespace, *args, name, kwargs)
+                
+                else:
+                    msg = f'Mapping values must be of type list or dict. Received {type(kwargs)}.'
+                    raise TypeError(msg)
+            except Exception as e:
+                msg = f'An error ocurred when instantiating a {self.itype.__name__}.'
+                raise ExceptionGroup(msg, [e])
                 
             _data[name] = item
           

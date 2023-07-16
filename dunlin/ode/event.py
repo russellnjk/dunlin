@@ -84,10 +84,10 @@ class Event():
     
     def delay_protocol(self, t, events_):
         t_           = t + self.delay
-        self.timer   = Event(name         = f'{self.name}, {self.delay}', 
-                             trigger_function = lambda t, *args: t - t_,
-                             execute      = self.execute,
-                             _parent      = self
+        self.timer   = Event(name                = f'{self.name}, {self.delay}', 
+                             trigger_function    = lambda t, *args: t - t_,
+                             assignment_function = self.execute,
+                             _parent             = self
                              )
         self.timer.remove = True
         events_.append(self.timer)

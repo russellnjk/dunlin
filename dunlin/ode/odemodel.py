@@ -9,8 +9,6 @@ import dunlin.utils          as ut
 import dunlin.comp           as cmp
 import dunlin.datastructures as dst
 import dunlin.ode.ode_coder  as odc
-import dunlin.ode.event      as oev
-import dunlin.ode.ivp        as ivp
 import dunlin.utils_plot     as upp
 from .basemodel import BaseModel
 
@@ -97,10 +95,6 @@ class ODEModel(BaseModel):
         
     def simulate(self, **kwargs):
         return ODESimResult(self, **kwargs)
-        
-class ModelMismatchError(Exception):
-    def __init__(self, expected, received):
-        super().__init__(f'Required keys: {list(expected)}. Recevied: {list(received)}')
         
 ###############################################################################
 #Integration Results
