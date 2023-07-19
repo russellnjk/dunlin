@@ -7,9 +7,9 @@ from dunlin.datastructures.gridconfig          import GridConfig
 from dunlin.datastructures.geometrydefinition  import GeometryDefinition,  GeometryDefinitionDict
 from dunlin.datastructures.boundarycondition   import BoundaryConditions,  BoundaryConditionDict
 
-from dunlin.datastructures.compartment         import Compartment,         CompartmentDict
-from dunlin.datastructures.domain              import Domain,              DomainDict
-from dunlin.datastructures.adjacentdomain      import AdjacentDomainDict
+from dunlin.datastructures.domaintype          import (DomainType,  DomainTypeDict,
+                                                       SurfaceType, SurfaceTypeDict
+                                                       )
 
 from dunlin.datastructures.masstransfer        import (Advection, AdvectionDict, 
                                                        Diffusion, DiffusionDict
@@ -71,7 +71,7 @@ data0 = {'dmnt0': {'dmn0': [2, 2]
                    }
           }
 
-data0  = {'x0c': [1], 'x0e': [1]}
+data0  = {'x0c': [1], 'x0e': [1], 'x0s': [1]}
 xs     = StateDict(all_names, data0)
 
 data0 = {'k0': [0.05], 'k1': [0.005], 
@@ -92,20 +92,29 @@ data0 = {'trans': {'stoichiometry' : {'x0c' : -1,
 rxns  = ReactionDict(all_names, xs, data0)
 
 ###############################################################################
-#Test Compartment
+#Test Domain Type
 ###############################################################################
-data0 = {'cpt0': ['x0c'],
-         'cpt1': ['x0e'],
+data0 = {'dmnt0': {'states'  : ['x0c'],
+                   'domains' : {'dmn0' : [2, 2]}
+                   },
+         'dmnt1':  {'states'  : ['x0e'],
+                    'domains' : {'dmn1' : [2, 3]}
+                    },
          }
 
-C = CompartmentDict
+C = DomainTypeDict
 
 #Test instantiation
-F0 = C(all_names, xs, data0)
+F0 = C(all_names, ccd, xs, data0)
 
-data0_ = {'cpt0': ['x0c'],
-          'cpt1': ['x0x'],
+data0_ = {'dmnt0': {'states'  : ['xx'],
+                    'domains' : {'dmn0' : [2, 2]}
+                    },
+          'dmnt1':  {'states'  : ['x0e'],
+                     'domains' : {'dmn1' : [2, 3]}
+                     },
           }
+
 
 try:
     F0 = C(set(), xs, data0_)
@@ -115,7 +124,7 @@ else:
     assert False
     
 #Test access
-f0 = F0['cpt0']
+f0 = F0['dmnt0']
 
 #Test export/roundtrip
 data1 = F0.to_dict()
@@ -126,80 +135,41 @@ assert data2 == data1 == data0
 ###############################################################################
 #Create Stuff for downstream tests
 ###############################################################################
-cpts = F0
+dmnts = F0
 
 ###############################################################################
-#Test Domain
+#Test Surface Type
 ###############################################################################
-data0 = {'dmn0': {'compartment'    : 'cpt0',
-                  'internal_point' : [2, 2]
-                   },
-         'dmn1': {'compartment'    : 'cpt1',
-                  'internal_point' : [2, 3]
-                  },
-          }
+data0 = {'dmnt0_dmnt1': {'states'   : ['x0s'],
+                         'surfaces' : {'sfc0': ['dmn0', 'dmn1']}
+                         }
+         }
 
-C = DomainDict
+C = SurfaceTypeDict
 
 #Test instantiation
-F0 = C(all_names, ccd, cpts, data0)
+F0 = C(all_names, xs, dmnts, data0)
 
-data0_ = {'dmn0': {'compartment'    : 'cpt0',
-                  'internal_point' : [2, 2, 2]
-                   },
-          'dmn1': {'compartment'    : 'cpt1',
-                   'internal_point' : [2, 3]
-                   },
+data0_ = {'dmnt0_dmnt1': {'states'   : ['x0s', 'x0e'],
+                          'surfaces' : {'sfc0': ['dmn0', 'dmn1']}
+                          }
           }
 
 try:
-    F0 = C(set(), ccd, data0_)
+    F0 = C(all_names, xs, dmnts, data0)
 except:
     assert True
 else:
     assert False
 
 #Test access
-f0 = F0['dmn0']
+f0 = F0['dmnt0_dmnt1']
 
 #Test export/roundtrip
 data1 = F0.to_dict()
 dunl = F0.to_dunl_elements()
 data2 = rdn.read_dunl_code(';A\n' + dunl)['A']
 assert data2 == data1 == data0 
-
-###############################################################################
-#Create Stuff for downstream tests
-###############################################################################
-dmns = F0
-
-###############################################################################
-#Test AdjacentDomains
-###############################################################################
-data0 = {'interface': ['dmn0', 'dmn1']}
-
-C = AdjacentDomainDict
-
-#Test instantiation
-F0 = C(all_names, ccd, dmns, data0)
-
-data0_ = {'interface': ['dmn0', 'dmn2']}
-
-try:
-    F0 = C(all_names, ccd, dmns, data0_)
-except:
-    assert True
-else:
-    assert False
-    
-#Test access
-f0 = F0['interface']
-
-#Test export/roundtrip
-data1 = F0.to_dict()
-dunl = F0.to_dunl_elements()
-data2 = rdn.read_dunl_code(';A\n' + dunl)['A']
-assert data2 == data1 == data0
 
 ###############################################################################
 #Test GridConfig
@@ -213,9 +183,6 @@ data0 = {'step'     : 0.02,
                                }
                        }
          }
-# data0 = {'gr_main': {'config' : [0.02, [0, 10], [0, 10], [0, 10]], 'children': ['gr0']},
-#          'gr0'    : {'config' : [0.01, [4, 6],  [4, 6],  [4, 6]]}
-#          }
 
 C = GridConfig
 
@@ -262,12 +229,12 @@ tank    = ['translate', 5, 5,
            ]
 
 data0 = {'myshape': {'geometry_type': 'csg',
-                     'compartment'  : 'cpt0',
+                     'domain_type'  : 'dmnt0',
                      'order'        : 1,
                      'definition'   : myshape
                      },
           'tank'  : {'geometry_type': 'csg',
-                     'compartment'  : 'cpt0',
+                     'domain_type'  : 'dmnt0',
                      'order'        : 0,
                      'definition'   : tank
                      }
@@ -276,22 +243,22 @@ data0 = {'myshape': {'geometry_type': 'csg',
 C = GeometryDefinitionDict
 
 #Test instantiation
-F0 = C(all_names, ccd, cpts, data0)
+F0 = C(all_names, ccd, dmnts, data0)
 
 data0_ = {'myshape': {'geometry_type': 'csg',
-                      'compartment'  : 'cpt0',
+                      'domain_type'  : 'dmnt0',
                       'order'        : 1,
                       'definition'   : myshape
                       },
           'tank'   : {'geometry_type': 'csg',
-                      'compartment'  : 'cpt0',
+                      'domain_type'  : 'dmnt0',
                       'order'        : 1,
                       'definition'   : tank
                       }
           }
 
 try:
-    F0 = C(all_names, ccd, cpts, data0)
+    F0 = C(all_names, ccd, dmnts, data0)
 except:
     assert True
 else:

@@ -11,14 +11,11 @@ from .ode import ODEModelData
 
 #For SpatialModel
 from .boundarycondition   import BoundaryConditions, BoundaryConditionDict
-from .compartment         import Compartment,        CompartmentDict
+from .domaintype          import DomainType,         DomainTypeDict
 from .masstransfer        import Advection,          AdvectionDict
 from .masstransfer        import Diffusion,          DiffusionDict
-from .gridconfig          import GridConfig#,         GridConfigDict
-from .domain              import Domain,             DomainDict
+from .gridconfig          import GridConfig
 from .geometrydefinition  import GeometryDefinition, GeometryDefinitionDict
-
-from .adjacentdomain      import AdjacentDomainDict
 from .coordinatecomponent import CoordinateComponentDict
 
 

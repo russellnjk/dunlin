@@ -57,10 +57,6 @@ advection = {'B' : 'F_B',
              'D' : 1
              }
 
-compartments = {'cytosol' : ['A', 'B'],
-                'medium'  : ['C', 'D']
-                }
-
 boundary_conditions = {'C': {'x' : {'min' : [1, 'Neumann'  ],       
                                     'max' : [-1, 'Neumann' ]
                                     },
@@ -78,25 +74,26 @@ grid_config = {'step' : 1,
                'max'  : [4, 4],
                }
 
-domains = {'medium0'  : {'compartment'    : 'medium',
-                         'internal_point' : [2, 3]
-                         },
-           'cytosolo' : {'compartment'    : 'cytosol',
-                         'internal_point' : [3, 3]
-                         }
-           
-           }
+domain_types = {'cytosol' : {'states'  : ['A', 'B'],
+                             'domains' : {'cytosol0' : [3, 3]}
+                             },
+                'medium'  : {'states'  : ['C', 'D'],
+                             'domains' : {'medium0' : [2, 3]}
+                             },
+                }
 
-adjacent_domains = {'membrane': ['cytosol', 'medium']
-                    }
+#No states associated with any surfaces
+surface_types = {'membrane': {'surfaces' : {'membrane0' : ['cytosol', 'medium']}
+                              }
+                 }
 
 geometry_definitions = {'cell': {'geometry_type' : 'csg',
-                                 'compartment'   : 'cytosol',
+                                 'domain_type'   : 'cytosol',
                                  'order'         : 1,
                                  'definition'    : ['translate', 2, 2, 'square']
                                  },
                         'field': {'geometry_type' : 'csg',
-                                  'compartment'   : 'medium',
+                                  'domain_type'   : 'medium',
                                   'order'         : 0,
                                   'definition'    : ['translate', 2, 2, ['scale', 2, 2, 'square']]
                                   }
@@ -110,12 +107,11 @@ M0 = {'states'                : states,
       'rates'                 : rates,
       'diffusion'             : diffusion,
       'advection'             : advection,
-      'compartments'          : compartments,
       'boundary_conditions'   : boundary_conditions,
       'coordinate_components' : coordinate_components,
       'grid_config'           : grid_config,
-      'domains'               : domains,
-      'adjacent_domains'      : adjacent_domains,
+      'domain_types'          : domain_types,
+      'surface_types'         : surface_types,
       'geometry_definitions'  : geometry_definitions,
       'events'                : events 
       }

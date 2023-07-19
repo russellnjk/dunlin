@@ -67,7 +67,7 @@ class ODEModelData(ModelData):
                  rates        : dict = None, 
                  events       : dict = None, 
                  units        : dict = None,
-                 compartments : dict = None,
+                 domain_types : dict = None,
                  tspans       : dict = None,
                  meta         : dict = None,
                  int_args     : dict = None,
@@ -87,7 +87,7 @@ class ODEModelData(ModelData):
                                             'rates',
                                             'events',
                                             'units',
-                                            'compartments',
+                                            'domain_types',
                                             'meta',
                                             'int_args',
                                             'sim_args',
@@ -109,7 +109,7 @@ class ODEModelData(ModelData):
         
         #Set up the remainder
         #We expect compartments to be processed differently in spatial
-        self.compartments = compartments
+        self.domain_types = self.deep_copy('compartments_types', domain_types)
         self.meta         = self.deep_copy('meta', meta)
         self.int_args     = self.deep_copy('int_args', int_args)
         self.sim_args     = self.deep_copy('sim_args', sim_args)

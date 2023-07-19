@@ -4,16 +4,15 @@ from typing import Any, Literal, Union
 import dunlin.utils             as ut
 from .bases               import DataValue, DataDict
 from .coordinatecomponent import CoordinateComponentDict
-from .compartment         import CompartmentDict
-from .domain              import DomainDict
+from .domaintype         import DomainTypeDict
 
 
 class GeometryDefinition(DataValue):
     '''
     This class differs from its SBML counterpart in several ways.
-        1. Compartments
-        Dunlin merges domain types and compartments. Geometry definitions are 
-        thus associated with compartments instead of domain types. 
+        1. domain_types
+        Dunlin merges domain types and domain_types. Geometry definitions are 
+        thus associated with domain_types instead of domain types. 
         2. The `definition` attribute
         Different types of geometry definitions have differents data formats. For 
         example, CSG in SBML spatial makes use of CSGNodes which are obviously 
@@ -34,19 +33,19 @@ class GeometryDefinition(DataValue):
     def __init__(self,
                  all_names                : set(),
                  coordinate_components    : CoordinateComponentDict,
-                 compartments             : CompartmentDict,
+                 domain_types             : DomainTypeDict,
                  order2geometrydefinition : dict,
                  name                     : str,
                  geometry_type            : Literal['csg', 'analytic', 'sampledfield', 'parametric'],
-                 compartment              : str,
+                 domain_type              : str,
                  order                    : int,
                  definition               : Any,
                  ) -> None:
         
-        #Check compartment
-        if compartment not in compartments:
-            msg  = f'Compartment {compartment} not found in domain types. '
-            msg += f'Available compartments: {list(compartments.keys())}.'
+        #Check domain_type
+        if domain_type not in domain_types:
+            msg  = f'domain_type {domain_type} not found in domain types. '
+            msg += f'Available domain_types: {list(domain_types.keys())}.'
             raise ValueError(msg)
         
         #Check order
@@ -83,7 +82,7 @@ class GeometryDefinition(DataValue):
         super().__init__(all_names,
                          name, 
                          order         = order, 
-                         compartment   = compartment,
+                         domain_type   = domain_type,
                          definition    = definition_, 
                          geometry_type = geometry_type
                          )
@@ -192,7 +191,7 @@ class GeometryDefinition(DataValue):
         
     def to_dict(self) -> dict:
         dct = {'geometry_type' : self.geometry_type,
-               'compartment'   : self.compartment,
+               'domain_type'   : self.domain_type,
                'order'         : self.order,
                'definition'    : self.definition,
                }
@@ -206,7 +205,7 @@ class GeometryDefinitionDict(DataDict):
     def __init__(self, 
                  all_names             : set, 
                  coordinate_components : CoordinateComponentDict,
-                 compartments          : CompartmentDict, 
+                 domain_types          : DomainTypeDict, 
                  mapping               : dict
                  ):
         
@@ -215,7 +214,7 @@ class GeometryDefinitionDict(DataDict):
         super().__init__(all_names, 
                          mapping, 
                          coordinate_components, 
-                         compartments, 
+                         domain_types, 
                          order2geometrydefinition
                          )
         

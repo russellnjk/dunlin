@@ -26,3 +26,4 @@ The flow of information is thus as follows:
 `Raw data <-> Model data containing data structures <-> Model for simulation and analysis`
 
 Note: To streamline the implementation of each class, the submodule contains base classes which serve a templates.
+

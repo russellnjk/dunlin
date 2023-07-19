@@ -3,26 +3,19 @@ from numbers import Number
 import dunlin.utils as ut
 from .bases               import DataDict, DataValue
 from .coordinatecomponent import CoordinateComponentDict
-from .compartment         import CompartmentDict
+from .domaintype          import DomainTypeDict
+
+'''
+Refer to documentation for domain type for details on the differences from 
+SBML.
+'''
 
 class Domain(DataValue):
-    '''
-    Differences with SBML Spatial:
-        1. Domain types and compartments have been merged as explained in the 
-        documentation for compartments. In dunlin, this class now takes over 
-        some of the information handled by SBML domain types.
-        
-        2. Only one internal point is accepted. This avoids unecessary checking.
-        
-        3. Does not implement SpatialSymbolReference for domain types. This is 
-        not something that should change with time so as to avoid unecessary 
-        complexity.
-    '''
     def __init__(self,
                  all_names             : set, 
                  coordinate_components : CoordinateComponentDict,
-                 compartments          : CompartmentDict,
-                 domain2compartment    : dict[str, str],
+                 domaintypes           : DomainTypeDict,
+                 domain2domaintype     : dict[str, str],
                  internal_points       : set[tuple],
                  name                  : str,
                  compartment           : str,
@@ -34,8 +27,8 @@ class Domain(DataValue):
             msg = f'Invalid name provieded for {type(self).__name__}: {name}'
             raise ValueError(msg)
         
-        #Check compartment
-        if compartment not in compartments:
+        #Check domain type
+        if domain_type not in domain_types:
             msg  = f'Error in {type(self).__name__} {name}.'
             msg += f' Domain {name} was assigned to an undefined compartment: {compartment}.'
             raise ValueError(msg)

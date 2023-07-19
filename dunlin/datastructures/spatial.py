@@ -4,13 +4,11 @@ from typing import Union
 import dunlin.comp as cmp
 
 from .boundarycondition   import BoundaryConditionDict
-from .compartment         import CompartmentDict
+from .domaintype          import DomainTypeDict, SurfaceTypeDict
 from .masstransfer        import AdvectionDict, DiffusionDict
 
 from .coordinatecomponent import CoordinateComponentDict
 from .gridconfig          import GridConfig
-from .domain              import DomainDict
-from .adjacentdomain      import AdjacentDomainDict
 from .geometrydefinition  import GeometryDefinitionDict
 
 from .ode          import ODEModelData
@@ -28,7 +26,7 @@ class SpatialModelData(ODEModelData):
             6. Rates
             7. Events
         2. Specific to SpatialModelData
-            1. Compartments
+            1. Domain types
             2. Advection
             3. Diffusion
             4. Boundary conditions
@@ -51,7 +49,8 @@ class SpatialModelData(ODEModelData):
                        'reactions'           : [True, False, True, True],
                        'rates'               : [True, True],
                        'events'              : [True, False, True],
-                       'compartments'        : [True, True],
+                       'domain_types'        : [True, False, True, False],
+                       'surface_types'       : [True, False, True, False],
                        'advection'           : [True, True],
                        'diffusion'           : [True, True],
                        'boundary_conditions' : [True, False, False, False],
@@ -66,11 +65,10 @@ class SpatialModelData(ODEModelData):
                  ref                   : str, 
                  states                : Union[dict, pd.DataFrame], 
                  parameters            : Union[dict, pd.DataFrame], 
-                 compartments          : dict,
                  coordinate_components : dict,
                  grid_config           : dict,
-                 domains               : dict,
-                 adjacent_domains      : dict,
+                 domain_types          : dict,
+                 surface_types         : dict,
                  geometry_definitions  : dict,
                  functions             : dict = None, 
                  variables             : dict = None, 
@@ -93,11 +91,10 @@ class SpatialModelData(ODEModelData):
         super()._set_exportable_attributes(['ref', 
                                             'states', 
                                             'parameters', 
-                                            'compartments',
                                             'coordinate_components',
                                             'grid_config',
-                                            'domains',
-                                            'adjacent_domains',
+                                            'domain_types',
+                                            'surface_types',
                                             'geometry_definitions',
                                             'functions', 
                                             'variables',
@@ -130,23 +127,19 @@ class SpatialModelData(ODEModelData):
                                                 self.coordinate_components,
                                                 **grid_config
                                                 )
-        self.compartments          = CompartmentDict(all_names,
-                                                     self.states,
-                                                     compartments
+        self.domain_types          = DomainTypeDict(all_names,
+                                                    self.coordinate_components, 
+                                                    self.states,
+                                                    domain_types
+                                                    )
+        self.surface_types         = SurfaceTypeDict(all_names, 
+                                                     self.states, 
+                                                     self.domain_types, 
+                                                     surface_types
                                                      )
-        self.domains               = DomainDict(all_names, 
-                                                self.coordinate_components, 
-                                                self.compartments, 
-                                                domains
-                                                )
-        self.adjacent_domains      = AdjacentDomainDict(all_names, 
-                                                        self.coordinate_components, 
-                                                        self.domains, 
-                                                        adjacent_domains
-                                                        )
         self.geometry_definitions  = GeometryDefinitionDict(all_names, 
                                                             self.coordinate_components, 
-                                                            self.compartments, 
+                                                            self.domain_types, 
                                                             geometry_definitions
                                                             )
         self.advection             = AdvectionDict(all_names, 

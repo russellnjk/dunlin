@@ -5,7 +5,12 @@ from .bases               import DataValue, DataDict
 from .coordinatecomponent import CoordinateComponentDict
 from .domain              import DomainDict
 
-class AdjacentDomain(DataValue):
+'''
+Replaces adjacent domains in SBML. Refer to documentation for domain types for 
+details.
+'''
+
+class Surface(DataValue):
     def __init__(self,
                  all_names             : set,
                  coordinate_components : CoordinateComponentDict,
@@ -35,8 +40,8 @@ class AdjacentDomain(DataValue):
         
         return dct
     
-class AdjacentDomainDict(DataDict):
-    itype = AdjacentDomain
+class SurfaceDict(DataDict):
+    itype = Surface
     
     def __init__(self,
                  all_names             : set,
