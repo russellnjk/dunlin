@@ -8,7 +8,7 @@ from dunlin.datastructures.geometrydefinition  import GeometryDefinition,  Geome
 from dunlin.datastructures.boundarycondition   import BoundaryConditions,  BoundaryConditionDict
 
 from dunlin.datastructures.domaintype          import (DomainType,  DomainTypeDict,
-                                                       SurfaceType, SurfaceTypeDict
+                                                       Surface,     SurfaceDict
                                                        )
 
 from dunlin.datastructures.masstransfer        import (Advection, AdvectionDict, 
@@ -138,32 +138,28 @@ assert data2 == data1 == data0
 dmnts = F0
 
 ###############################################################################
-#Test Surface Type
+#Test Surface 
 ###############################################################################
-data0 = {'dmnt0_dmnt1': {'states'   : ['x0s'],
-                         'surfaces' : {'sfc0': ['dmn0', 'dmn1']}
-                         }
+data0 = {'dmn0_dmn1': ['dmn0', 'dmn1']
          }
 
-C = SurfaceTypeDict
+C = SurfaceDict
 
 #Test instantiation
-F0 = C(all_names, xs, dmnts, data0)
+F0 = C(all_names, dmnts, data0)
 
-data0_ = {'dmnt0_dmnt1': {'states'   : ['x0s', 'x0e'],
-                          'surfaces' : {'sfc0': ['dmn0', 'dmn1']}
-                          }
-          }
+data0_ = {'dmn0_dmn1': ['dmn0', 'dmn0']
+         }
 
 try:
-    F0 = C(all_names, xs, dmnts, data0)
+    F0 = C(all_names, dmnts, data0)
 except:
     assert True
 else:
     assert False
 
 #Test access
-f0 = F0['dmnt0_dmnt1']
+f0 = F0['dmn0_dmn1']
 
 #Test export/roundtrip
 data1 = F0.to_dict()

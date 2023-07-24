@@ -7,7 +7,8 @@ from dunlin.datastructures.spatial      import SpatialModelData
 states = {'A' : [0, 1],
           'B' : [1, 2],
           'C' : [0, 3],
-          'D' : [0, 4]
+          'D' : [0, 4],
+          'E' : [5, 5]
           }
 
 parameters = {'k_degA' : [0.1, 0.1  ],
@@ -83,9 +84,8 @@ domain_types = {'cytosol' : {'states'  : ['A', 'B'],
                 }
 
 #No states associated with any surfaces
-surface_types = {'membrane': {'surfaces' : {'membrane0' : ['cytosol', 'medium']}
-                              }
-                 }
+surfaces = {'membrane0': ['cytosol0', 'medium0']
+            }
 
 geometry_definitions = {'cell': {'geometry_type' : 'csg',
                                  'domain_type'   : 'cytosol',
@@ -111,7 +111,7 @@ M0 = {'states'                : states,
       'coordinate_components' : coordinate_components,
       'grid_config'           : grid_config,
       'domain_types'          : domain_types,
-      'surface_types'         : surface_types,
+      'surfaces'              : surfaces,
       'geometry_definitions'  : geometry_definitions,
       'events'                : events 
       }

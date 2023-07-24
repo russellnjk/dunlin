@@ -3,11 +3,11 @@ from numbers import Number
 from typing  import Iterable, Mapping, Union
 
 import dunlin.utils_plot as upp
-from .grid   import RegularGrid, NestedGrid
-from .bidict import One2One, Many2One
-from .stack  import (Stack,
-                     Domain_type, Domain, Voxel,
-                     )
+from ..grid.grid   import RegularGrid, NestedGrid
+from ..grid.bidict import One2One, Many2One
+from .stack        import (Stack,
+                           Domain_type, Domain, Voxel,
+                           )
 
 AdjacentDomains = namedtuple('AdjacentDomains',
                              'domain0 domain1 domain0_voxels domain1_voxels'
@@ -46,7 +46,7 @@ class DomainStack(Stack):
     def __init__(self, 
                  grid_config   : dict, 
                  shapes        : Iterable,
-                 domain_types  : dict = None,
+                 domain_types  : dict,
                  surfaces      : dict = None
                  ) -> None:
         
@@ -69,12 +69,7 @@ class DomainStack(Stack):
         self.domain2domain_type_idx = {}
         self._reindex_domains(domain_types)
         
-            
-        #Reindex the surfaces based on user definition
-        self.voxel2surface           = Many2One('voxel', 'surface')
-        self.surface2domain_type_idx = {} 
-        if surface_types:
-            self._reindex_surfaces(surface_types)
+         
     
     def _reindex_surfaces(self, user_surface_types: dict) -> None:
         pass

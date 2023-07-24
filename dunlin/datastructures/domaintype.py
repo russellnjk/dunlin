@@ -1,4 +1,5 @@
 from numbers import Number
+from typing  import Literal
 
 import dunlin.utils                    as ut
 from dunlin.datastructures.bases import DataDict, DataValue
@@ -41,9 +42,11 @@ Also, SBML does not require that the unit sizes sum to 1.
 The second case is also problematic as the interpretation is ambiguous unless 
 the number of dimensions of the compartment is one fewer than that of the 
 domain type. For example, a 2-D compartment represents the surface of a 
-3-D domain type. However, even in this case, where in physical space each 
-surface is located. And once again, SBML does not require that the unit 
-sizes for this application sum to one.
+3-D domain type. However, SBML lacks guidance on how to interpret surface-bound 
+states. Furthermore, such simulations often have complex requirements that 
+depend on the nature of the problem e.g. steric effects, transmembrane structures 
+etc. And once again, SBML does not require that the unit sizes for this 
+application sum to one.
 
 The domains and adjacent domains in SBML adds to the confusion. This is 
 because 
@@ -63,30 +66,15 @@ I have therefore made changes as follows:
     grouped under a Dunlin domain type. This corresponds to the case where 
     the compartment has the same number of dimensions as the domain type 
     
-    2. A group of states can alternatively occupy the surface between two 
-    adjacent domain types. They are grouped under a Dunlin surface type. This 
-    corresponds to the case where the compartment has one fewer dimension 
-    than the domain type. 
-    
-    Because a surface itype s defined using two domain types, this allows 
-    a clearer definition of complex structures such the ER of a cell. For
-    example, the ER, nucleus and cytoplasm could each be a domain type.
-    The ER is continuous with the perinuclear space but separated by a 
-    membrane from the cytoplasm so this requires two different kinds of 
-    surface types between the ER domain type and the other two. 
-    
-    The former surface type has no physical meaning and merely delineates the two 
-    regions, a reaction should be implemented to simulate the transport 
-    of a molecule from one region to another. Two different states must be 
-    defined; one that exists in the nucleus domain type and another that 
-    exists in the ER domain type.
-    
-    The latter is a physical membrane with molecules attached to it. To 
-    simulate location at the membrane, a reaction could be defined where 
-    a cytoplasmic molecule reacts at the membrane and is converted into a 
-    membrane molecule. Two different states must be defined; one that 
-    exists in the cytoplasm domain type and another that exists in the 
-    ER-cytoplasm surface type.
+    Dunlin does not explicitly account for case where the compartment has one 
+    fewer dimension than the domain type. When the user wants to simulate a 
+    membrane bound protein, they could define a reaction that takes place at 
+    a surface between two domains. The rate of the reaction could include a 
+    dummy state that exists on the other side of the membrane and has a value 
+    of 1. This causes the reaction to be defined only at the surface. The 
+    membrane bound version of the protein would have no diffusion or advection 
+    coefficients. More complicated scenarios require extensions beyond what 
+    SBML specifies (according to my current understanding).
     
     3. States now have a one-to-one mapping with domain types or surfaces. 
     All states of the same domain type will exist in the same region of space. 
@@ -152,7 +140,7 @@ class DomainType(ContainerType):
                  all_states            : StateDict,
                  state2domain_type     : dict[str, str],
                  domain2domain_type    : dict[str, str],
-                 internal_points       : set[tuple],
+                 internal_points       : dict[tuple, str],
                  name                  : str,
                  states                : list[str]               = None,
                  domains               : dict[str, list[Number]] = None
@@ -173,6 +161,13 @@ class DomainType(ContainerType):
                 #Parse and check internal point
                 spans = list(coordinate_components.spans.values())
                 ndims = coordinate_components.ndims
+                
+                if any([not isinstance(i, Number) for i in internal_point]):
+                    msg  = f'Error in {type(self).__name__} {name}.'
+                    msg += 'Internal point can ony contain numbers.'
+                    raise TypeError(msg)
+                
+                
                 if len(internal_point) != coordinate_components.ndims:
                     msg  = f'Error in {type(self).__name__} {name}.'
                     msg += f' Expected an internal point with {ndims} coordinates.'
@@ -191,13 +186,11 @@ class DomainType(ContainerType):
                     msg += f' Repeated internal points {internal_point}.'
                     raise ValueError(msg)
                 
-                if any([not isinstance(i, Number) for i in internal_point]):
-                    msg  = f'Error in {type(self).__name__} {name}.'
-                    msg += 'Internal point can ony contain numbers.'
-                    raise TypeError(msg)
                 
+                internal_points.add(tuple(internal_point))
                 domain2internal_point[domain] = list(internal_point)
-        
+                domain2domain_type[domain]    = name
+                
         super().__init__(all_names, 
                          all_states, 
                          state2domain_type,
@@ -216,7 +209,7 @@ class DomainType(ContainerType):
             dct = {self.name: dct}
         
         return dct
-
+    
 class SurfaceType(ContainerType):
     itype = 'surface_type'
     
@@ -302,7 +295,7 @@ class DomainTypeDict(DataDict):
                          )
         
         #Update
-        self.state2domain_type = state2domain_type
+        self.state2domain_type  = state2domain_type
         self.domain2domain_type = domain2domain_type
         
 class SurfaceTypeDict(DataDict):
@@ -340,4 +333,72 @@ class SurfaceTypeDict(DataDict):
             msg = f'States {missing} not assigned to a domain or surface type.'
             raise ValueError(msg)
         
+class Surface(DataValue):
+    def __init__(self,
+                 all_names      : set,
+                 domain_types   : DomainTypeDict,
+                 domain2surface : set,
+                 name           : str,
+                 domain0        : str,
+                 domain1        : str
+                 ):
         
+        domain2domain_type = domain_types.domain2domain_type
+        
+        if type(domain0) != str:
+            msg = f'Domains must be strings. Received {type(domain0)}.'
+            raise TypeError(msg)
+        if type(domain1) != str:
+            msg = f'Domains must be strings. Received {type(domain1)}.'
+            raise TypeError(msg)
+        if domain0 not in domain2domain_type:
+            msg = f'Unexpected domain {domain0}.'
+            raise ValueError(msg)
+        if domain1 not in domain2domain_type:
+            msg = f'Unexpected domain {domain1}.'
+            raise ValueError(msg)
+        if domain0 == domain1:
+            msg = f'Received repeated domains : ({domain0}, {domain1}).'
+            raise ValueError(msg)
+        
+        tup = tuple(sorted([domain0, domain1])) 
+        if tup  in domain2surface:
+            msg = f'Repeated pair of domains {domain0}, {domain1}.'
+            raise ValueError(msg)
+            
+        super().__init__(all_names,
+                         name,
+                         domains     = tup,
+                         domains_ori = [domain0, domain1]
+                         )
+        
+        domain2surface[tup] = name
+    
+    def to_dict(self) -> dict:
+        dct = {self.name: list(self.domains_ori)}
+        return dct
+    
+    def __iter__(self):
+        return iter(self.domains)
+    
+    def __getitem__(self, idx: Literal[0, 1]) -> str:
+        return self.domains[idx]
+
+class SurfaceDict(DataDict):
+    itype = Surface
+    
+    def __init__(self, 
+                 all_names    : set,
+                 domain_types : DomainTypeDict,
+                 surfaces     : dict
+                 ):
+        domain2surface = {}
+        
+        super().__init__(all_names, 
+                         surfaces,
+                         domain_types,
+                         domain2surface
+                         )
+        
+        
+    

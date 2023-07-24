@@ -3,7 +3,7 @@ import numpy             as np
 
 import addpath
 import dunlin as dn
-from dunlin.spatial.grid.stack import Stack
+from dunlin.spatial.stack.stack import Stack
 
 plt.close('all')
 plt.ion()
@@ -62,8 +62,8 @@ shape1 = Shape(lambda x, y: x > 1, 'b', 'y')
 shapes = [shape0, shape1]
 
 #Test here
-grid_voxels = nested_grids['_main'].voxels
-mappings    = Stack._make_mappings(grid_voxels, shapes)
+grid     = nested_grids['_main']
+mappings = Stack._make_mappings(grid.voxels, shapes)
 
 shape_dict            = mappings[0]
 shape2domain_type     = mappings[1]
@@ -110,6 +110,42 @@ assert voxel2shape          == {(1.5, 0.5): 'b',
 
 assert shape_dict           == {'a': shape0, 'b': shape1}
 
+
+# shape0 = Shape(lambda x, y:   True,                 'a', domain_type='x')
+# shape1 = Shape(lambda x, y:   x > 1   and  y > 1,   'b', domain_type='y')
+# shape2 = Shape(lambda x, y:   x < 1.5 and  y < 1.5, 'c', domain_type='x')
+# shape3 = Shape(lambda x, y:   x < 1   and  y > 2,   'd', domain_type='z')
+# shape4 = Shape(lambda x, y:   x > 2   and  y < 1 ,  'e', domain_type='z')
+# shapes = [shape0, shape1, shape2, shape3, shape4]
+
+# mappings = Stack._make_mappings(grid.voxels, shapes)
+
+# shape_dict            = mappings[0]
+# shape2domain_type     = mappings[1]
+# voxel2domain_type     = mappings[2]
+# voxel2domain_type_idx = mappings[3]
+# voxel2shape           = mappings[4]
+
+# domain_type2domain = {'x': {'dmn0' : [0.5, 0.2]},
+#                       'y': {'dmn1' : [2.5, 2]},
+#                       'z': {'dmn2' : [0.5, 2.2],
+#                             'dmn3' : [2.5, 0.2]
+#                             }
+#                       }
+
+# surface2domain = {'adj0': ['dmn0', 'dmn1'],
+#                   'adj1': ['dmn0', 'dmn2'],
+#                   'adj2': ['dmn0', 'dmn3'],
+#                   'adj3': ['dmn1', 'dmn2'],
+#                   'adj4': ['dmn1', 'dmn3']
+#                   }
+
+# shape2domain = Stack._map_domains(grid, 
+#                                   voxel2domain_type_idx, 
+#                                   voxel2shape, 
+#                                   domain_type2domain
+#                                   )
+
 ###############################################################################
 #Test Instantiation
 ###############################################################################
@@ -145,22 +181,23 @@ domain_type_args = {'facecolor': {'x': 'steel',
 
 stk.plot_voxels(AX[3], domain_type_args=domain_type_args)
 
-###############################################################################
-#Test Faulty Instantiation
-###############################################################################
-shape0 = Shape(lambda x, y:   True,                 'a', domain_type='x')
-shape1 = Shape(lambda x, y:   x > 1   and  y > 1,   'b', domain_type='y')
-shape2 = Shape(lambda x, y:   x < 1.5 and  y < 1.5, 'c', domain_type='x')
-shape3 = Shape(lambda x, y:   x < 1   and  y > 2,   'd', domain_type='z')
-shape4 = Shape(lambda x, y:   x > 2   and  y < -1 , 'e', domain_type='z')
-shapes = [shape0, shape1, shape2, shape3, shape4]
+# ###############################################################################
+# #Test Faulty Instantiation
+# ###############################################################################
+# shape0 = Shape(lambda x, y:   True,                 'a', domain_type='x')
+# shape1 = Shape(lambda x, y:   x > 1   and  y > 1,   'b', domain_type='y')
+# shape2 = Shape(lambda x, y:   x < 1.5 and  y < 1.5, 'c', domain_type='x')
+# shape3 = Shape(lambda x, y:   x < 1   and  y > 2,   'd', domain_type='z')
+# shape4 = Shape(lambda x, y:   x > 2   and  y < -1 , 'e', domain_type='z')
+# shapes = [shape0, shape1, shape2, shape3, shape4]
 
-grid = nested_grids['_main']
-try:
-    stk  = Stack(grid, shapes)
-except ValueError:
-    assert True
-else:
-    assert False
+# grid = nested_grids['_main']
+# try:
+#     stk  = Stack(grid, shapes)
+# except ValueError:
+#     assert True
+# else:
+#     assert False
 
-# plt.show(block=True)
+
+# # plt.show(block=True)

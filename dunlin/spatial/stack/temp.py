@@ -4,8 +4,8 @@ from numbers import Number
 from typing  import Iterable, Union
 
 import dunlin.utils_plot as upp
-from .grid   import RegularGrid, NestedGrid, make_grids_from_config
-from .bidict import One2One, Many2One
+from ..grid.grid   import RegularGrid, NestedGrid, make_grids_from_config
+from ..grid.bidict import One2One, Many2One
 
 #Types
 Domain_type = Union[str, Number]
@@ -42,7 +42,8 @@ class Stack:
     
     def __init__(self, 
                  grid   : Union[RegularGrid, NestedGrid], 
-                 shapes : Iterable 
+                 shapes : Iterable,
+                 domain_type2domain : dict = None,
                  ) -> None:
         #Copy from grid
         ndims  = grid.ndims
@@ -62,8 +63,16 @@ class Stack:
         self.voxel2domain_type_idx = mappings[3]
         self.voxel2shape           = mappings[4]
         
-        #Create voxel dict for the current object
-        self.voxels = {}
+        #Map domains
+        self.shape2domain = self._map_domains(grid, 
+                                              self.voxel2domain_type_idx, 
+                                              self.voxel2shape, 
+                                              domain_type2domain
+                                              )
+        
+        #Create mappings for iteration
+        self.voxels       = {}
+        self.voxel2domain = {}
         
         #Iterate through each voxel
         for voxel in self.voxel2shape:
@@ -176,7 +185,45 @@ class Stack:
                 voxel2domain_type_idx,
                 voxel2shape, 
                 )
-
+    
+    @staticmethod
+    def _map_domains(grid, 
+                     voxel2domain_type_idx,
+                     voxel2shape, 
+                     domain_type2domain,
+                     ):
+        shape2domain = Many2One('shape', 'domain')
+        
+        for new_domain_type, domains in domain_type2domain.items():
+            for domain, internal_point in domains.items():
+                
+                if not grid.contains(internal_point):
+                    msg = f'Internal point {internal_point} appears to be outside the grid.'
+                    raise ValueError(msg)
+                
+                #Convert the internal point into a voxel and get its domain type
+                voxel           = grid.voxelize(internal_point)
+                old_domain_type = voxel2domain_type_idx[voxel][1]
+                
+                #Check that the voxelized internal point is in the correct domain type
+                if old_domain_type != new_domain_type:
+                    a = f'The internal point {internal_point} '
+                    b = f'belongs to domain type "{new_domain_type}". '
+                    c = f'However, it was mapped to "{old_domain_type}".'
+                    d = 'The internal point may be in a wrong or bad location. '
+                    e = 'This is most likely solved by: '
+                    f = '\n1. Choosing a different internal point OR'
+                    g = '\n2. Changing the step size of the grid.'
+                    h = a + b + c + d + e + f + g
+                    raise ValueError(h)
+                
+                #Determine which shape the voxel is in
+                shape = voxel2shape[voxel]
+                
+                shape2domain[shape] = domain
+        
+        return shape2domain
+    
     def _add_voxel(self, voxel) -> None:
         voxel2domain_type     = self.voxel2domain_type
         
@@ -242,8 +289,41 @@ class Stack:
         self.voxels[voxel] = datum
     
     def _add_bulk(self, voxel, neighbour, shift):
-        pass
-       
+        voxel2shape  = self.voxel2shape
+        shape2domain = self.shape2domain_type
+        voxel2domain = self.voxel2domain
+        
+        shape0 = voxel2shape[voxel]
+        shape1 = voxel2shape[neighbour]
+    
+        #To prevent double computation
+        if tuple(sorted([voxel, neighbour])) == (voxel, neighbour):
+            #Update shape2domain
+            if shape0 != shape1:
+                #Case 1: Both shapes exist in shape2domain
+                #Check that they correspond to the same domain
+                if shape0 in shape2domain and shape1 in shape2domain:
+                    domain0 = shape2domain[shape0]
+                    domain1 = shape2domain[shape1]
+                    
+                    if domain0 != domain1:
+                        msg  = f'Domains {domain0} and {domain1} are touching. '
+                        msg += 'Domains of the same domain type must not touch.'
+                        raise ValueError(msg)
+                
+                #Case 2: Only one of the shapes exist in shape2domain
+                #The other shape has not been mapped to a domain yet
+                #Update shape2domain
+                elif shape0 in shape2domain:
+                    shape2domain[shape1] = shape2domain[shape0]
+                else:
+                    shape2domain[shape0] = shape2domain[shape1]
+                
+            #Update voxel2domain
+            domain0                 = shape2domain[shape0]
+            voxel2domain[voxel]     = domain0
+            domain1                 = shape2domain[shape1]
+            voxel2domain[neighbour] = domain1
     
     def _add_surface(self, voxel, neighbour, shift):
         pass

@@ -87,16 +87,16 @@ adjacent_domains = {'membrane': ['cytosol', 'medium']
 geometry_definitions = {'cell': {'definition' : 'csg',
                                  'domain_type': 'cytosolic',
                                  'order'      : 1,
-                                 'node'       : ['square', 
-                                                 ['translate', 2, 2]
+                                 'node'       : ['translate', 2, 2, 
+                                                 'square'
                                                  ]
                                  },
                         'field': {'definition' : 'csg',
                                   'domain_type': 'extracellular',
                                   'order'      : 0,
-                                  'node'       : ['square', 
-                                                  ['scale', 2, 2], 
-                                                  ['translate', 2, 2]
+                                  'node'       : ['translate', 2, 2,
+                                                  ['scale', 2, 2, 
+                                                   'square']
                                                   ]
                                   }
                         }
@@ -121,5 +121,16 @@ M0 = {'states'              : states,
       'geometry'            : geometry,
       'events'              : events 
       }
+
+states = {'A' : [0],
+          'B' : [0]
+          }
+
+parameters = {'k0' : [0]}
+
+# domain_types = {'x': {'states'  : ['A'],
+#                       'domains' : []}
+#                 }
+# geometry = {'A': }
 
 all_data = {'M0': M0}

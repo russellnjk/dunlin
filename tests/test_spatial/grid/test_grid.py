@@ -78,8 +78,6 @@ grid5.plot(AX[3])
 grid6 = NestedGrid(grid2, grid5, grid3, name='grid6')
 grid6.plot(AX[5])
 
-print(grid6.underlying)
-
 ###############################################################################
 #Test Front-End Functions
 ###############################################################################

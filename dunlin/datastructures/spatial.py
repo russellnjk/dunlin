@@ -4,7 +4,7 @@ from typing import Union
 import dunlin.comp as cmp
 
 from .boundarycondition   import BoundaryConditionDict
-from .domaintype          import DomainTypeDict, SurfaceTypeDict
+from .domaintype          import DomainTypeDict, SurfaceDict
 from .masstransfer        import AdvectionDict, DiffusionDict
 
 from .coordinatecomponent import CoordinateComponentDict
@@ -68,8 +68,8 @@ class SpatialModelData(ODEModelData):
                  coordinate_components : dict,
                  grid_config           : dict,
                  domain_types          : dict,
-                 surface_types         : dict,
                  geometry_definitions  : dict,
+                 surfaces              : dict = None,
                  functions             : dict = None, 
                  variables             : dict = None, 
                  reactions             : dict = None, 
@@ -94,7 +94,7 @@ class SpatialModelData(ODEModelData):
                                             'coordinate_components',
                                             'grid_config',
                                             'domain_types',
-                                            'surface_types',
+                                            'surfaces',
                                             'geometry_definitions',
                                             'functions', 
                                             'variables',
@@ -132,11 +132,10 @@ class SpatialModelData(ODEModelData):
                                                     self.states,
                                                     domain_types
                                                     )
-        self.surface_types         = SurfaceTypeDict(all_names, 
-                                                     self.states, 
-                                                     self.domain_types, 
-                                                     surface_types
-                                                     )
+        self.surfaces              = SurfaceDict(all_names, 
+                                                 self.domain_types, 
+                                                 surfaces
+                                                 ) if surfaces else None
         self.geometry_definitions  = GeometryDefinitionDict(all_names, 
                                                             self.coordinate_components, 
                                                             self.domain_types, 

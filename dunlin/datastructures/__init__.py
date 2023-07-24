@@ -11,7 +11,7 @@ from .ode import ODEModelData
 
 #For SpatialModel
 from .boundarycondition   import BoundaryConditions, BoundaryConditionDict
-from .domaintype          import DomainType,         DomainTypeDict
+from .domaintype          import DomainType,         DomainTypeDict, Surface, SurfaceDict
 from .masstransfer        import Advection,          AdvectionDict
 from .masstransfer        import Diffusion,          DiffusionDict
 from .gridconfig          import GridConfig

@@ -4,8 +4,8 @@ from numbers import Number
 from typing  import Iterable, Union
 
 import dunlin.utils_plot as upp
-from .grid   import RegularGrid, NestedGrid, make_grids_from_config
-from .bidict import One2One, Many2One
+from ..grid.grid   import RegularGrid, NestedGrid, make_grids_from_config
+from .bidict       import One2One, One2Many
 
 #Types
 Domain_type = Union[str, Number]
@@ -21,10 +21,10 @@ class Stack:
     sizes                 : dict[Voxel, Number]
     voxels                : dict[Voxel, dict]
     shape_dict            : One2One[str, object]
-    shape2domain_type     : Many2One[str, Domain_type]
-    voxel2domain_type     : Many2One[Voxel, Domain_type]
+    shape2domain_type     : One2Many[str, Domain_type]
+    voxel2domain_type     : One2Many[Voxel, Domain_type]
     voxel2domain_type_idx : One2One[Voxel, tuple[int, Domain_type]]
-    voxel2shape           : Many2One[Voxel, str]
+    voxel2shape           : One2Many[Voxel, str]
     
     #For plotting
     default_domain_type_args = {'edgecolor': 'None'
@@ -48,12 +48,26 @@ class Stack:
         ndims  = grid.ndims
         shifts = [i for i in range(-ndims, ndims+1) if i]
         
+        #Set attributes required for the rest of the preprocessing
         self.grid   = grid
         self.ndims  = ndims
         self.sizes  = grid.sizes
         self.shifts = shifts
+        self.shapes = list(shapes)
         
         #Map shapes and voxels
+        self._preprocess()
+        
+        #Iterate through each voxel
+        for voxel in self.voxel2shape:
+            #Update self.voxels
+            #This method can be overriden in the subclasses to expand functionality
+            self._add_voxel(voxel)
+    
+    def _preprocess(self) -> None:
+        #Make mappings between shapes, voxels and domain types
+        grid     = self.grid
+        shapes   = self.shapes 
         mappings = self._make_mappings(grid.voxels, shapes)
         
         self.shape_dict            = mappings[0]
@@ -65,12 +79,10 @@ class Stack:
         #Create voxel dict for the current object
         self.voxels = {}
         
-        #Iterate through each voxel
-        for voxel in self.voxel2shape:
-            #Update self.voxels
-            #This method can be overriden in the subclasses to expand functionality
-            self._add_voxel(voxel)
-
+        #Create mappings between shapes and domains
+        shape2domain      = {shape: i for i, shape in enumerate(self.shape_dict)}
+        self.shape2domain = One2Many('shape', 'domain', shape2domain)
+        
     @staticmethod
     def _make_mappings(voxels: dict, shapes: tuple):
         '''
@@ -104,9 +116,9 @@ class Stack:
         '''
         #Check shapes and map each voxel to a shape 
         voxel_array           = np.array(list(voxels))
-        voxel2shape           = Many2One('voxel', 'shape')
-        shape2domain_type     = Many2One('shape', 'domain_type')
-        voxel2domain_type     = Many2One('voxel', 'domain_type')
+        voxel2shape           = One2Many('voxel', 'shape')
+        shape2domain_type     = One2Many('shape', 'domain_type')
+        voxel2domain_type     = One2Many('voxel', 'domain_type')
         voxel2domain_type_idx = One2One('voxel', 'domain_type_idx')
         shape_dict            = One2One('shape', 'shape_object')
         domain_type_idxs      = {}
@@ -179,18 +191,21 @@ class Stack:
 
     def _add_voxel(self, voxel) -> None:
         voxel2domain_type     = self.voxel2domain_type
+        voxel2shape           = self.voxel2shape
+        shape2domain          = self.shape2domain 
         
         #Grid mappings
         neighbours     = self.grid.voxels[voxel]
         
         #Set up 
+        shape0       = voxel2shape[voxel]
         domain_type0 = voxel2domain_type[voxel]
         
         #Template the voxel datum
         datum = {'neighbours'  : {},
                  'boundary'    : [],
                  'surface'     : {},
-                 'bulk'        : Many2One('neighbour', 'shift'),
+                 'bulk'        : One2Many('neighbour', 'shift'),
                  'size'        : self.sizes[voxel],
                  'shape'       : self.voxel2shape[voxel],
                  'domain_type' : domain_type0,
@@ -217,17 +232,26 @@ class Stack:
                 if domain_type0 == domain_type1:
                     #Update self.voxels
                     datum['bulk'][neighbour] = shift
-
-                    #Update self.bulks
+                    
+                    #Update shape2domain
+                    #Check the shape that neighbour belongs to
+                    shape1 = voxel2shape[neighbour]
+                    #If the neighbour belongs to a different shape
+                    #Then shape0 and shape1 are part of the same domain
+                    #Remap shape2domain
+                    if shape0 != shape1:
+                        shape2domain[shape1] = shape2domain[shape0]
+                    
+                    #Subclasses will extend the functionality of this method
                     self._add_bulk(voxel, neighbour, shift)
                     
                 #Surface edge
                 else:
                     #Update self.voxels
-                    datum['surface'].setdefault(domain_type1, Many2One('neighbour', 'shift'))
+                    datum['surface'].setdefault(domain_type1, One2Many('neighbour', 'shift'))
                     datum['surface'][domain_type1][neighbour] = shift
                     
-                    #Update self.surfaces
+                    #Subclasses will extend the functionality of this method
                     self._add_surface(voxel, neighbour, shift)
                     
             if new_shift_neighbours:
@@ -243,7 +267,6 @@ class Stack:
     
     def _add_bulk(self, voxel, neighbour, shift):
         pass
-       
     
     def _add_surface(self, voxel, neighbour, shift):
         pass
