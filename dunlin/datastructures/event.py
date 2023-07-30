@@ -1,65 +1,29 @@
 import re
+from numbers import Number
 
-import dunlin.utils                       as ut
-from dunlin.datastructures.bases import DataDict, DataValue
+import dunlin.utils as ut
+from dunlin.datastructures.bases      import DataDict, DataValue
+from dunlin.datastructures.stateparam import StateDict, ParameterDict
 
 class Event(DataValue):
-    @staticmethod
-    def get_trigger_expr(name:str, trigger: str) -> str:
-        if type(trigger) != str:
-            msg = f'Error in instantiating event {name}.'
-            msg = f'{msg} Invalid event trigger. Expected a string.'
-            msg = f'{msg} Received {type(trigger)}.'
-            raise ValueError(msg)
-            
-        pattern = '([^<>=]*)([<>=][=]?)([^<>=]*)'
-        temp    = re.findall(pattern, trigger)
-        
-        if len(temp) != 1:
-            msg = f'Error in instantiating event {name}.'
-            msg = f'{msg} Invalid event trigger. Expected ">", "<" or "==" between the lhs and rhs.'
-            msg = f'{msg} Received {trigger}'
-            raise ValueError(msg)
-            
-        lhs, op, rhs = temp[0]
-
-        if '<' in op:
-            return f'{rhs.strip()} - {lhs.strip()}'
-        else:
-            return f'{lhs.strip()} - {rhs.strip()}'
-    
-    @staticmethod
-    def get_assign_expr(assign: str) -> list[str]:
-        #Case 1: The assignment is dict-like
-        if ut.isdictlike(assign):
-            assign_ = [f'{k} = {v}' for k, v in assign.items()]
-        #Case 2: The assignment is string-like (Only one assignment)
-        elif ut.isstrlike(assign):
-            assign_ = [assign]
-        #Case 3: The assignment is list-like
-        else:
-            assign_ = list(assign)
-        
-        return assign_
-        
+    '''Corresponds to SBML events. However, the formatting for the trigger is 
+    restricted to the form `<expr> < 0` or `<expr> > 0` where `<expr>` is a string 
+    corresponding to the `trigger` argument in the constructor for this class.
+    '''
     ###########################################################################
     #Constructor
     ###########################################################################
     def __init__(self, 
-                 all_names  : set, 
-                 name       : str, 
-                 trigger    : str, 
-                 assign     : str, 
-                 delay      : float = 0, 
-                 persistent : bool = True, 
-                 priority   : int = 0, 
+                 all_names   : set, 
+                 states      : StateDict,
+                 parameters  : ParameterDict,
+                 name        : str, 
+                 trigger     : str, 
+                 assign      : dict[str, str], 
+                 delay       : float = 0, 
+                 persistent  : bool  = True, 
+                 priority    : int   = 0, 
                  ):
-        
-        #Format trigger
-        trigger_expr = self.get_trigger_expr(name, trigger)
-        
-        #Format assign
-        assign_expr = self.get_assign_expr(assign)
         
         #Check type for name, delay, persistent and priority
         ut.check_valid_name(name)
@@ -89,26 +53,54 @@ class Event(DataValue):
             raise ValueError(msg)
             
         #Check namespace
-        trigger_namespace = ut.get_namespace(trigger_expr, allow_reserved=True)
-        assign_namespace  = ut.get_namespace(assign_expr,  allow_reserved=True)
+        trigger_namespace = ut.get_namespace(trigger, allow_reserved=True)
         
         undefined = trigger_namespace.difference(all_names)
         if undefined:
             msg = f'Undefined namespace in event {name} trigger : {undefined}'
             raise NameError(msg)
-        undefined = assign_namespace.difference(all_names)
-        if undefined:
-            msg = f'Undefined namespace in event {name} assign : {undefined}'
-            raise NameError(msg)
         
+        #Check trigger
+        trigger_namespace = ut.get_namespace(trigger, allow_reserved=True)
+        
+        for trigger_name in trigger_namespace:
+            if trigger_name not in states and trigger_name not in parameters and trigger_name != 'time':
+                msg  = f'Error in parsing event {name}. '
+                msg += 'Trigger can only contain "time", states or parameters. '
+                msg += f'Received: {trigger_name}'
+                raise ValueError(msg)
+        
+        #Check and copy assignments
+        assignments_ = {}
+        for lhs, rhs in assign.items():
+            if lhs not in states and lhs not in parameters and lhs != 'time':
+                msg  = f'Error in parsing event {name}. '
+                msg += 'Left-hand side of assignment must be "time", a state or parameter. '
+                msg += f'Received: {lhs}'
+                raise ValueError(msg)
+            
+            if type(rhs) != str and not isinstance(rhs, Number):
+                msg  = f'Error in parsing event {name}. '
+                msg += 'Right-hand side must be string or number.'
+                raise TypeError(msg)
+            elif isinstance(rhs, Number):
+                pass
+            else:
+                rhs_names = ut.get_namespace(rhs)
+                for rhs_name in rhs_names:
+                    if rhs_name not in states and rhs_name not in parameters and rhs_name != 'time':
+                        msg  = f'Error in parsing event {name}. '
+                        msg += 'Right-hand side of assignment can only contain numbers, states and parameters. '
+                        msg += f'Received: {lhs}'
+                        raise ValueError(msg)
+            
+            assignments_[lhs] = rhs
+                    
         #It is now safe to call the parent's init
         super().__init__(all_names, 
                          name         = name,
-                         trigger_expr = trigger_expr,
-                         assign_expr  = assign_expr,
                          trigger      = trigger,
-                         assign       = assign,
-                         assignments  = assign,
+                         assignments  = assignments_,
                          delay        = delay,
                          persistent   = persistent,
                          priority     = priority,
@@ -119,7 +111,7 @@ class Event(DataValue):
     ###########################################################################
     def to_dict(self) -> dict:
         dct = {'trigger' : self.trigger,
-               'assign'  : self.assign,
+               'assign'  : self.assignments.copy(),
                }
         
         delay      = self.delay
@@ -144,7 +136,12 @@ class EventDict(DataDict):
     ###########################################################################
     #Constructor
     ###########################################################################
-    def __init__(self, all_names: set, events: dict):
+    def __init__(self, 
+                 all_names  : set, 
+                 states     : StateDict, 
+                 parameters : ParameterDict,
+                 events     : dict
+                 ):
         #Make the dict
-        super().__init__(all_names, events)
+        super().__init__(all_names, events, states, parameters)
         

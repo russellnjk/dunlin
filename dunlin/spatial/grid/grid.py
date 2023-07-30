@@ -461,9 +461,9 @@ class NestedGrid(BaseGrid):
 ###############################################################################
 #Instantiation from Config Dicts
 ###############################################################################
-def make_grids_from_config(grid_config: dict, 
-                           _name      : str    = '_main', 
-                           _step      : Number = None
+def make_grids_from_config(grid_config : dict, 
+                           _name       : str    = '_main', 
+                           _step       : Number = None
                            ) -> dict[str, Union[NestedGrid, RegularGrid]]:
     nested_grids = {}
     
@@ -482,16 +482,18 @@ def make_grids_from_config(grid_config: dict,
     grid  = RegularGrid(step, *spans, name=_name)
     
     #Recurse
-    child_grids = []
-    for child, child_config in grid_config.get('children', {}).items():
-        temp        = make_grids_from_config(child_config, _name=child, _step=step/2)
-        child_grid  = temp[child]
+    children = grid_config.get('children', {})
+    if children:
+        child_grids = []
+        for child, child_config in children.items():
+            temp        = make_grids_from_config(child_config, _name=child, _step=step/2)
+            child_grid  = temp[child]
+            
+            child_grids.append(child_grid)
+            nested_grids.update(temp)
         
-        child_grids.append(child_grid)
-        nested_grids.update(temp)
-        
-    if child_grids:
-        grid = NestedGrid(grid, *child_grids, name=_name)
+        if child_grids:
+            grid = NestedGrid(grid, *child_grids, name=_name)
         
     nested_grids[_name] = grid
     

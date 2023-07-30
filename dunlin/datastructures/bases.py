@@ -80,6 +80,12 @@ class DataValue(ABC):
         else:
             super().__setattr__(attr, value)
     
+    def __getitem__(self, attr):
+        return getattr(self, attr)
+    
+    def get(self, attr, default=None):
+        return getattr(self, attr, default)
+    
     ###########################################################################
     #Representation
     ###########################################################################

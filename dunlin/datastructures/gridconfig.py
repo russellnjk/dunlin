@@ -62,9 +62,6 @@ class GridConfig(Tree):
                          _parent_step = step 
                          )
     
-    def __getitem__(self, key: str):
-        return self.children[key]
-    
     def to_dict(self) -> dict:
         dct = {'step'     : self.step,
                'min'      : list(self.min),

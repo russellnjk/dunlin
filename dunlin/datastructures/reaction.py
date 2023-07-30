@@ -104,6 +104,8 @@ class Reaction(DataValue):
             msg = f'Stoichiometry for {name} contains unexpected states: {difference}.'
             raise ValueError(msg)
         
+        namespace = ut.get_namespace(rate) | set(stoichiometry)
+        
         #Parse the bounds
         bounds_ = None if bounds is None else tuple(bounds)
         
@@ -115,7 +117,8 @@ class Reaction(DataValue):
                          reactants     = frozenset(reactants),
                          products      = frozenset(products),
                          states        = frozenset(reactants|products),
-                         bounds        = bounds_
+                         bounds        = bounds_,
+                         namespace     = namespace
                          )
         
         states_set.update(stoichiometry)

@@ -279,7 +279,7 @@ class DomainTypeDict(DataDict):
                  coordinate_components : CoordinateComponentDict,
                  states                : StateDict,
                  mapping               : dict
-                 ) -> None:
+                 ):
         
         state2domain_type  = {}
         domain2domain_type = {}
@@ -399,6 +399,7 @@ class SurfaceDict(DataDict):
                          domain_types,
                          domain2surface
                          )
+        self.domain2surface = domain2surface
         
         
     

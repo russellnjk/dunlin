@@ -1,30 +1,30 @@
 import numpy as np
 from matplotlib.patches import Rectangle
 from numbers import Number
-from typing  import Iterable, Union
+from typing  import Iterable
 
 import dunlin.utils_plot as upp
 from ..grid.grid   import RegularGrid, NestedGrid, make_grids_from_config
-from .bidict       import One2One, One2Many
+from .bidict       import One2One, Many2One
 
 #Types
-Domain_type = Union[str, Number]
-Domain      = Union[str, Number]
+Domain_type = str|Number
+Domain      = str|Number
 Voxel       = tuple[Number]
 
 #Stack class
 class Stack:
     #Expected mappings and attributes
-    grid                  : Union[RegularGrid, NestedGrid]
+    grid                  : RegularGrid|NestedGrid
     ndims                 : int
     shifts                : list
     sizes                 : dict[Voxel, Number]
     voxels                : dict[Voxel, dict]
     shape_dict            : One2One[str, object]
-    shape2domain_type     : One2Many[str, Domain_type]
-    voxel2domain_type     : One2Many[Voxel, Domain_type]
+    shape2domain_type     : Many2One[str, Domain_type]
+    voxel2domain_type     : Many2One[Voxel, Domain_type]
     voxel2domain_type_idx : One2One[Voxel, tuple[int, Domain_type]]
-    voxel2shape           : One2Many[Voxel, str]
+    voxel2shape           : Many2One[Voxel, str]
     
     #For plotting
     default_domain_type_args = {'edgecolor': 'None'
@@ -37,13 +37,13 @@ class Stack:
                                 }
     
     @staticmethod
-    def make_grids_from_config(grid_config):
+    def make_grids_from_config(grid_config) -> dict[str, RegularGrid|NestedGrid]:
         return make_grids_from_config(grid_config)
     
     def __init__(self, 
-                 grid   : Union[RegularGrid, NestedGrid], 
+                 grid   : RegularGrid|NestedGrid, 
                  shapes : Iterable 
-                 ) -> None:
+                 ):
         #Copy from grid
         ndims  = grid.ndims
         shifts = [i for i in range(-ndims, ndims+1) if i]
@@ -81,7 +81,7 @@ class Stack:
         
         #Create mappings between shapes and domains
         shape2domain      = {shape: i for i, shape in enumerate(self.shape_dict)}
-        self.shape2domain = One2Many('shape', 'domain', shape2domain)
+        self.shape2domain = Many2One('shape', 'domain', shape2domain)
         
     @staticmethod
     def _make_mappings(voxels: dict, shapes: tuple):
@@ -116,9 +116,9 @@ class Stack:
         '''
         #Check shapes and map each voxel to a shape 
         voxel_array           = np.array(list(voxels))
-        voxel2shape           = One2Many('voxel', 'shape')
-        shape2domain_type     = One2Many('shape', 'domain_type')
-        voxel2domain_type     = One2Many('voxel', 'domain_type')
+        voxel2shape           = Many2One('voxel', 'shape')
+        shape2domain_type     = Many2One('shape', 'domain_type')
+        voxel2domain_type     = Many2One('voxel', 'domain_type')
         voxel2domain_type_idx = One2One('voxel', 'domain_type_idx')
         shape_dict            = One2One('shape', 'shape_object')
         domain_type_idxs      = {}
@@ -189,7 +189,7 @@ class Stack:
                 voxel2shape, 
                 )
 
-    def _add_voxel(self, voxel) -> None:
+    def _add_voxel(self, voxel: Voxel) -> None:
         voxel2domain_type     = self.voxel2domain_type
         voxel2shape           = self.voxel2shape
         shape2domain          = self.shape2domain 
@@ -205,7 +205,7 @@ class Stack:
         datum = {'neighbours'  : {},
                  'boundary'    : [],
                  'surface'     : {},
-                 'bulk'        : One2Many('neighbour', 'shift'),
+                 'bulk'        : Many2One('neighbour', 'shift'),
                  'size'        : self.sizes[voxel],
                  'shape'       : self.voxel2shape[voxel],
                  'domain_type' : domain_type0,
@@ -248,7 +248,7 @@ class Stack:
                 #Surface edge
                 else:
                     #Update self.voxels
-                    datum['surface'].setdefault(domain_type1, One2Many('neighbour', 'shift'))
+                    datum['surface'].setdefault(domain_type1, Many2One('neighbour', 'shift'))
                     datum['surface'][domain_type1][neighbour] = shift
                     
                     #Subclasses will extend the functionality of this method
@@ -265,13 +265,13 @@ class Stack:
                 
         self.voxels[voxel] = datum
     
-    def _add_bulk(self, voxel, neighbour, shift):
+    def _add_bulk(self, voxel: Voxel, neighbour: Voxel, shift: int):
         pass
     
-    def _add_surface(self, voxel, neighbour, shift):
+    def _add_surface(self, voxel: Voxel, neighbour: Voxel, shift: int):
         pass
     
-    def _add_boundary(self, voxel, shift):
+    def _add_boundary(self, voxel: Voxel, shift: int):
         pass
     
     ###########################################################################

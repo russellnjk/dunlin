@@ -1,13 +1,19 @@
 from numbers import Number
 from typing  import Union
 
-import dunlin.utils as ut
 from .bases               import DataDict, DataValue
 from .coordinatecomponent import CoordinateComponentDict
 from .stateparam          import StateDict, ParameterDict
 
 class BoundaryConditions(DataValue):
-    '''Boundary conditions for one state
+    '''Boundary conditions for one state. The input takes the form:
+        ```
+        {<axis> : {"min": [<value>, <condition_type>],
+                   "max": [<value>, <condition_type>],
+                   },
+         ...
+         }
+        ```
     ''' 
     def __init__(self,
                  all_names             : set,
@@ -25,6 +31,9 @@ class BoundaryConditions(DataValue):
         
         temp = {}
         for axis, boundary_data in boundary_conditions.items():
+            if type(boundary_data) == list:
+                boundary_data = {'min': boundary_data, 'max': boundary_data}
+                
             for bound, condition in boundary_data.items():
                 #Extract the value and condition type
                 if type(condition) == list or type(condition) == tuple:

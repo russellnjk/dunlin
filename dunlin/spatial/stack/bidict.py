@@ -191,7 +191,7 @@ class One2One(_BiDict):
         self._forward.pop(key, )
         return key
     
-class One2Many(_BiDict):
+class Many2One(_BiDict):
     def pop(self, key):
         value = self._forward.pop(key)
         self._backward[value].remove(key)

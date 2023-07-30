@@ -9,24 +9,19 @@ from scipy   import spatial
 from typing  import Literal, Union
 
 import dunlin.utils      as ut
-import dunlin.utils_plot as upp
-from .grid.grid            import RegularGrid, NestedGrid
-from .grid.bidict          import One2One, One2Many
-from .statestack           import (StateStack,
-                                   Domain_type, Domain, Voxel, 
-                                   AdjacentShapes, AdjacentDomains,
-                                   State, Parameter,
-                                   )
+from ..grid.grid  import RegularGrid, NestedGrid
+from .bidict      import One2One, Many2One
+from .statestack  import (StateStack,
+                          Domain_type, Domain, Voxel, 
+                          State, Parameter,
+                          )
 from dunlin.datastructures import SpatialModelData
 
 #Typing
-Surface = tuple[Domain_type, Domain_type]
+Surface_type = tuple[Domain_type, Domain_type]
     
 #ReactionStack
 class ReactionStack(StateStack):
-    #For plotting
-    surface_linewidth = 5
-    
     #Expected mappings and attributes
     grid                  : Union[RegularGrid, NestedGrid]
     ndims                 : int
@@ -34,40 +29,40 @@ class ReactionStack(StateStack):
     sizes                 : dict[Voxel, Number]
     voxels                : dict[Voxel, dict]
     shape_dict            : One2One[str, object]
-    shape2domain_type     : One2Many[str, Domain_type]
-    voxel2domain_type     : One2Many[Voxel, Domain_type]
-    voxel2domain_type_idx : One2Many[Voxel, int]
-    voxel2shape           : One2Many[Voxel, str]
-    shape2domain          : One2Many[str, Domain]
+    shape2domain_type     : Many2One[str, Domain_type]
+    voxel2domain_type     : Many2One[Voxel, Domain_type]
+    voxel2domain_type_idx : One2One[Voxel, tuple[int, Domain_type]]
+    voxel2shape           : Many2One[Voxel, str]
+    shape2domain          : Many2One[str, Domain]
     
-    grids              : dict[str, Union[RegularGrid, NestedGrid]]
-    adjacent_shapes    : dict[tuple, AdjacentShapes]
-    adjacent_domains   : dict[tuple, AdjacentDomains]
-    voxel2domain       : One2Many[Voxel, Domain]
-    domain2domain_type : One2Many[Domain, Domain_type]
+    grids              : dict[str, RegularGrid|NestedGrid]
+    adjacent_shapes    : set[tuple[str, str]]
+    voxel2domain       : Many2One[Voxel, Domain]
+    domain2domain_type : Many2One[Domain, Domain_type]
+    shape2domain       : Many2One[str, Domain]
+    surface2domain     : One2One[str|tuple[Domain, Domain], tuple[Domain, Domain]]
     
     spatial_data      : SpatialModelData
     element2idx       : One2One[tuple[Voxel, State], int]
     state2dxidx       : One2One[State, tuple[int, int]]
-    state2domain_type : One2Many[State, Domain_type]
+    state2domain_type : Many2One[State, Domain_type]
     state_code        : str
     parameter_code    : str
     function_code     : str
     diff_code         : str
     signature         : tuple[str]
     rhs_functions     : dict[str, callable]
-    rhsdct_functions  : dict[str, callable]
     formatter         : str
     
-    surface_data      : dict[Surface, dict]
-    global_variables  : set
-    bulk_variables    : dict[str, Domain_type]
-    surface_variables : dict[str, Surface]
-    variable_code     : str
-    bulk_reactions    : dict[str, Domain_type]
-    surface_reactions : dict[str, Surface]
-    reaction_code     : str
-    surface_linewidth : float
+    surface_data         : dict[Surface_type, dict]
+    global_variables     : set
+    bulk_variables       : dict[str, Domain_type]
+    surface_variables    : dict[str, Surface_type]
+    variable_code        : str
+    bulk_reactions       : dict[str, Domain_type]
+    surface_reactions    : dict[str, Surface_type]
+    reaction_code        : str
+    reaction_code_rhsdct : str
     
     def __init__(self, spatial_data: SpatialModelData):
         #Data structures for self._add_surface
@@ -81,7 +76,7 @@ class ReactionStack(StateStack):
         self.global_variables  = set()
         self.bulk_variables    = {}
         self.surface_variables = {}
-        self.variable_code     = '\t#Variables'
+        self.variable_code     = '\t#Variables\n'
         self._add_variable_code()
         
         #Parse the reactions
@@ -89,6 +84,12 @@ class ReactionStack(StateStack):
         self.surface_reactions = {}
         self.reaction_code     = '\t#Reactions\n'
         self._add_reaction_code()
+        
+        pattern = '[^[]__array\([^)]*\)'
+        repl    = lambda match: match[0] + '[:,__newaxis]'
+        edit    = lambda x: re.sub(pattern, repl, x)
+        
+        self.reaction_code_rhsdct = edit(self.reaction_code)
         
     ###########################################################################
     #Preprocessing
@@ -104,13 +105,13 @@ class ReactionStack(StateStack):
         domain_type0 = voxel2domain_type[voxel0]
         domain_type1 = voxel2domain_type[voxel1]
         domain_types = domain_type0, domain_type1
-        surface      = tuple(sorted([domain_type0, domain_type1]))
+        surface_type = tuple(sorted([domain_type0, domain_type1]))
         size0        = sizes[voxel0]
         size1        = sizes[voxel1]
         n            = ndims - 1
         
         #Prevent double computation
-        if surface != domain_types:
+        if surface_type != domain_types:
             return
         
         #Update self.surface_data
@@ -121,7 +122,7 @@ class ReactionStack(StateStack):
         voxel1_idx = voxel2domain_type_idx[voxel1][0]
         
         default       = {'batch_data' : []}
-        surface_datum = surface_data.setdefault(surface, default)
+        surface_datum = surface_data.setdefault(surface_type, default)
         batch_data    = surface_datum['batch_data']
         
         i = 0
@@ -170,9 +171,9 @@ class ReactionStack(StateStack):
         surface_data = self.surface_data
         
         start = 0
-        for surface in surface_data.keys():
-            domain_type0, domain_type1 = surface
-            surface_datum              = surface_data[surface]  
+        for surface_type in surface_data.keys():
+            domain_type0, domain_type1 = surface_type
+            surface_datum              = surface_data[surface_type]  
             batches                    = surface_datum['batch_data']
             template                   = '__array({})'
             collated0                  = []
@@ -225,8 +226,8 @@ class ReactionStack(StateStack):
                 start = stop
             
             #Convert collated from list to string
-            collated0   = template.format('[' + ', '.join([str(i) for i in collated0]) + ']')
-            collated1   = template.format('[' + ', '.join([str(i) for i in collated1]) + ']')
+            collated0 = template.format('[' + ', '.join([str(i) for i in collated0]) + ']')
+            collated1 = template.format('[' + ', '.join([str(i) for i in collated1]) + ']')
             
             #Convert surface_idx2midpoint into One2One to allow 2 way access
             surface_idx2midpoint = One2One('surface_idx', 'midpoint', surface_idx2midpoint)
@@ -285,7 +286,7 @@ class ReactionStack(StateStack):
         spatial_data         = self.spatial_data
         variables            = spatial_data.variables
         state2domain_type    = self.state2domain_type
-        states               = set(spatial_data.states.keys())
+        states               = set(spatial_data.states)
         global_variables     = self.global_variables
         bulk_variables       = self.bulk_variables
         surface_variables    = self.surface_variables
@@ -362,7 +363,7 @@ class ReactionStack(StateStack):
         spatial_data      = self.spatial_data
         reactions         = spatial_data.reactions
         state2domain_type    = self.state2domain_type
-        states               = set(spatial_data.states.keys())
+        states               = set(spatial_data.states)
         bulk_variables       = self.bulk_variables
         surface_variables    = self.surface_variables
         bulk_reactions       = self.bulk_reactions
@@ -464,14 +465,14 @@ class ReactionStack(StateStack):
     #Retrieval
     ###########################################################################
     def get_surface_midpoints(self,
-                              surface : Surface
+                              surface : Surface_type
                               ) -> list[tuple]:
         surface_idx2midpoint = self.surface_data[surface]['spatial']['surface_idx2midpoint']
         surface_midpoints    = list(surface_idx2midpoint.values())
         return surface_midpoints 
     
     def get_surface_idx(self, 
-                        surface : Surface,
+                        surface : Surface_type,
                         *points : tuple[Number], 
                         ) -> int:
         #Set up variables
@@ -512,11 +513,12 @@ class ReactionStack(StateStack):
                       ax, 
                       name           : str, 
                       values         : np.array,
-                      surface        : Surface,
+                      surface        : Surface_type,
                       cmap           : str='coolwarm',
                       norm           : Literal['linear', 'log']='linear',
                       label_surfaces : bool=True,
-                      colorbar_ax    : plt.Axes=None
+                      linewidth      : int = 5,
+                      colorbar_ax    : plt.Axes=None,
                       ) -> dict:
         #Create the cache for the results
         results = {}

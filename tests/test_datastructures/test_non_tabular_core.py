@@ -151,12 +151,15 @@ assert data2 == data1 == data0
 ##############################################################################
 #Test event
 ##############################################################################
-data0 = {'f0': {'trigger'    : 'time > 10',
-                'assign'     : 'x0 = 2',
+data0 = {'f0': {'trigger'    : 'time - 10',
+                'assign'     : {'x0' : '2'
+                                },
                 'delay'      : 5,
                 },
-         'f1': {'trigger'    : 'time > 20',
-                'assign'     : ['x1 = 2', 'x0 = 3'],
+         'f1': {'trigger'    : 'time - 20',
+                'assign'     : {'x1': 2, 
+                                'x0' : '3'
+                                },
                 'delay'      : 5,
                 'persistent' : False,
                 'priority'   : 1
@@ -165,16 +168,17 @@ data0 = {'f0': {'trigger'    : 'time > 10',
 
 all_names = {'x0', 'x1'}
 C = EventDict
-F0 = C(set(all_names), data0)
+F0 = C(set(all_names), {'x0': [0], 'x1': [0]}, {'p0': [0], 'p1': [0]}, data0)
+
 try:
-    F0 = C(set(all_names[1:]), data0)
+    F0 = C(set(all_names[1:]), {'x0': [0], 'x1': [0]}, {'p0': [0], 'p1': [0]}, data0)
 except:
     assert True
 else:
     assert False
 
 try:
-    F0 = C(set(all_names + ('f0',)), data0)
+    F0 = C(set(all_names + ('f0',)), {'x0': [0], 'x1': [0]}, {'p0': [0], 'p1': [0]}, data0)
 except:
     assert True
 else:

@@ -141,7 +141,7 @@ class ODEModelData(ModelData):
         self.variables  = VariableDict(all_names, variables)              
         self.reactions  = ReactionDict(all_names, self.states, reactions) 
         self.rates      = RateDict(all_names, self.states, rates)         
-        self.events     = EventDict(all_names, events)                    
+        self.events     = EventDict(all_names, states, parameters, events)                    
         self.units      = UnitsDict(self.states, parameters, units) if units     else None
         self.tspans     = self.deep_copy('tspans', tspans)
         

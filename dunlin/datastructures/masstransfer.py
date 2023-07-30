@@ -1,6 +1,6 @@
 import pandas as pd
 from numbers import Number
-from typing  import Any, Union
+from typing  import Any
 
 import dunlin.utils as ut
 from dunlin.datastructures.bases import DataDict, DataValue
@@ -19,7 +19,7 @@ class MassTransfer(DataValue):
                  state                 : str,
                  *coefficients_tup,
                  **coefficients_dct
-                 ) -> None:
+                 ):
         #Check the state
         if state not in states:
             msg = f'State {state} is not in model states.'
@@ -69,9 +69,12 @@ class MassTransfer(DataValue):
                          coefficients = coefficients
                          )
     
-    def __getitem__(self, axis: str) -> Union[str, Number]:
+    def __getitem__(self, axis: str) -> str|Number:
         return self.coefficients[axis]
-        
+    
+    def get(self, axis: str, default: Any=None) -> None|str|Number:
+        return self.coefficients.get(axis, default)
+    
     def to_dict(self) -> dict:
         lst = [*self.coefficients.values()]
         
@@ -88,11 +91,11 @@ class MassTransferDict(DataDict):
     itype: type
     
     def __init__(self, 
-                 all_names         : set,
+                 all_names             : set,
                  coordinate_components : CoordinateComponentDict,
                  states                : StateDict,
                  parameters            : ParameterDict,
-                 mapping               : Union[dict, list, str, Number],
+                 mapping               : dict|list|str|Number,
                  ) -> None:
         
         super().__init__(all_names, 
@@ -103,8 +106,8 @@ class MassTransferDict(DataDict):
                          )
     
     def __getitem__(self, 
-                    key: tuple[str, Union[str, Number]]
-                    ) -> Union[str, Number]:
+                    key: tuple[str, str| Number]
+                    ) -> str|Number:
         state, axis = key
         
         if type(axis) == str:
@@ -119,9 +122,9 @@ class MassTransferDict(DataDict):
         
     def get(self,
             state   : str, 
-            axis    : Union[str, Number],
+            axis    : str|Number,
             default : Any                = None
-            ) -> Union[None, str, Number]:
+            ) -> None|str|Number:
         
         if type(axis) == str:
             pass

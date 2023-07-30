@@ -21,9 +21,10 @@ class Variable(DataValue):
         
         #It is now safe to call the parent's init
         super().__init__(all_names, 
-                         name     = name,
-                         expr     = expr_str,
-                         expr_ori = expr
+                         name      = name,
+                         expr      = expr_str,
+                         expr_ori  = expr,
+                         namespace = namespace
                          )
     
     ###########################################################################

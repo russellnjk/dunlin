@@ -1,0 +1,160 @@
+def model_M0(time, states, parameters):
+
+	#States
+	A = states[0:4]
+	B = states[4:8]
+	C = states[8:20]
+	D = states[20:32]
+
+	#Parameters
+	k_degA = parameters[0]
+	k_synB = parameters[1]
+	k_synD = parameters[2]
+	k_degD = parameters[3]
+	k_pump = parameters[4]
+	J_B = parameters[5]
+	J_C_x = parameters[6]
+	J_C_y = parameters[7]
+	F_B = parameters[8]
+	F_C_x = parameters[9]
+	F_C_y = parameters[10]
+
+	#Diffs
+	_d_A = __zeros(A.shape, __float64)
+	_d_B = __zeros(B.shape, __float64)
+	_d_C = __zeros(C.shape, __float64)
+	_d_D = __zeros(D.shape, __float64)
+
+	#Functions
+	def func0(x, k):
+		return -x*k
+
+	#Variables
+	#vrb0
+	vrb0 = func0(k_degA, A)
+
+	#vrb1
+	vrb1 = k_pump*B[__array([0, 1, 2, 3, 0, 1, 2, 3])]*C[__array([1, 2, 6, 7, 4, 5, 9, 10])]
+
+	#vrb2
+	vrb2 = 1
+
+	#vrb3
+	vrb3 = vrb0[__array([0, 1, 2, 3, 0, 1, 2, 3])]*vrb1*vrb2
+
+
+	#Reactions
+	#synB
+	synB = k_synB
+
+	_d_B += 1*synB
+
+	#pumpB
+	pumpB = k_pump*B[__array([0, 1, 2, 3, 0, 1, 2, 3])]
+
+	_d_B[__array([0, 1, 2, 3])] += -1*pumpB[4:8]*__array([1, 1, 1, 1])/__array([1, 1, 1, 1])
+
+	_d_C[__array([4, 5, 9, 10])] += 1*pumpB[4:8]*__array([1, 1, 1, 1])/__array([1, 1, 1, 1])
+
+	#synD
+	synD = k_synD*C - vrb2*D
+
+	_d_C += -1*synD
+	_d_D += 1*synD
+
+
+	##Advection B
+	_adv_B = __zeros(B.shape)
+
+	_left = (__array([[-1,  0, -1,  2],  [ 0,  1,  0,  1]]),)
+	_right = (__array([[ 1, -1,  3, -1],  [ 1,  0,  1,  0]]),)
+	_adv_B += __advection(B, __ones(B.shape)*F_B, _left, _right, __array([1, 1, 1, 1]))
+
+	_left = (__array([[-1, -1,  0,  1],  [ 0,  0,  1,  1]]),)
+	_right = (__array([[ 2,  3, -1, -1],  [ 1,  1,  0,  0]]),)
+	_adv_B += __advection(B, __ones(B.shape)*F_B, _left, _right, __array([1, 1, 1, 1]))
+
+	_d_B += _adv_B
+
+	##Advection C
+	_adv_C = __zeros(C.shape)
+
+	_left = (__array([[-1,  0,  1,  2, -1, -1, -1, -1, -1,  8,  9, 10],  [ 0,  1,  1,  1,  0,  0,  0,  0,  0,  1,  1,  1]]),)
+	_right = (__array([[ 1,  2,  3, -1, -1, -1, -1, -1,  9, 10, 11, -1],  [ 1,  1,  1,  0,  0,  0,  0,  0,  1,  1,  1,  0]]),)
+	_adv_C += __advection(C, __ones(C.shape)*F_C_x, _left, _right, __array([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]))
+
+	_left = (__array([[-1, -1, -1, -1,  0,  3,  4,  5,  6, -1, -1,  7],  [ 0,  0,  0,  0,  1,  1,  1,  1,  1,  0,  0,  1]]),)
+	_right = (__array([[ 4, -1, -1,  5,  6,  7,  8, 11, -1, -1, -1, -1],  [ 1,  0,  0,  1,  1,  1,  1,  1,  0,  0,  0,  0]]),)
+	_adv_C += __advection(C, __ones(C.shape)*F_C_y, _left, _right, __array([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]))
+
+	_d_C += _adv_C
+
+	##Advection D
+	_adv_D = __zeros(D.shape)
+
+	_left = (__array([[-1,  0,  1,  2, -1, -1, -1, -1, -1,  8,  9, 10],  [ 0,  1,  1,  1,  0,  0,  0,  0,  0,  1,  1,  1]]),)
+	_right = (__array([[ 1,  2,  3, -1, -1, -1, -1, -1,  9, 10, 11, -1],  [ 1,  1,  1,  0,  0,  0,  0,  0,  1,  1,  1,  0]]),)
+	_adv_D += __advection(D, __ones(D.shape)*1, _left, _right, __array([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]))
+
+	_left = (__array([[-1, -1, -1, -1,  0,  3,  4,  5,  6, -1, -1,  7],  [ 0,  0,  0,  0,  1,  1,  1,  1,  1,  0,  0,  1]]),)
+	_right = (__array([[ 4, -1, -1,  5,  6,  7,  8, 11, -1, -1, -1, -1],  [ 1,  0,  0,  1,  1,  1,  1,  1,  0,  0,  0,  0]]),)
+	_adv_D += __advection(D, __ones(D.shape)*1, _left, _right, __array([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]))
+
+	_d_D += _adv_D
+
+
+
+	##Diffusion B
+	_dfn_B = __zeros(B.shape)
+
+	_left = (__array([[-1,  0, -1,  2],  [ 0,  1,  0,  1]]),)
+	_dfn_B += __diffusion(B, __ones(B.shape)*J_B, _left, __array([1, 1, 1, 1]))
+
+	_left = (__array([[-1, -1,  0,  1],  [ 0,  0,  1,  1]]),)
+	_dfn_B += __diffusion(B, __ones(B.shape)*J_B, _left, __array([1, 1, 1, 1]))
+
+	_d_B += _dfn_B
+
+	##Diffusion C
+	_dfn_C = __zeros(C.shape)
+
+	_left = (__array([[-1,  0,  1,  2, -1, -1, -1, -1, -1,  8,  9, 10],  [ 0,  1,  1,  1,  0,  0,  0,  0,  0,  1,  1,  1]]),)
+	_dfn_C += __diffusion(C, __ones(C.shape)*J_C_x, _left, __array([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]))
+
+	_left = (__array([[-1, -1, -1, -1,  0,  3,  4,  5,  6, -1, -1,  7],  [ 0,  0,  0,  0,  1,  1,  1,  1,  1,  0,  0,  1]]),)
+	_dfn_C += __diffusion(C, __ones(C.shape)*J_C_y, _left, __array([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]))
+
+	_d_C += _dfn_C
+
+	##Diffusion D
+	_dfn_D = __zeros(D.shape)
+
+	_left = (__array([[-1,  0,  1,  2, -1, -1, -1, -1, -1,  8,  9, 10],  [ 0,  1,  1,  1,  0,  0,  0,  0,  0,  1,  1,  1]]),)
+	_dfn_D += __diffusion(D, __ones(D.shape)*1, _left, __array([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]))
+
+	_left = (__array([[-1, -1, -1, -1,  0,  3,  4,  5,  6, -1, -1,  7],  [ 0,  0,  0,  0,  1,  1,  1,  1,  1,  0,  0,  1]]),)
+	_dfn_D += __diffusion(D, __ones(D.shape)*1, _left, __array([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]))
+
+	_d_D += _dfn_D
+
+
+
+	##Boundary Conditions C
+	_bc_C = __zeros(C.shape)
+
+	_left = __array([[0., 1., 2., 3.],  [1., 1., 1., 1.]])
+	_bc_C += __Dirichlet(C, __ones(C.shape)*J_C_y, __ones(C.shape)*0, _left, __array([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]))
+	_right = __array([[ 8.,  9., 10., 11.],  [ 1.,  1.,  1.,  1.]])
+	_bc_C += __Dirichlet(C, __ones(C.shape)*J_C_y, __ones(C.shape)*0, _right, __array([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]))
+	_left = __array([[0., 4., 6., 8.],  [1., 1., 1., 1.]])
+	_bc_C += __Neumann(C, __ones(C.shape)*1, _left, __array([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]))
+	_right = __array([[ 3.,  5.,  7., 11.],  [ 1.,  1.,  1.,  1.]])
+	_bc_C += __Neumann(C, __ones(C.shape)*-1, _right, __array([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]))
+	_d_C += _bc_C
+
+
+
+	_d_A += vrb0
+
+	_d_states = __concatenate((_d_A, _d_B, _d_C, _d_D, ))
+	return _d_states
