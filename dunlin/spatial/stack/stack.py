@@ -66,15 +66,15 @@ class Stack:
     
     def _preprocess(self) -> None:
         #Make mappings between shapes, voxels and domain types
-        grid     = self.grid
-        shapes   = self.shapes 
-        mappings = self._make_mappings(grid.voxels, shapes)
+        grid   = self.grid
+        shapes = self.shapes 
         
-        self.shape_dict            = mappings[0]
-        self.shape2domain_type     = mappings[1]
-        self.voxel2domain_type     = mappings[2]
-        self.voxel2domain_type_idx = mappings[3]
-        self.voxel2shape           = mappings[4]
+        (self.shape_dict,
+         self.shape2domain_type,
+         self.voxel2domain_type,
+         self.voxel2domain_type_idx,
+         self.voxel2shape,
+         ) = self._make_mappings(grid.voxels, shapes)
         
         #Create voxel dict for the current object
         self.voxels = {}
@@ -122,6 +122,7 @@ class Stack:
         voxel2domain_type_idx = One2One('voxel', 'domain_type_idx')
         shape_dict            = One2One('shape', 'shape_object')
         domain_type_idxs      = {}
+        
         
         #Iterate backwards
         for shape in shapes[::-1]:

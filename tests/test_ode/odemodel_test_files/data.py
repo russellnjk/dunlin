@@ -18,8 +18,15 @@ m0 = {'states'     : {'x0': {'c0': 1},
                              'rate'         : 'p1*x1'
                              },
                       },
-      'events'     : {'e0': ['time==0', ['x0 = 3']],
-                      'e6': ['time==800', ['x0 = 3'], 0, True, 1],
+      'events'     : {'e0': {'trigger' : 'time',
+                             'assign'  : {'x0': 3}
+                             },
+                      'e6': {'trigger'    : 'time-800', 
+                             'assign'     : {'x0': 3}, 
+                             'delay'      : 0, 
+                             'persistent' : True, 
+                             'priority'   : 1
+                             },
                       },
       'tspans'     : {'c0': np.linspace(0, 1000, 101)}
       }

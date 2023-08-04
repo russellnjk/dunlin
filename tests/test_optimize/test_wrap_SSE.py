@@ -15,8 +15,12 @@ all_data = {'M1': {'states'     : {'x0': [1, 1],
                    'parameters' : {'p0': [0.1, 0.1], 
                                    'p1': [0.1, 0.1]
                                    },
-                   'reactions'  : {'r0': ['x0 ->', 'p0'], 
-                                   'r1': ['-> x1', 'p1']
+                   'reactions'  : {'r0': {'stoichiometry' : {'x0' : -1}, 
+                                          'rate'          : 'p0'
+                                          }, 
+                                   'r1': {'stoichiometry' : {'x1' : 1}, 
+                                          'rate'          : 'p1'
+                                                          }, 
                                    },
                    'variables'  : {'v0': 'x0'
                                    },
@@ -31,14 +35,16 @@ all_data = {'M1': {'states'     : {'x0': [1, 1],
                                    'x1': [0, 0]
                                   },
                    'parameters' : {'p0': [0.1, 0.1], 
-                                               'p1': [0.1, 0.1]
-                                               },
-                   'reactions'  : {'r0': ['x0 ->', 'p0'], 
-                                               'r1': ['-> x1', 'p1']
-                                               },
-                   'variables'  : {'v0': 'x0'
+                                   'p1': [0.1, 0.1]
                                    },
-                   'extra'      : {'final_x0': ['index', 'x0', -1]
+                   'reactions'  : {'r0': {'stoichiometry' : {'x0' : -1}, 
+                                          'rate'          : 'p0'
+                                          }, 
+                                   'r1': {'stoichiometry' : {'x1' : 1}, 
+                                          'rate'          : 'p1'
+                                                          }, 
+                                   },
+                   'variables'  : {'v0': 'x0'
                                    },
                    'int_args'   : {'method': 'LSODA'
                                    },
@@ -49,60 +55,126 @@ all_data = {'M1': {'states'     : {'x0': [1, 1],
                    },
             }
 
+def test_equivalence(d, d_, msg: str):
+        for k, v in d.items():
+            if type(v) == dict:
+                for kk, vv in v.items():
+                    try:
+                        test = vv == d_[k][kk]
+                        if hasattr(test, '__iter__'):
+                            test = all(test)
+                        if not test:
+                            raise ValueError(f'Not equivalent. Keys {k} -> {kk}')
+                    except Exception as e:
+                        raise e
+            else:
+                try:
+                    test = v == d_[k]
+                    if hasattr(test, '__iter__'):
+                        test = all(test)
+                    if not test:
+                        raise ValueError(f'Not equivalent. Key {k}')
+                except Exception as e:
+                    raise e
+                
 if __name__ == '__main__':
-    time1   = np.linspace(0,  1, 21)
-    time2   = np.linspace(0,  2, 21)
-    y_data1 = np.e**(-time1)
-    y_data2 = 2 -2*np.e**(-time2)
+    time0   = np.linspace(0,  1, 21)
+    time1   = np.linspace(0,  2, 21)
+    y_data0 = np.e**(-time0)
+    y_data1 = 2 -2*np.e**(-time1)
 
-    cols1 = pd.MultiIndex.from_product([['x0', 'x1'], [0]])
-    cols2 = pd.MultiIndex.from_product([['x0', 'x1'], [1]])
-    df1 = pd.DataFrame(np.array([y_data1, y_data1]).T, index=time1, columns=cols1)
-    df2 = pd.DataFrame(np.array([y_data2, y_data2]).T, index=time2, columns=cols2)
+    # cols1 = pd.MultiIndex.from_product([['x0', 'x1'], [0]])
+    # cols2 = pd.MultiIndex.from_product([['x0', 'x1'], [1]])
+    # df1 = pd.DataFrame(np.array([y_data0, y_data0]).T, index=time0, columns=cols1)
+    # df2 = pd.DataFrame(np.array([y_data1, y_data1]).T, index=time1, columns=cols2)
     
-    #Read model
-    model    = dn.ODEModel.from_data(all_data, 'M1')
-
-    #Test Extraction of tspan, indices for t, y values and st dev
-    print('Test Extraction of tspan, indices for t, y values and st dev')
-    tspan, y_data, s_data, t_data, t_idx = ws.SSECalculator.parse_df(model, df1, df2)
+    s0 = pd.Series(y_data0, index=time0)
+    s1 = pd.Series(y_data1, index=time1)
+    
+    s0.sd = 1
+    s1.sd = 1
+    
+    by_state = {'x0': {0: s0,
+                       1: s1,
+                       },
+                'x1': {0: s0,
+                       1: s1,
+                       },
+                } 
+    
+    by_scenario = {0: {'x0': s0,
+                       'x1': s0,
+                       },
+                   1: {'x0': s1,
+                       'x1': s1
+                       },
+                   }
+    
+    model = dn.ODEModel.from_data(all_data, 'M1')
+    
+    ###########################################################################
+    #Test Preprocessing
+    ###########################################################################
+    r = ws.SSECalculator.parse_data(model, by_scenario, by='scenario')
+    
+    scenario2y_data0  = r[0]
+    scenario2t_data0  = r[1]
+    scenario2sd_data0 = r[2] 
+    scenario2t_idxs0  = r[3] 
+    scenario2tspan0   = r[4]
+    
+    r = ws.SSECalculator.parse_data(model, by_state, by='state')
+    
+    scenario2y_data1  = r[0]
+    scenario2t_data1  = r[1]
+    scenario2sd_data1 = r[2] 
+    scenario2t_idxs1  = r[3] 
+    scenario2tspan1   = r[4]
+    
+    test_equivalence(scenario2y_data0,  scenario2y_data1,  'scenario2y_data' )
+    test_equivalence(scenario2t_data0,  scenario2t_data1,  'scenario2t_data' )
+    test_equivalence(scenario2sd_data0, scenario2sd_data1, 'scenario2sd_data')
+    test_equivalence(scenario2t_idxs0,  scenario2t_idxs1,  'scenario2t_idxs' )
+    test_equivalence(scenario2tspan0,   scenario2tspan1,   'scenario2tspan'  )
+    
+    assert set(scenario2y_data0)  == {0, 1}
+    assert set(scenario2t_data0)  == {0, 1}
+    assert set(scenario2sd_data0) == {0, 1}
+    assert set(scenario2t_idxs0)  == {0, 1}
+    assert set(scenario2tspan0)   == {0, 1}
+    
+    ###########################################################################
+    #Test Instantiation
+    ###########################################################################
+    get_SSE = ws.SSECalculator(model, by_scenario, by='scenario')
+    
+    ###########################################################################
+    #Test Calculation
+    ###########################################################################    
+    get_SSE = ws.SSECalculator(model, by_scenario, by='scenario')
     
     #Initialize variables
-    init = model._states
+    init = model.state_dict
     assert np.all( init[0] == np.array([1, 0]) )
     assert np.all( init[1] == np.array([1, 0]) )
     
-    print('Test wrap_get_SSE')
-    df1_sd = df1.copy()
-    df1_sd.columns = df1_sd.columns.set_levels(['__x0', '__x1'], level=0)
-    df2_sd = df2.copy()
-    df2_sd.columns = df2_sd.columns.set_levels(['__x0', '__x1'], level=0)
-    for df in [df1_sd, df2_sd]:
-        for col in df.columns:
-            df[col].values[:] = 1
-    
+    #Test 0
+    print('Test wrap_get_SSE 0')
     p_array  = np.array([1, 1])
-    get_SSE  = ws.SSECalculator(model, df1, df2, df1_sd, df2_sd)
     SSE      = get_SSE(p_array)
     print(SSE)
     assert np.isclose(59.348280344968195, SSE, rtol=1e-2)
-        
-    #Test variable SSE
-    print('Test wrap_get_SSE with variable')
+    
+    #Test 1
+    delattr(s0, 'sd')
+    delattr(s1, 'sd')
+    
+    get_SSE = ws.SSECalculator(model, by_scenario, by='scenario')
+    
+    print('Test wrap_get_SSE 0')
     p_array  = np.array([1, 1])
-    get_SSE  = ws.SSECalculator(model, df1, df2)
     SSE      = get_SSE(p_array)
-    
-
-    SSE_     = get_SSE(p_array)
-    assert np.isclose(SSE, SSE_, rtol=1e-4)
-
-    
-    
-    
-    
-    
-    
-    
+    print(SSE)
+    assert np.isclose(842.5211496180012, SSE, rtol=1e-2)
     
     

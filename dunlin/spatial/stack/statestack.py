@@ -89,7 +89,8 @@ class StateStack(DomainStack):
         
         #For code excution
         self.signature        = 'time', 'states', 'parameters'
-        self.rhs_functions    = {'__array'   : np.ndarray,
+        self.rhs_functions    = {'__array'   : np.array,
+                                 '__ndarray' : np.ndarray,
                                  '__ones'    : np.ones,
                                  '__zeros'   : np.zeros,
                                  '__float64' : np.float64

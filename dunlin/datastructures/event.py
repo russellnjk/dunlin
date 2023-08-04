@@ -71,6 +71,10 @@ class Event(DataValue):
                 raise ValueError(msg)
         
         #Check and copy assignments
+        if type(assign) != dict:
+            msg = 'Event assignment must be a dict. Received {type(assign)}.'
+            raise TypeError(msg)
+            
         assignments_ = {}
         for lhs, rhs in assign.items():
             if lhs not in states and lhs not in parameters and lhs != 'time':

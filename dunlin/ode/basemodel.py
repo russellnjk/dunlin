@@ -274,6 +274,7 @@ class BaseModel(ABC):
         pass
     
     def integrate(self, 
+                  scenarios      : list = None,
                   raw            : bool = False, 
                   include_events : bool = True,
                   ) -> dict:
@@ -283,6 +284,9 @@ class BaseModel(ABC):
 
         Parameters
         ----------
+        scenarios: list, optional
+            A list of scenarios to integrate over. An exception is not raised if 
+            the scenario does not exist in the model's states.
         raw : bool, optional
             If True, returns Numpy arrays. If False, returns the integration 
             results as part of another class designed to package the results. The 
@@ -303,6 +307,10 @@ class BaseModel(ABC):
         
         
         for scenario, y0 in states.items():
+            if scenarios:
+                if scenario in scenarios:
+                    continue
+                
             p0    = parameters[scenario]
             tspan = self.get_tspan(scenario)
             

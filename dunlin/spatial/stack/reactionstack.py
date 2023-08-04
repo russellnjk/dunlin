@@ -536,7 +536,6 @@ class ReactionStack(StateStack):
         
         #Other overhead
         domain_type0, domain_type1 = surface
-        surface_linewidth          = self.surface_linewidth
         
         for surface_idx, value in enumerate(values):
             #Determine the arguments for the
@@ -559,7 +558,7 @@ class ReactionStack(StateStack):
             x, y       = np.stack([start, stop]).T
             
             #Plot the line
-            line = ax.plot(x, y, linewidth=surface_linewidth, color=color)
+            line = ax.plot(x, y, linewidth=linewidth, color=color)
             
             #Update the results
             results[surface_idx] = line
