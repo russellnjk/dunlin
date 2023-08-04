@@ -9,8 +9,6 @@ from time                import time
 ###############################################################################
 #Non-Standard Imports
 ###############################################################################
-import dunlin.simulate          as sim
-import dunlin.optimize.wrap_SSE as ws
 import dunlin.optimize.algos    as ag 
 import dunlin.optimize.trace    as tr
 from dunlin.optimize.params import SampledParam, Bounds, DunlinOptimizationError
@@ -77,7 +75,15 @@ class Optimizer:
         
         return opt_result
     
-    def __init__(self, nominal, free_parameters, to_minimize, settings=None, trace_args=None, ref=None):
+    def __init__(self, 
+                 nominal, 
+                 free_parameters, 
+                 to_minimize, 
+                 settings=None, 
+                 trace_args=None, 
+                 ref=None
+                 ):
+        
         self.settings           = {} if settings   is None else settings
         self.trace_args         = {} if trace_args is None else trace_args
         self.neg_log_likelihood = to_minimize

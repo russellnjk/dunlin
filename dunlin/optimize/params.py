@@ -20,7 +20,7 @@ class SampledParam:
                 'log10' : lambda x: 10**x
                 }
     
-    _priors = {'uniform'    : lambda lb, ub    : uniform(lb, ub-lb),
+    _priors = {'uniform'    : lambda lb, ub    : 1,
                'normal'     : lambda mean, sd  : norm(mean, sd),
                'laplace'    : lambda loc, scale: laplace(loc, scale),
                'logNormal'  : lambda mean, sd  : lognorm(mean, sd),
@@ -61,7 +61,14 @@ class SampledParam:
             raise InvalidPrior(_name, prior, 'list/tuple in the order [type, loc, scale] or dict with keys type, loc and scale')
         return ptype, func(a, b)
             
-    def __init__(self, name, bounds, prior=None, sample=None, scale='lin', guess=None, scaled_guess=False):
+    def __init__(self, 
+                 name, 
+                 bounds, 
+                 prior        = None, 
+                 sample       = None, 
+                 scale        = 'lin', 
+                 guess        = None, 
+                 scaled_guess = False):
         #Set name
         self.name  = name
         

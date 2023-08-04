@@ -84,17 +84,17 @@ if __name__ == '__main__':
     print('Test prior calculation for a single parameter')
     
     free_params = {'p0': {'bounds': [-10, 10], 'scale': 'lin',   'prior': ['uniform',              -5, 5]},
-                    'p1': {'bounds': [-10, 10], 'scale': 'lin',   'prior': ['normal',                0, 1]},
-                    'p2': {'bounds': [-10, 10], 'scale': 'lin',   'prior': ['laplace',               0, 1]},
-                    'p3': {'bounds': [0.1, 10], 'scale': 'log10', 'prior': ['normal',                0, 1]},
-                    'p4': {'bounds': [0.1, 10], 'scale': 'log10', 'prior': ['parameterScaleNormal',  0, 1]},
-                    'p5': {'bounds': [0.1, 10], 'scale': 'log10', 'prior': ['normal',                0, 1], 
+                   'p1': {'bounds': [-10, 10], 'scale': 'lin',   'prior': ['normal',                0, 1]},
+                   'p2': {'bounds': [-10, 10], 'scale': 'lin',   'prior': ['laplace',               0, 1]},
+                   'p3': {'bounds': [0.1, 10], 'scale': 'log10', 'prior': ['normal',                0, 1]},
+                   'p4': {'bounds': [0.1, 10], 'scale': 'log10', 'prior': ['parameterScaleNormal',  0, 1]},
+                   'p5': {'bounds': [0.1, 10], 'scale': 'log10', 'prior': ['normal',                0, 1], 
                           'sample': ['laplace', 0, 1]},
-                    }
+                   }
     
     p0 = opt.SampledParam('p0', **free_params['p0'])
     r = p0.get_prior(1)    
-    assert r == uniform(0, 10).pdf(1)
+    assert r == 1
     
     p1 = opt.SampledParam('p1', **free_params['p1'])
     r = p1.get_prior(1)    

@@ -8,8 +8,6 @@ from typing  import Literal
 import dunlin.utils as ut
 from ..ode.odemodel import ODEModel
 
-# import dunlin.data  as ddt
-
 State    = str
 Scenario = Number|str|tuple[Number|str]
 
@@ -117,7 +115,7 @@ class SSECalculator:
     ###########################################################################       
     def reconstruct(self, free_params_array):
         sampled_index = self.sampled_parameter_idxs
-        nominal_dct   = self.nominals
+        nominal_dct   = self.nominal
         p             = {} 
         
         for scenario in self.scenario2y0:
@@ -161,7 +159,7 @@ class SSECalculator:
         free_parameters = model.optim_args['free_parameters'] 
         scenario2y0     = model.state_dict
         
-        nominals               = model.parameter_dict
+        nominal               = model.parameter_dict
         parameters             = model.parameters
         sampled_parameter_idxs = [i for i, p in enumerate(parameters) if p in free_parameters]
         
@@ -175,7 +173,7 @@ class SSECalculator:
         #Assign attributes
         self.ref                    = model.ref
         self.scenario2y0            = scenario2y0 
-        self.nominals               = nominals
+        self.nominal               = nominal
         self.sampled_parameter_idxs = np.array(sampled_parameter_idxs)
         self.model                  = model
         
