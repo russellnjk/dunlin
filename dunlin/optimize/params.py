@@ -1,7 +1,8 @@
-import numpy             as     np
-import pandas            as     pd
-from numba               import njit
-from scipy.stats         import norm, laplace, lognorm, loglaplace, uniform
+import numpy as np
+from numba       import njit
+from numbers     import Number
+from scipy.stats import norm, laplace, lognorm, loglaplace
+from typing      import Literal
 
 ###############################################################################
 #Sampled Parameters
@@ -63,20 +64,20 @@ class SampledParam:
             
     def __init__(self, 
                  name, 
-                 bounds, 
-                 prior        = None, 
-                 sample       = None, 
-                 scale        = 'lin', 
-                 guess        = None, 
-                 scaled_guess = False):
+                 bounds       : tuple[Number, Number], 
+                 prior        : Literal['uni', 'norm', 'lap', 'lognorm', ...] = None, 
+                 sample       : Literal['uni', 'norm', 'lap', 'lognorm', ...] = None, 
+                 scale        : Literal['lin', 'log', 'log10'] = 'lin', 
+                 guess        : np.ndarray = None, 
+                 scaled_guess : bool = False):
         #Set name
         self.name  = name
         
         #Set bounds
         if hasattr(bounds, 'items'):
-            self.bounds      = bounds['lb'], bounds['ub']
+            self.bounds = bounds['lb'], bounds['ub']
         else:
-            self.bounds      = tuple(bounds)
+            self.bounds = tuple(bounds)
         if self.bounds[0] >= self.bounds[1] or len(self.bounds) != 2:
             raise InvalidBoundsError(name, self.bounds)
         

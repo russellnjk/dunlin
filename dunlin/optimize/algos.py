@@ -63,8 +63,8 @@ def differential_evolution(func, bounds, callback=None, **kwargs):
             return callback(xk, convergence)
         else:
             return 
-    
-    result = sop.differential_evolution(func, bounds, callback=_callback, **kwargs)
+
+    result = sop.differential_evolution(func, bounds=bounds, callback=_callback, **kwargs)
     
     return Result(samples, posterior, convergences, result)
 

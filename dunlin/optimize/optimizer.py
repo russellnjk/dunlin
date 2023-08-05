@@ -5,13 +5,20 @@ from collections         import namedtuple
 from numba               import njit
 from scipy.stats         import norm
 from time                import time
-  
+from typing              import Callable
+ 
 ###############################################################################
 #Non-Standard Imports
 ###############################################################################
-import dunlin.optimize.algos    as ag 
-import dunlin.optimize.trace    as tr
-from dunlin.optimize.params import SampledParam, Bounds, DunlinOptimizationError
+from .       import algos as ag 
+from .       import trace as tr
+from .params import SampledParam, Bounds, DunlinOptimizationError
+
+###############################################################################
+#Typing
+###############################################################################
+Parameter = str
+State     = str
 
 ###############################################################################
 #Wrapping
@@ -67,7 +74,7 @@ class Optimizer:
             raise ValueError('to_minimize must be callable.')
         
         #Instantiate
-        nominal         = model.parameters
+        nominal         = model.parameter_df
         free_parameters = model.optim_args.get('free_parameters', {})
         settings        = model.optim_args.get('settings',    {})
         trace_args      = model.optim_args.get('trace_args',  {})
@@ -76,12 +83,12 @@ class Optimizer:
         return opt_result
     
     def __init__(self, 
-                 nominal, 
-                 free_parameters, 
-                 to_minimize, 
-                 settings=None, 
-                 trace_args=None, 
-                 ref=None
+                 nominal         : dict[Parameter, np.ndarray], 
+                 free_parameters : list[Parameter], 
+                 to_minimize     : Callable, 
+                 settings        : dict = None, 
+                 trace_args      : dict = None, 
+                 ref             : str  = None
                  ):
         
         self.settings           = {} if settings   is None else settings

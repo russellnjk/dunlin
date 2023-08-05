@@ -24,10 +24,18 @@ m1 = {'states'     : {'x0' : [0, 100],
                       'u0' : [1  ]*2,
                       'u1' : [9  ]*2
                       },
-      'reactions' : {'g0' : ['   -> x0', 'u0'   ],
-                     'g1' : ['   -> x1', 'u1'   ],
-                     'r0' : ['x0 ->   ', 'p0*x0'],
-                     'r1' : ['x1 ->   ', 'p1*x1']
+      'reactions' : {'g0' : {'stoichiometry' : {'x0': 1},
+                             'rate'          : 'u0'
+                             },
+                     'g1' : {'stoichiometry' : {'x1': 1},
+                             'rate'          : 'u1'
+                             },
+                     'r0' : {'stoichiometry' : {'x0': -1},
+                             'rate'          : 'p0*x0'
+                             },
+                     'r1' : {'stoichiometry' : {'x1': -1},
+                             'rate'          : 'p1*x1'
+                             },
                      },
       'variables' : {'v0' : 'x0'
                      },
@@ -182,7 +190,7 @@ if __name__ == '__main__':
     assert r == temp1 + temp2
     
     ###############################################################################
-    #Part 3: optimize (Differential Evolution)
+    #Part 3: Optimize (Differential Evolution)
     ###############################################################################
     #Test differential evolution
     print('Test differential evolution')
@@ -209,18 +217,26 @@ if __name__ == '__main__':
     ###############################################################################
     #Read model
     model = dn.ODEModel('M1', **m1)
-
-    time        = np.linspace(0, 100, 51)
-    y_data0     = 50 - 50*np.exp(-0.1*time)
-    y_data1     = 50 + 50*np.exp(-0.1*time)
     
-    cols0 = pd.MultiIndex.from_product([['x0', 'x1'], [0]])
-    cols1 = pd.MultiIndex.from_product([['x0', 'x1'], [1]])
-    df0 = pd.DataFrame(np.array([y_data0, y_data0]).T, index=time, columns=cols0)
-    df1 = pd.DataFrame(np.array([y_data1, y_data1]).T, index=time, columns=cols1)
+    #The y values are first order diff equations i.e. dx = g - p*x
+    time    = np.linspace(0, 100, 51)
+    y_data0 = 50 - 50*np.exp(-0.1*time)
+    y_data1 = 50 + 50*np.exp(-0.1*time)
     
-    get_SSE          = ws.SSECalculator(model, df1, df0)
-    fig, AX          = upp.figure(1, 1)
+    #Formatted as scenario -> state -> series
+    series0 = pd.Series(y_data0, index=time)
+    series1 = pd.Series(y_data1, index=time)
+    
+    data = {0 : {'x0' : series0,
+                 'x1' : series0
+                 },
+            1 : {'x0' : series1,
+                 'x1' : series1
+                 }
+            }
+    
+    get_SSE = ws.SSECalculator(model, data=data, by='scenario')
+    fig, AX = upp.figure(1, 2)
     
     #Case 0: Test instantiation from model
     print('Test instantiation from model')
@@ -228,7 +244,9 @@ if __name__ == '__main__':
     
     trace = optresult.run_differential_evolution()
     
+    #Get the scipy result
     o = trace.other
     assert all( np.isclose(o.x, [5, 5], rtol=1e-3) )
     AX[0].plot(trace.posterior, label='Case 1')
     AX[0].legend()
+    

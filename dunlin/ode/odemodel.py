@@ -186,7 +186,7 @@ class ODEResult:
     #Representation
     ###########################################################################
     def __str__(self):
-        s = tuple(self.namespace)
+        s = tuple(self.ref)
         return f'{type(self).__name__}{s}'
     
     def __repr__(self):

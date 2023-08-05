@@ -8,8 +8,9 @@ from typing  import Literal
 import dunlin.utils as ut
 from ..ode.odemodel import ODEModel
 
-State    = str
-Scenario = Number|str|tuple[Number|str]
+Parameter = str
+State     = str
+Scenario  = Number|str|tuple[Number|str]
 
 class SSECalculator:
     @staticmethod
