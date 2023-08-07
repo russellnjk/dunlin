@@ -345,46 +345,6 @@ class Optimizer:
             raise AttributeError(msg)
         return self._trace
     
-    @property
-    def names(self):
-        return [sp.name for sp in self.sampled_parameters]
-    
-    @property
-    def objective(self):
-        return self.trace.objective
-    
-    @property
-    def posterior(self):
-        return self.trace.posterior
-    
-    @property
-    def context(self):
-        return self.trace.context
-    
-    @property
-    def other(self):
-        return self.trace.other
-    
-    @property
-    def o(self):
-        return self.other
-    
-    @property
-    def loc(self):
-        return self.trace.loc
-    
-    @property
-    def iloc(self):
-        return self.trace.iloc
-    
-    def __getitem__(self, key):
-        df = self.trace.data
-        
-        return df[key]
-    
-    def get_best(self, posterior=True):
-        return self.trace.best
-    
     def reconstruct(self, 
                     free_parameters_array : np.ndarray,
                     as_df                 : bool = True
