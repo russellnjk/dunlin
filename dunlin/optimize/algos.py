@@ -2,21 +2,29 @@ import numpy        as np
 import numpy.random as rnd
 import scipy.optimize as sop
 
-from  collections import namedtuple
-from  numba       import njit
-from  tqdm        import tqdm
+from collections import namedtuple
+from numba       import njit
+from numbers     import Number
+from tqdm        import tqdm
+from typing      import Any, Callable, Literal
 
 Result = namedtuple('Result', 'samples posterior context other', defaults=[None])
 
 ###############################################################################
 #Local Minimize
 ###############################################################################
-def local_minimize(func, x0, bounds, callback=None, **kwargs):
+def local_minimize(func        : Callable, 
+                   bounds      : Callable, 
+                   x0          : np.ndarray, 
+                   callback    : Callable = None, 
+                   **kwargs
+                   ) -> Result:
     samples   = []
     posterior = []
     states    = []
     
-    def _callback_trust_constr(xk, state):
+    def _callback_trust_constr(xk: np.ndarray, state: Any):
+        #Update the trace
         states.append(state)
         posterior.append(func(xk))
         samples.append(xk)
@@ -26,7 +34,8 @@ def local_minimize(func, x0, bounds, callback=None, **kwargs):
         else:
             return 
     
-    def _callback_general(xk):
+    def _callback_general(xk: np.ndarray):
+        #Update the trace
         states.append(True)
         posterior.append(func(xk))
         samples.append(xk)
@@ -40,7 +49,7 @@ def local_minimize(func, x0, bounds, callback=None, **kwargs):
     if method == 'trust-constr':
         _callback = _callback_trust_constr  
     else: 
-        _callback_general
+        _callback = _callback_general
     
     result = sop.minimize(func, x0, callback=_callback, **kwargs)
     
@@ -49,12 +58,17 @@ def local_minimize(func, x0, bounds, callback=None, **kwargs):
 ###############################################################################
 #Differential Evolution
 ###############################################################################
-def differential_evolution(func, bounds, callback=None, **kwargs):
+def differential_evolution(func        : Callable, 
+                           bounds      : Callable, 
+                           callback    : Callable = None, 
+                           **kwargs
+                           ) -> Result:
     samples      = []
     posterior    = []
     convergences = []
     
-    def _callback(xk, convergence):
+    def _callback(xk: np.ndarray, convergence: Number):
+        #Update the trace
         convergences.append(convergence)
         posterior.append(func(xk))
         samples.append(xk)
@@ -71,12 +85,17 @@ def differential_evolution(func, bounds, callback=None, **kwargs):
 ###############################################################################
 #Dual Annealing
 ###############################################################################
-def dual_annealing(func, bounds, x0, callback=None, **kwargs):
+def dual_annealing(func        : Callable, 
+                   bounds      : Callable, 
+                   x0          : np.ndarray, 
+                   callback    : Callable = None, 
+                   **kwargs
+                   ) -> Result:
     samples   = []
     posterior = []
     contexts  = []
     
-    def _callback(x, f, context):
+    def _callback(x: np.ndarray, f: Number, context: Literal[0, 1, 2]):
         contexts.append(context)
         posterior.append(f)
         samples.append(x)
@@ -93,18 +112,25 @@ def dual_annealing(func, bounds, x0, callback=None, **kwargs):
 ###############################################################################
 #Basinhopping
 ###############################################################################
-def basinhopping(func, bounds, x0, callback=None, accept_test=None, **kwargs):
+def basinhopping(func        : Callable, 
+                 bounds      : Callable, 
+                 x0          : np.ndarray, 
+                 callback    : Callable = None, 
+                 accept_test : Callable = None, 
+                 **kwargs
+                 ) -> Result:
     samples   = []
     posterior = []
     accepted  = []
     
-    def _callback(x, f, accept):
-        accepted.append(accept)
+    def _callback(x: np.ndarray, f: Number, accepted: bool):
+        #Update the trace
+        accepted.append(accepted)
         posterior.append(f)
         samples.append(x)
         
         if callable(callback):
-            return callback(x, f, accept)
+            return callback(x, f, accepted)
         else:
             return 
     
@@ -119,8 +145,8 @@ def basinhopping(func, bounds, x0, callback=None, accept_test=None, **kwargs):
     
     result = sop.basinhopping(func, 
                               x0, 
-                              accept_test=_accept_test, 
-                              callback=_callback,
+                              accept_test = _accept_test, 
+                              callback    = _callback,
                               **kwargs
                               )
     
@@ -129,7 +155,14 @@ def basinhopping(func, bounds, x0, callback=None, accept_test=None, **kwargs):
 ###############################################################################
 #Simulated Annealing
 ###############################################################################
-def simulated_annealing(func, bounds, step, x0, niter=1000, cooling=1, disp=False):
+def simulated_annealing(func        : Callable, 
+                        bounds      : Callable, 
+                        step        : Callable, 
+                        x0          : np.ndarray, 
+                        niter       : int      = 1000, 
+                        cooling     : Number   = 1, 
+                        disp        : bool     = False,
+                        ) -> Result:
     x_curr    = np.array(x0)
     pos_curr  = func(x_curr)
     init      = f"{pos_curr:.4}"
@@ -155,6 +188,7 @@ def simulated_annealing(func, bounds, step, x0, niter=1000, cooling=1, disp=Fals
         pos_new = func(x_new)
         accept  = calculate_inverted_acceptance(pos_curr, pos_new, i, niter, cooling)
         
+        #Update the trace
         samples.append(x_new)
         posterior.append(pos_new)
         accepted.append(accept)

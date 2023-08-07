@@ -189,7 +189,7 @@ class Bounds:
     '''A class for bounds testing. In Scipy, the test is called AFTER evaluation 
     of the objective function. This class is not meant to be mutable.
     '''
-    def __init__(self, sampled_params):
+    def __init__(self, sampled_params: list[str]):
         self._xmax = np.zeros(len(sampled_params))
         self._xmin = np.zeros(len(sampled_params))
         self._idx  = {}
@@ -201,7 +201,7 @@ class Bounds:
         
         
     def __call__(self, **kwargs):
-        '''Defined according to Scipy to ensure compatibility.Signature is:
+        '''Defined according to Scipy to ensure compatibility. Signature is:
         accept_test(f_new=f_new, x_new=x_new, f_old=fold, x_old=x_old)
         '''
         #Follow scipy definition in order to ensure compatibility with scipy algos
@@ -262,10 +262,6 @@ class DunlinOptimizationError(Exception):
     @classmethod
     def no_opt_result(cls):
         return cls.raise_template('No optimization yet. Make sure you have run one of the optimization algorithms.')
-    
-    @classmethod
-    def nominal(cls):
-        return cls.raise_template('When instantiating an OptResult object, make sure the nominal is a DataFrame of dict that can be converted into a DataFrame.')
     
     @classmethod
     def no_algo(cls, algo):

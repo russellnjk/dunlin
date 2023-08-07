@@ -10,8 +10,9 @@ from typing              import Callable
 ###############################################################################
 #Non-Standard Imports
 ###############################################################################
-from .       import algos as ag 
-from .       import trace as tr
+from .       import algos    as ag 
+from .       import trace    as tr
+from .       import wrap_SSE as ws
 from .params import SampledParam, Bounds, DunlinOptimizationError
 
 ###############################################################################
@@ -83,7 +84,7 @@ class Optimizer:
         return opt_result
     
     def __init__(self, 
-                 nominal         : dict[Parameter, np.ndarray], 
+                 nominal         : pd.DataFrame, 
                  free_parameters : list[Parameter], 
                  to_minimize     : Callable, 
                  settings        : dict = None, 
@@ -91,33 +92,38 @@ class Optimizer:
                  ref             : str  = None
                  ):
         
-        self.settings           = {} if settings   is None else settings
-        self.trace_args         = {} if trace_args is None else trace_args
-        self.neg_log_likelihood = to_minimize
-        self.fixed              = []
-        self.free_parameters    = {}
-        self.sampled_parameters = []
-        self.ref                = ref
+        self.ref                 = ref
+        self.settings            = {} if settings   is None else settings
+        self.trace_args          =  {} if trace_args is None else trace_args
+        self.neg_log_likelihood  = to_minimize
+        self.fixed               = []
+        self.free_parameters     = {}
+        self.sampled_parameters  = []
+        sampled_parameter_idxs   = []
         
+        #Check input and update attributes
         if not free_parameters:
             raise ValueError('No free parameters provided.')
             
-        for p in nominal.keys():
+        for i, p in enumerate(nominal.keys()):
             if p in free_parameters:
                 kw = free_parameters[p]
-                self.sampled_parameters.append(SampledParam(p, **kw))
+                sp = SampledParam(p, **kw)
+                self.sampled_parameters.append(sp)
+                sampled_parameter_idxs.append(i)
                 self.free_parameters[p] = free_parameters[p]
             else:
                 self.fixed.append(p)
         
-        try:
-            self.nominal = pd.DataFrame(nominal)
-        except:
-            try:
-                self.nominal = pd.DataFrame([nominal])
-            except:
-                raise DunlinOptimizationError.nominal()
+        if type(nominal) != pd.DataFrame:
+            msg  = f'Error instantiating {type(self).__name__} for model {ref}. '
+            msg += 'The "nominal" argument must be a DataFrame. Received {type(nominal)}.'
+            raise TypeError(msg)
         
+        self.nominal                = nominal.copy()
+        self.nominal_dct            = dict(zip(nominal.index, nominal.values))
+        self.sampled_parameter_idxs = np.array(sampled_parameter_idxs)
+
     ###########################################################################
     #Optimization and Calculation
     ###########################################################################       
@@ -190,7 +196,10 @@ class Optimizer:
     def run_differential_evolution(self, **kwargs):
         func     = lambda x: self.get_objective(x)
         bounds   = self.get_bounds()
-        settings = {**{'bounds': bounds}, **self.settings, **kwargs}
+        settings = {**{'bounds': bounds}, 
+                    **self.settings, 
+                    **kwargs
+                    }
         result   = ag.differential_evolution(func, **settings)
         
         #Cache and return the result
@@ -234,7 +243,7 @@ class Optimizer:
         
         settings = {**{'minimizer_kwargs' : {}, 
                        }, 
-                    **self.settings, 
+                    **self.settings,
                     **kwargs
                     }
         settings['minimizer_kwargs'].setdefault('bounds', minimizer_bounds)
@@ -305,27 +314,23 @@ class Optimizer:
     ###########################################################################
     #Trace
     ###########################################################################     
-    def make_trace(self, result):
+    def make_trace(self, result: tuple):
         
-        samples, objective, context, other = result
+        samples, objective, context, raw = result
         
         #Unscale
-        samples   = np.array(samples)
+        samples = np.array(samples)
         
         for i, sp in enumerate(self.sampled_parameters):
             samples[:,i] = sp.unscale(samples[:,i])
-        
-        #Cache and return the result
-        samples       = pd.DataFrame(samples, columns=self.names)
-        objective     = pd.Series(objective, name='objective')
-        posterior     = -pd.Series(objective, name='posterior')
-        context       = pd.Series(context, name='context')
-        df            = pd.concat([samples, objective, posterior, context], axis=1)
-        
-        self._trace = tr.Trace(df, 
-                               other, 
-                               free_parameters=self.free_parameters, 
-                               ref=self.ref, 
+         
+        self._trace = tr.Trace(self.free_parameters, 
+                               samples, 
+                               objective, 
+                               context, 
+                               raw, 
+                               self.reconstruct, 
+                               self.ref,
                                **self.trace_args
                                )
         return self.trace
@@ -380,6 +385,28 @@ class Optimizer:
     def get_best(self, posterior=True):
         return self.trace.best
     
+    def reconstruct(self, 
+                    free_parameters_array : np.ndarray,
+                    as_df                 : bool = True
+                    ) -> dict|pd.DataFrame:
+        
+        sampled_index = self.sampled_parameter_idxs
+        nominal_dct   = self.nominal_dct
+        p             = {} 
+        
+        for scenario, value in nominal_dct.items():
+            recon_array = ws.SSECalculator._reconstruct(nominal_dct[scenario],
+                                                        sampled_index, 
+                                                        free_parameters_array
+                                                        )
+            p[scenario] = recon_array
+        
+        if as_df:
+            p         = pd.DataFrame.from_dict(p, orient='index')
+            p.columns = self.nominal.columns
+        else:
+            return p
+        
     ###########################################################################
     #Printing
     ###########################################################################    

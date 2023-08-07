@@ -1,24 +1,15 @@
-import numpy             as     np
-import pandas            as     pd
-from collections         import namedtuple
-from scipy.stats         import skewtest, kurtosistest
-
+import matplotlib.axes as axes
+import numpy           as np
+import pandas          as pd
+import seaborn         as sns
+from collections import namedtuple
+from numbers     import Number 
+from typing      import Any, Callable
+  
 import dunlin.utils             as ut
 import dunlin.utils_plot        as upp
 
 #Future work: Statistical analysis and MCMC diagnostics
-
-###############################################################################
-#Trace Analysis
-############################################################################### 
-def calculate_r_hat(traces):
-    if len(traces) < 2:
-        raise ValueError('Expected at least 2 traces.')
-    
-    raise NotImplementedError()
-
-def merge_traces(traces):
-    return Trace.merge(traces)
 
 ###############################################################################
 #Trace Class
@@ -32,52 +23,92 @@ class Trace:
     #Constructors
     ###########################################################################  
     @classmethod
-    def merge(cls, traces):
-        trace_dfs = []
-        other     = None
-        first     = True
+    def merge(cls, traces) -> 'Trace':
+        samples         = []
+        objective       = []
+        context         = []
+        raw             = []
+        expected        = None
+        free_parameters = None
+        ref             = None
+        trace_args      = None
+        reconstruct     = None
         
-        for trace in traces:
+        for i, trace in enumerate(traces):
             if type(trace) != cls:
-                trace = trace.trace
+                msg = 'Expected a {cls.__name__}. Received {type(trace)}.'
+                raise TypeError(msg)
             
-            trace_dfs.append(trace.data)
+            samples.append(trace.samples)
+            objective.append(trace.objective)
+            context.append(trace.context)
+            raw.append(trace.raw)
             
-            if first:
+            if i == 0:
+                expected = set(trace.free_parameters)
+            else:
+                received   = set(trace.free_parameters)
+                missing    = expected - received
+                unexpected = received - expected
+                if missing:
+                    msg = f'Trace {i} is missing {missing}.'
+                    raise ValueError(msg)
+                if unexpected:
+                    msg = f'Trace {i} contains unpexpected parameters {unexpected}.'
+                    raise ValueError(msg)
+                
+            if i == len(traces)-1:
                 free_parameters = trace.free_parameters
                 ref             = trace.ref
                 trace_args      = trace.trace_args 
-                first           = False
-            else:
-                if list(trace.data.columns) != list(trace_dfs[0].columns):
-                    raise ValueError('Could not merge traces as columns were mismatched.')
-                    
-        trace_df = pd.concat(trace_dfs, ignore_index=True)
-        new_obj  = cls(trace_df, other, free_parameters, ref, trace_args)
+                reconstruct     = trace.reconstruct
+            
+        samples   = pd.concat(samples, ignore_index=True)
+        objective = pd.concat(objective, ignore_index=True)
+        context   = pd.concat(context, ignore_index=True)
+        
+        new_obj = cls(free_parameters, 
+                      samples, 
+                      objective, 
+                      context, 
+                      raw, 
+                      reconstruct, 
+                      ref, 
+                      **trace_args
+                      )
         
         return new_obj
     
-    def __init__(self, trace_df, other, free_parameters, ref=None, trace_args=None):
-        self.other           = other
-        self._data           = trace_df.astype(np.float64)
-        self.trace_args      = {} if trace_args is None else trace_args
+    def __init__(self, 
+                 free_parameters : dict[str, dict],
+                 samples         : list[np.ndarray],
+                 objective       : list[Number],
+                 context         : list[Any],
+                 raw             : Any, 
+                 reconstruct     : Callable = None,
+                 ref             : str      = None, 
+                 **trace_args   
+                 ):
         self.ref             = ref
         self.free_parameters = free_parameters
+        self.samples         = pd.DataFrame(samples, columns=list(free_parameters))
+        self.objective       = pd.Series(objective, name='objective')
+        self.context         = pd.Series(context, name='context')
+        self.reconstruct     = reconstruct
+        self.raw             = raw
+        self.trace_args      = {} if trace_args is None else trace_args
+        
         
         #For caching
-        self._sorted_df = None
-        
-        if set(free_parameters).difference( set(trace_df.columns) ):
-            raise ValueError('Free parameters and trace DataFrames do not match.')
+        self._sorted_df: pd.DataFrame = None
+        self._posterior: pd.Series    = None
+        self._skew     : pd.Series    = None
             
     ###########################################################################
     #Combining Traces
     ###########################################################################     
     def __add__(self, other):
-        if ut.islistlike(other):
-            return self.merge([self, *other])
-        else:
-            return self.merge([self, other])
+        return self.merge([self, other])
     
     ###########################################################################
     #Representation
@@ -93,83 +124,89 @@ class Trace:
     
     ###########################################################################
     #Access
-    ###########################################################################  
+    ###########################################################################   
     @property
-    def trace(self):
-        return self
-    
-    @property
-    def data(self):
-        return self._data
-    
-    @property
-    def sorted_df(self):
+    def sorted_df(self) -> pd.DataFrame:
         if self._sorted_df is None:
-            self._sorted_df = self.data.sort_values(by='posterior', 
-                                                    ascending=False, 
-                                                    inplace=False
-                                                    )
-        
+            sorted_objective = self.objective.sort_values(ascending = True, 
+                                                          inplace   = False
+                                                          )
+            index            = sorted_objective.index
+            sorted_samples   = self.samples.loc[index]
+            self._sorted_df  = sorted_samples
+            
         return self._sorted_df
         
     @property
-    def objective(self):
-        return self.data['objective']
+    def posterior(self) -> pd.Series:
+        if self._posterior is None:
+            self._posterior = -self.objective
+        return self._posterior
     
     @property
-    def posterior(self):
-        return self.data['posterior']
-    
-    @property
-    def context(self):
-        return self.data['context']
-    
-    @property
-    def p(self):
+    def p(self) -> pd.Series:
         return self.posterior
     
     @property
-    def o(self):
+    def o(self) -> pd.Series:
         return self.other
     
     @property
     def loc(self):
-        return self.data.loc
+        return self.samples.loc
     
     @property
     def iloc(self):
-        return self.data.iloc
+        return self.samples.iloc
     
     def __getitem__(self, key):
-        return self.data[key]
+        if key in {'objective', 'posterior', 'context'}:
+            return getattr(self, key)
+        else:    
+            return self.samples[key]
     
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.data)
     
     ###########################################################################
     #Analysis
     ###########################################################################     
-    def get_best(self, n=0):
-        df        = self.sorted_df
-        df        = df.iloc[n]
-        posterior = df['posterior']
-        objective = df['objective']
-        
-        if type(df) == pd.Series:
-            parameters = df.iloc[:len(self.free_parameters)]
-        else:
-            parameters = df.iloc[:, :len(self.free_parameters)]
+    def get(self, 
+            n           : int|list[int] = 0, 
+            sort        : bool = True, 
+            reconstruct : bool = False,
+            ) -> tuple:
+        if type(n) == list:
+            return [self.get(i, sort, reconstruct) for i in n]
+        elif type(n) != int:
+            msg = f'Argument n must be an integer. Received {type(n)}.'
+            raise TypeError(msg)
             
-        return best(parameters, objective, posterior)
+        if sort:
+            df = self.sorted_df
+        else:
+            df = self.samples
+        
+        row       = df.iloc[n]
+        idx       = row.name
+        objective = self.objective.loc[idx]
+        posterior = -objective
+        context   = self.context.loc[idx]
+        
+        result = {'sample'    : row,
+                  'objective' : objective,
+                  'posterior' : posterior,
+                  'context'   : context
+                  }
+        
+        if reconstruct:
+            result['parameter_df'] = self.reconstruct(row.values)
+    
+        return result
     
     @property
     def best(self):
-        df         = self.sorted_df
-        series     = df.iloc[0]
-        objective  = series['objective']
-        posterior  = series['posterior']
-        parameters = series.iloc[:len(self.free_parameters)]
-        return best(parameters, objective, posterior)
+        return self.get(0, sort=True, reconstruct=True)
     
     def var(self, last=0.5):
         df  = self.data.iloc[:, :len(self.free_parameters)]
@@ -189,97 +226,142 @@ class Trace:
             
         return sd
     
+    @property
+    def skew(self) -> pd.Series:
+        if self._skew is None:
+            self._skew = self.samples.skew(axis=0)
+        return self._skew
+    
     ###########################################################################
     #Trace Plotting
     ###########################################################################     
-    def plot(self, ax, var, plot_type='line', **trace_args):
-        if plot_type == 'line':
-            if ut.islistlike(var):
-                x, y = var
-                return self.plot_steps(ax, *var, **trace_args)
-            else:
-                return self.plot_steps(ax, None, var, **trace_args)
-        elif plot_type == 'hist':
-            raise NotImplementedError()
-        elif plot_type == 'kde':
-            raise NotImplementedError()
+    def _plot_helper(self, 
+                     ax      : axes.Axes, 
+                     x       : str, 
+                     y       : str|None, 
+                     default : dict, 
+                     kwargs  : dict) -> tuple:
+        if y is None:
+            var = x
         else:
-            raise ValueError(f'Unrecognized plot_type {plot_type}')
-    
-    def get_scale(self, x):
-        if ut.is_valid_name(x):
-            scale = self.free_parameters[x].get('scale', 'lin')
-        else:
-            scale = 'lin'
+            var = x, y
         
-        scale = self.scale_types[scale]
-        return scale
-    
-    def plot_steps(self, ax, x, y=None, **kwargs):
-        ext_args  = kwargs
-        self_args = self.trace_args.get('step', {})
+        label      = lambda ref, var: '{} {}'.format(ref, var)
+        default    = {**default, 'label': label}
+        sub_args   = {'ref': self.ref, 'var': var}
+        converters = {'color': upp.get_color}
+        kwargs     = upp.process_kwargs(kwargs, 
+                                        [var], 
+                                        default    = {**default, 'label': label},
+                                        sub_args   = sub_args, 
+                                        converters = converters
+                                        )
+        
+        
+        def get_scale(x) -> str:
+            scale = self.free_parameters.get(x, {}).get('scale', 'lin')
+            scale = self.scale_types[scale]
+            return scale
         
         if y is None:
-            kwargs  = self._recursive_get(self_args, ext_args, x)
-        else:
-            kwargs  = self._recursive_get(self_args, ext_args, (x, y)) 
-            
-        kwargs.setdefault('marker', '+')
-        kwargs.setdefault('linestyle','None')
-        
-        if y is None:
-            scale = self.get_scale(x)
+            scale = get_scale(x)
             ax.set_yscale(scale)
             ax.set_ylabel(x)
             y_vals = self[x].values
             
-            return ax.plot(y_vals, **kwargs)
+            return y_vals, kwargs
         else:
-            scale = self.get_scale(y)
+            scale = get_scale(y)
             ax.set_yscale(scale)
             ax.set_ylabel(y)
             y_vals = self[y].values
 
-            scale = self.get_scale(x)
+            scale = get_scale(x)
             ax.set_yscale(scale)
             x_vals = self[x].values
             ax.set_xlabel(x)
+        
+        return x_vals, y_vals, kwargs
+        
+    def plot_kde(self, 
+                 ax : axes.Axes, 
+                 x  : str, 
+                 y  : str=None, 
+                 **kwargs
+                 ) -> axes.Axes:
+        
+        default = {**self.trace_args.get('kde', {}), 
+                   'gridsize' : 100
+                   }
+        
+        if y is None:
+            y_vals, kwargs = self._plot_helper(ax, x, y, default, kwargs)
+            
+            return sns.kdeplot(x=y_vals, ax=ax, **kwargs)
+        else:
+            x_vals, y_vals, kwargs = self._plot_helper(ax, x, y, default, kwargs)
+            
+            return sns.kdeplot(x=x_vals, y=y_vals, ax=ax, **kwargs)
+    
+    def plot_histogram(self, 
+                       ax : axes.Axes, 
+                       x  : str, 
+                       y  : str=None, 
+                       **kwargs
+                       ) -> axes.Axes:
+        
+        default = {'kde_kws': self.trace_args.get('kde', {}),
+                   **self.trace_args.get('hist', {}), 
+                   }
+        
+        if y is None:
+            y_vals, kwargs = self._plot_helper(ax, x, y, default, kwargs)
+            
+            return sns.histplot(x=y_vals, ax=ax, **kwargs)
+        else:
+            x_vals, y_vals, kwargs = self._plot_helper(ax, x, y, default, kwargs)
+            
+            return sns.histplot(x=x_vals, y=y_vals, ax=ax, **kwargs)
+        
+    def plot_steps(self, 
+                   ax : axes.Axes, 
+                   x  : str, 
+                   y  : str=None, 
+                   **kwargs
+                   ) -> axes.Axes:
+        default = {'marker'          : '+', 
+                   'markersize'      : 10,
+                   'markeredgewidth' : 3,
+                   'linestyle'       : 'None'
+                   }
+
+        if y is None:
+            y_vals, kwargs = self._plot_helper(ax, x, y, default, kwargs)
+            
+            return ax.plot(y_vals, **kwargs)
+        else:
+            x_vals, y_vals, kwargs = self._plot_helper(ax, x, y, default, kwargs)
             
             return ax.plot(x_vals, y_vals, **kwargs)
+    
+    ###########################################################################
+    #Export
+    ###########################################################################
+    def to_excel(self, 
+                 filename: str|pd.ExcelWriter, 
+                 **kwargs
+                 ) -> None:
+        df = pd.concat([self.samples, self.objective, self.context], axis=1)
         
-    def _recursive_get(self, self_args, ext_args, var):
-        global colors
-        
-        keys = self.ref, var
-        def recurse(dct):
-            if dct is None:
-                return {}
-            return {k: upp.recursive_get(v, *keys) for k, v in dct.items()}
-        
-        
-        self_args = recurse(self_args)
-        ext_args  = recurse(ext_args) 
-        kwargs    = {**self_args, **ext_args}
-        
-        #Process special keywords
-        label = kwargs.get('label', '{ref}')
-        
-        if callable(label):
-            label = label(ref=self.ref, var=var)
-        else:
-            label = label.format(ref=self.ref, var=var)
-        
-        kwargs['label'] = label
-        
-        #Process color
-        color = kwargs.get('color')
-        
-        if callable(color):
-            color = color(ref=self.ref, var=var)
-        else:
-            color = upp.get_color(color)
-        
-        kwargs['color'] = color
+        return df.to_excel(filename, **kwargs)
 
-        return kwargs
-            
+###############################################################################
+#Trace Analysis
+############################################################################### 
+def calculate_r_hat(traces):
+    if len(traces) < 2:
+        raise ValueError('Expected at least 2 traces.')
+    
+    raise NotImplementedError()
+
+

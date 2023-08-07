@@ -131,6 +131,7 @@ if __name__ == '__main__':
     print('Test on array')
     
     nominal      = {'p0': 50, 'p1': 50, 'p2': 50, 'p3': 50, 'p4': 50}
+    nominal      = pd.DataFrame([nominal])
     free_params  = {'p1': {'bounds': [0,   100], 'scale': 'lin',   'prior': ['normal', 50, 10]},
                     'p3': {'bounds': [0.1, 100], 'scale': 'log10', 'prior': ['normal', 50, 10]}
                     }
@@ -199,21 +200,22 @@ if __name__ == '__main__':
         return sum([abs(params[0] - 50), abs(params[1]-10)])
     
     nominal      = {'p0': 50, 'p1': 50, 'p2': 50, 'p3': 50, 'p4': 50}
+    nominal      = pd.DataFrame([nominal])
     free_params  = {'p1': {'bounds': [0,   100], 'scale': 'lin',   'prior': ['parameterScaleNormal', 50, 10]},
                     'p3': {'bounds': [0.1, 100], 'scale': 'log10', 'prior': ['parameterScaleNormal',  1,  1]}
                     }
-    OptResult    = opt.Optimizer(nominal, free_params, log_likelihood)
+    optr = opt.Optimizer(nominal, free_params, log_likelihood)
     
-    trace = OptResult.run_differential_evolution()
+    trace = optr.run_differential_evolution()
     
-    o = trace.other
+    o = trace.raw
     assert np.all( np.isclose(o.x, [50, 1], rtol=2e-2))
     
-    a = trace.data
+    a = trace.samples
     assert type(a) == pd.DataFrame
 
     ###############################################################################
-    #Part 4A: Test Curvefitting
+    #Part 4: Test Curvefitting
     ###############################################################################
     #Read model
     model = dn.ODEModel('M1', **m1)
@@ -236,17 +238,41 @@ if __name__ == '__main__':
             }
     
     get_SSE = ws.SSECalculator(model, data=data, by='scenario')
-    fig, AX = upp.figure(1, 2)
     
     #Case 0: Test instantiation from model
     print('Test instantiation from model')
-    optresult = opt.Optimizer.from_model(model, to_minimize=get_SSE)
+    optr = opt.Optimizer.from_model(model, to_minimize=get_SSE)
     
-    trace = optresult.run_differential_evolution()
+    trace = optr.run_differential_evolution()
     
     #Get the scipy result
-    o = trace.other
+    o = trace.raw
     assert all( np.isclose(o.x, [5, 5], rtol=1e-3) )
-    AX[0].plot(trace.posterior, label='Case 1')
-    AX[0].legend()
     
+    ###########################################################################
+    #Part 5: Plotting and Export with Trace
+    ###########################################################################
+    fig, AX = upp.figure(3, 2)
+    
+    
+    trace.plot_steps(AX[0], 'objective')
+    AX[0].set_title('Test plot_steps on objective')
+    
+    trace.plot_steps(AX[1], 'u0', 'u1')
+    AX[1].set_title('Test plot_steps on parameters')
+    
+    trace.plot_kde(AX[2], 'u0')
+    AX[2].set_title('Test plot_kde on 1 parameter')
+    
+    trace.plot_kde(AX[3], 'u0', 'u1')
+    AX[3].set_title('Test plot_kde on 2 parameters')
+    
+    trace.plot_histogram(AX[4], 'u0')
+    AX[4].set_title('Test plot_histogram on 1 parameter')
+    
+    trace.plot_histogram(AX[5], 'u0', 'u1')
+    AX[5].set_title('Test plot_histogram on 2 parameters')
+    
+    fig.tight_layout()
+    
+    trace.to_excel('test_optimize.xlsx')
