@@ -1,8 +1,8 @@
 import numpy             as     np
 import pandas            as     pd
-import scipy.optimize    as     sop
 from collections         import namedtuple
 from numba               import njit
+from numbers             import Number
 from scipy.stats         import norm
 from time                import time
 from typing              import Callable
@@ -10,10 +10,10 @@ from typing              import Callable
 ###############################################################################
 #Non-Standard Imports
 ###############################################################################
-from .       import algos    as ag 
-from .       import trace    as tr
-from .       import wrap_SSE as ws
-from .params import SampledParam, Bounds, DunlinOptimizationError
+from .            import algos    as ag 
+from .            import trace    as tr
+from .params      import SampledParam, Bounds
+from .sensitivity import SensitivityMixin
 
 ###############################################################################
 #Typing
@@ -55,7 +55,7 @@ def get_best_optimization(optimizers):
 ###############################################################################
 #Dunlin Classes
 ###############################################################################    
-class Optimizer:
+class Optimizer(SensitivityMixin):
     '''
     Note: Many optimization algorithms seek to MINIMIZE an objective function, 
     while Bayesian formula attempts to MAXIMIZE the posterior function.
@@ -78,7 +78,7 @@ class Optimizer:
         nominal         = model.parameter_df
         free_parameters = model.optim_args.get('free_parameters', {})
         settings        = model.optim_args.get('settings',    {})
-        trace_args      = model.optim_args.get('trace_args',  {})
+        trace_args      = model.trace_args
         opt_result      = cls(nominal, free_parameters, to_minimize, settings, trace_args)
         
         return opt_result
@@ -94,7 +94,7 @@ class Optimizer:
         
         self.ref                 = ref
         self.settings            = {} if settings   is None else settings
-        self.trace_args          =  {} if trace_args is None else trace_args
+        self.trace_args          = {} if trace_args is None else trace_args
         self.neg_log_likelihood  = to_minimize
         self.fixed               = []
         self.free_parameters     = {}
@@ -127,7 +127,7 @@ class Optimizer:
     ###########################################################################
     #Optimization and Calculation
     ###########################################################################       
-    def get_objective(self, free_parameters_array):
+    def get_objective(self, free_parameters_array: np.ndarray) -> Number:
         priors   = np.zeros(len(free_parameters_array))
         unscaled = np.zeros(len(free_parameters_array))
         
@@ -145,13 +145,13 @@ class Optimizer:
         return np.sum(np.log(arr))
     
     def get_bounds(self):
-        return [p.get_opt_bounds() for p in self.sampled_parameters]
+        return [p.scaled_bounds for p in self.sampled_parameters]
     
     def get_x0step(self, x0_nominal=False):
         x0   = []
         step = []
         for p in self.sampled_parameters:
-            b = p.get_opt_bounds()
+            b = p.scaled_bounds()
             step.append( (b[1] - b[0])/40 )
             
             if x0_nominal:
@@ -197,7 +197,7 @@ class Optimizer:
         func     = lambda x: self.get_objective(x)
         bounds   = self.get_bounds()
         settings = {**{'bounds': bounds}, 
-                    **self.settings, 
+                    **self.settings.get('differential_evolution', {}), 
                     **kwargs
                     }
         result   = ag.differential_evolution(func, **settings)
@@ -217,7 +217,7 @@ class Optimizer:
         settings = {**{'take_step'        : step,
                        'minimizer_kwargs' : {}
                        }, 
-                    **self.settings, 
+                    **self.settings.get('basinhopping', {}), 
                     **kwargs
                     }
         settings['minimizer_kwargs'].setdefault('bounds', minimizer_bounds)
@@ -243,7 +243,7 @@ class Optimizer:
         
         settings = {**{'minimizer_kwargs' : {}, 
                        }, 
-                    **self.settings,
+                    **self.settings.get('dual_annealing', {}),
                     **kwargs
                     }
         settings['minimizer_kwargs'].setdefault('bounds', minimizer_bounds)
@@ -268,7 +268,7 @@ class Optimizer:
         settings = {**{'bounds'      : bounds, 
                        'x0'          : x0
                        }, 
-                    **self.settings, 
+                    **self.settings.get('local_minimize', {}), 
                     **kwargs
                     }
         
@@ -295,7 +295,7 @@ class Optimizer:
                        'x0'     : x0, 
                        'step'   : step
                        }, 
-                    **self.settings, 
+                    **self.settings.get('simulated_annealing', {}), 
                     **kwargs
                     }
         
@@ -329,7 +329,6 @@ class Optimizer:
                                objective, 
                                context, 
                                raw, 
-                               self.reconstruct, 
                                self.ref,
                                **self.trace_args
                                )
@@ -344,28 +343,6 @@ class Optimizer:
             msg = 'Cannot return trace before running optimization.'
             raise AttributeError(msg)
         return self._trace
-    
-    def reconstruct(self, 
-                    free_parameters_array : np.ndarray,
-                    as_df                 : bool = True
-                    ) -> dict|pd.DataFrame:
-        
-        sampled_index = self.sampled_parameter_idxs
-        nominal_dct   = self.nominal_dct
-        p             = {} 
-        
-        for scenario, value in nominal_dct.items():
-            recon_array = ws.SSECalculator._reconstruct(nominal_dct[scenario],
-                                                        sampled_index, 
-                                                        free_parameters_array
-                                                        )
-            p[scenario] = recon_array
-        
-        if as_df:
-            p         = pd.DataFrame.from_dict(p, orient='index')
-            p.columns = self.nominal.columns
-        else:
-            return p
         
     ###########################################################################
     #Printing

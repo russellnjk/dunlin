@@ -1,282 +1,121 @@
 import numpy  as np
-import pandas as pd
-from collections   import namedtuple
-from SALib.sample  import saltelli
-from SALib.analyze import sobol
+from numbers import Number
+from SALib   import ProblemSpec
+from typing  import Callable
 
-import dunlin.utils as ut
+Parameter = str
 
-###############################################################################
-#Function-Based
-###############################################################################
-def test_sensitivity(variable, model, algo='sobol', **kwargs):
-    sensitivity_test = SensitivityTest(model)
-    method = getattr(sensitivity_test, 'analyze_'+algo, None)
+class SensitivityMixin:
+    '''To be mixed into Optimizer.
+    '''
+    settings        : dict
+    free_parameters : dict[Parameter, dict] 
+    get_objective   : Callable
     
-    if method is None:
-        raise AttributeError(f'Could not algorithm for "{algo}"')
-    
-    sensitivity_result = method(variable, **kwargs)
-    
-    return sensitivity_result
-
-def plot_sensitivity(sensitivity_result):
-    raise NotImplementedError('Not implemented yet.')
-
-###############################################################################
-#Classes
-###############################################################################
-Result = namedtuple('SensivityResult', 'dtype Si Y samples problem')
-
-class SensitivityTest:
-    def __init__(self, model):
-        self.ref    = model.ref
-        self._model = model
+    def get_objective_nd(self, free_parameters_array: np.ndarray) -> Number:
+        if len(free_parameters_array) == 1:
+            return self.get_objective(free_parameters_array)
         
-        #Set up SALib arguments
-        #Extracting the nominal and tspan now "freezes" the arguments
-        #This helps to avoid side effects
-        self.nominal          = model.parameters.copy()
-        self.tspan            = model.tspan
-        self.free_parameters  = model.optim_args['free_parameters']
-        self.sensitivity_args = model.optim_args.get('sensitivity', {})
+        neg_posterior = np.zeros(len(free_parameters_array))
         
+        for i, row in enumerate(free_parameters_array):
+            neg_posterior[i] = self.get_objective(row)
+       
+        return neg_posterior
+    
     @property
-    def parameters(self):
-        return self._model.parameter_names
-    
-    def get_groups(self):
-        dct = self.sensitivity_args.get('groups')
-        
-        if not dct:
-            return
-        else:
-            inverted = {}
-            
-            for group_name, lst in dct.items():
-                for variable in lst:
-                    if variable in inverted:
-                        raise ValueError('Groups must be mutually exclusive.')
-                    inverted[variable] = group_name
-            
-            free_parameters = set(self.free_parameters)
-            
-            difference = free_parameters.difference(inverted)
-            if difference:
-                raise ValueError(f'No group assigned for {difference}')
-            
-            return inverted
-        
-    @property
-    def problem(self):
-        free_parameters = self.free_parameters
+    def salib_problem(self) -> dict:
+        '''Generates a problem according to SALib specifications. Note that 
+        the bounds are given as scaled values. E.g. If a sampled parameter's 
+        `scale` attribute is `"log10"`, then its bounds are power of ten.
+        '''
+        sampled_parameters = self.sampled_parameters
         
         #Define SALib problem
+        n      = 0
+        names  = []
         bounds = []
-        for parameter, args in self.free_parameters.items():
-            if ut.isdictlike(args):
-                bounds_ = args['bounds']
-            else:
-                bounds_ = args[0]
+        
+        for sampled_parameter in sampled_parameters:
+            n += 1
+            names.append(sampled_parameter.name)
             
-            if len(bounds_) != 2:
-                raise ValueError('Expected a pair in the form (lower_bounds, upper_bound)')
-            elif bounds_[0] >= bounds_[1]:
-                msg  = f'Invalid bounds for {parameter}: {args}.'
-                msg += ' Ensure lower bound is lower than upper bound.'
-                raise ValueError(msg)
+            #Get the bounds
+            sample_type = sampled_parameter.sample_type
+            if sample_type == 'uniform':
+                lb, ub = sampled_parameter.scaled_bounds
                 
-            bounds.append(bounds_)
-        
+            elif sample_type in {'normal', 'lognormal'}:
+                
+                mean = sampled_parameter.sample_calc.mean()
+                sd   = sampled_parameter.sample_calc.std()
+                lb   = mean - 3*sd
+                ub   = mean + 3*sd
+                lb   = sampled_parameter.scale(lb)
+                ub   = sampled_parameter.scale(ub)
+            
+            else:
+                
+                mean, variance = sampled_parameter.sample_calc.stats()
+                
+                lb = mean - 3*variance**.5*3
+                ub = mean + 3*variance**.5*3
+                
+            
+            bounds.append([lb, ub])
+                
         #Collate problem
-        problem = {'num_vars': len(free_parameters),
-                   'names'   : list(free_parameters),
+        problem = {'num_vars': n,
+                   'names'   : names,
                    'bounds'  : bounds,
-                   'dist'    : self.sensitivity_args.get('dist', 'unif')
                    }
-        
-        groups = self.get_groups()
-        if groups:
-            problem['groups'] = [groups[variable] for variable in problem['names']] 
-        
         
         return problem
     
-    ###########################################################################
-    #Model Evaluation
-    ###########################################################################
-    def __call__(self, *args, **kwargs):
-        return self._model(*args, **kwargs)
     
-    @staticmethod
-    def _split(variable):
-        #Determine which variables are actually callables
-        if ut.islistlike(variable):
-            vs = []
-            cs = []
-            
-            for v in variable:
-                if callable(variable):
-                    cs.append(v)
-                else:
-                    vs.append(v)
-        else:
-            if callable(variable):
-                cs = [variable]
-                vs = []
-            else:
-                vs = [variable]
-                cs = []
+    def run_sobol(self, 
+                  N : int  = 1024,
+                  ):
+        #Parse kwargs
+        kwargs   = self.settings.get('sobol', {})
         
-        return vs, cs
-    
-    def evaluate(self, variable, problem, free_parameter_samples, 
-                 combine_scenarios=False
-                 ):
-        if combine_scenarios:
-            return self._eval_combined(variable, problem, free_parameter_samples)
-        else:
-            return self._eval_separate(variable, problem, free_parameter_samples)
+        #Generate samples
+        problem           = self.salib_problem
+        calc_second_order = kwargs.get('calc_second_order', True)
         
-    def _eval_separate(self, variable, problem, free_parameter_samples):
-        vs, cs    = self._split(variable)
-        nominal   = self.nominal.copy()
-        scenarios = nominal.index
-        length    = free_parameter_samples.shape[0]
-        tspan     = self.tspan
-        
-        V = np.zeros((len(vs), len(scenarios), length)) if vs else None
-        C = {call: {c: np.zeros(length) for c in scenarios} for call in cs}
-        
-        #Iterate and evaluate
-        for i, free_parameter_array in enumerate(free_parameter_samples):
-            #For callables
-            for call in cs:
-                y = call(free_parameter_array)
-                for scenario in scenarios:
-                    C[call][i] = y[scenario]
-            
-            if not vs:
-                continue
-            
-            #For actual variables
-            nominal[problem['names']] = free_parameter_array
-            
-            for ii, (scenario, row) in enumerate(nominal.iterrows()):
-                ir    = self(scenario=scenario, 
-                             p0=row.values, 
-                             tspan=tspan[scenario]
-                             )
-                
-                #Update the array
-                V[:, ii, i] += ir[vs]
-        
-        #Collate the results
-        V = {v: {c: row for c, row in zip(scenarios, table) } for v, table in zip(vs, V)}
-        Y = {**V, **C}
-        
-        return Y
-        
-    def _eval_combined(self, variable, problem, free_parameter_samples):
-        
-        vs, cs = self._split(variable)
-        tspan  = self.tspan
-        
-        V = np.zeros((len(vs), free_parameter_samples.shape[0])) if vs else None
-        C = {call: np.zeros(free_parameter_samples.shape[0]) for call in cs}
-        
-        #Iterate and evaluate
-        nominal = self.nominal.copy()
-        
-        for i, free_parameter_array in enumerate(free_parameter_samples):
-            #For callables
-            for call in cs:
-                y          = call(free_parameter_array)
-                C[call][i] = y
-            
-            if not vs:
-                continue
-            
-            #For actual variables
-            nominal[problem['names']] = free_parameter_array
-            
-            for scenario, row in nominal.iterrows():
-                ir = self(scenario=scenario, 
-                          p0=row.values,
-                          tspan=tspan[scenario]
-                          )
-                
-                #Update the array
-                V[:, i] += ir[vs]
-        
-        #Collate the results
-        V = dict(zip(vs, V)) if vs else {}
-        Y = {**V, **C}
-        
-        return Y
-    
-    ###########################################################################
-    #Analysis
-    ###########################################################################
-    def sample_saltelli(self, **sampling_settings):
-        settings = self.sensitivity_args.get('sample', {})
-        problem  = self.problem
-        default  = {'N' : 1024}
-        
-        settings = {**default, **settings, **sampling_settings}
-        
-        #Define samples for SALib
-        free_parameter_samples = saltelli.sample(problem, **settings)
-        
-        return problem, free_parameter_samples
-    
-    def analyze_sobol(self, variable, combine_scenarios=True, 
-                      sampling_settings=None, analysis_settings=None
-                      ):
-        #Make samples
-        sampling_settings = sampling_settings if sampling_settings else {}
-            
-        problem, free_parameter_samples = self.sample_saltelli(**sampling_settings)
-        
-        #Evalute model
-        Y = self.evaluate('final_x1', 
-                          problem, 
-                          free_parameter_samples, 
-                          combine_scenarios
-                          )
-        
-        #Run sobol
-        if analysis_settings:
-            analysis_settings = {**self.sensitivity_args.get('analyze', {}),
-                                 **analysis_settings
-                                 }
-        else:
-            analysis_settings = self.sensitivity_args.get('analyze', {}).copy()
-        
-        analysis_settings['print_to_console'] = analysis_settings.pop('disp', True)
-        
-        Si = {}
-        for v, Y_ in Y.items():
-            if combine_scenarios:
-                Si_ = sobol.analyze(problem, 
-                                    Y_, 
-                                    **analysis_settings
-                                    )
+        #Make ProblemSpec and chain methods
+        sp = ProblemSpec(problem)
 
-            else:
-                Si_   = {}
-                for scenario in Y_:
-                    Si_[scenario] = sobol.analyze(problem, 
-                                                  Y_[scenario], 
-                                                  **analysis_settings
-                                                  )
-                    
-            Si_   = Result('sobol', Si_, Y_, free_parameter_samples, problem)
-            Si[v] = Si_
+        (sp
+          .sample_sobol(N, calc_second_order=calc_second_order)
+          .evaluate(self.get_objective_nd)
+          .analyze_sobol(**kwargs)
+          )
+        return sp
         
-        #Extract if required and then return
-        if not ut.islistlike(variable):
-            Si = Si[variable]
-        return Si
-    
+    def run_dgsm(self, 
+                 N: int = 1000
+                 ):
+        #Parse kwargs
+        kwargs   = {**self.settings.get('dgsm', {})}
+        
+        #Generate samples
+        problem           = self.salib_problem
+        
+        sp = ProblemSpec(problem)
+        
+        (sp
+         .sample_finite_diff(N           = N, 
+                             delta       = kwargs.pop('delta', 0.01),
+                             seed        = kwargs.pop('seed', None),
+                             skip_values = kwargs.pop('skip_values', 1024)
+                             )
+         .evaluate(self.get_objective_nd)
+         .analyze_dgsm()
+         )
+        
+        return sp
+        
+        
+        
     

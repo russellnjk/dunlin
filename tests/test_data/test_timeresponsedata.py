@@ -18,10 +18,18 @@ m1 = {'states'     : {'x0' : [0, 100],
                       'u0' : [1  ]*2,
                       'u1' : [9  ]*2
                       },
-      'reactions' : {'g0' : ['   -> x0', 'u0'   ],
-                     'g1' : ['   -> x1', 'u1'   ],
-                     'r0' : ['x0 ->   ', 'p0*x0'],
-                     'r1' : ['x1 ->   ', 'p1*x1']
+      'reactions' : {'g0' : {'stoichiometry' : {'x0': 1},
+                             'rate'          : 'u0'
+                             },
+                     'g1' : {'stoichiometry' : {'x1': 1},
+                             'rate'          : 'u1'
+                             },
+                     'r0' : {'stoichiometry' : {'x0': -1},
+                             'rate'          : 'p0*x0'
+                             },
+                     'r1' : {'stoichiometry' : {'x1': -1},
+                             'rate'          : 'p1*x1'
+                             },
                      },
       'variables' : {'v0' : 'x0'
                      },

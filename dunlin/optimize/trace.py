@@ -2,11 +2,11 @@ import matplotlib.axes as axes
 import numpy           as np
 import pandas          as pd
 import seaborn         as sns
-from collections import namedtuple
-from numbers     import Number 
-from typing      import Any, Callable
+from collections            import namedtuple
+from matplotlib.collections import LineCollection
+from numbers                import Number 
+from typing                 import Any, Callable
   
-import dunlin.utils             as ut
 import dunlin.utils_plot        as upp
 
 #Future work: Statistical analysis and MCMC diagnostics
@@ -32,7 +32,6 @@ class Trace:
         free_parameters = None
         ref             = None
         trace_args      = None
-        reconstruct     = None
         
         for i, trace in enumerate(traces):
             if type(trace) != cls:
@@ -61,8 +60,7 @@ class Trace:
                 free_parameters = trace.free_parameters
                 ref             = trace.ref
                 trace_args      = trace.trace_args 
-                reconstruct     = trace.reconstruct
-            
+                
         samples   = pd.concat(samples, ignore_index=True)
         objective = pd.concat(objective, ignore_index=True)
         context   = pd.concat(context, ignore_index=True)
@@ -72,7 +70,6 @@ class Trace:
                       objective, 
                       context, 
                       raw, 
-                      reconstruct, 
                       ref, 
                       **trace_args
                       )
@@ -85,7 +82,6 @@ class Trace:
                  objective       : list[Number],
                  context         : list[Any],
                  raw             : Any, 
-                 reconstruct     : Callable = None,
                  ref             : str      = None, 
                  **trace_args   
                  ):
@@ -94,7 +90,6 @@ class Trace:
         self.samples         = pd.DataFrame(samples, columns=list(free_parameters))
         self.objective       = pd.Series(objective, name='objective')
         self.context         = pd.Series(context, name='context')
-        self.reconstruct     = reconstruct
         self.raw             = raw
         self.trace_args      = {} if trace_args is None else trace_args
         
@@ -174,10 +169,9 @@ class Trace:
     def get(self, 
             n           : int|list[int] = 0, 
             sort        : bool = True, 
-            reconstruct : bool = False,
-            ) -> tuple:
+            ) -> dict|dict[int, dict]:
         if type(n) == list:
-            return [self.get(i, sort, reconstruct) for i in n]
+            return {i: self.get(i, sort) for i in n}
         elif type(n) != int:
             msg = f'Argument n must be an integer. Received {type(n)}.'
             raise TypeError(msg)
@@ -199,9 +193,6 @@ class Trace:
                   'context'   : context
                   }
         
-        if reconstruct:
-            result['parameter_df'] = self.reconstruct(row.values)
-    
         return result
     
     @property
@@ -240,7 +231,8 @@ class Trace:
                      x       : str, 
                      y       : str|None, 
                      default : dict, 
-                     kwargs  : dict) -> tuple:
+                     kwargs  : dict
+                     ) -> tuple:
         if y is None:
             var = x
         else:
@@ -284,9 +276,8 @@ class Trace:
         return x_vals, y_vals, kwargs
         
     def plot_kde(self, 
-                 ax : axes.Axes, 
-                 x  : str, 
-                 y  : str=None, 
+                 ax        : axes.Axes, 
+                 parameter : str|tuple[str, str],
                  **kwargs
                  ) -> axes.Axes:
         
@@ -294,19 +285,26 @@ class Trace:
                    'gridsize' : 100
                    }
         
-        if y is None:
-            y_vals, kwargs = self._plot_helper(ax, x, y, default, kwargs)
+        match parameter:
+            case str(x):
+                y = None
+                
+                y_vals, kwargs = self._plot_helper(ax, x, y, default, kwargs)
+                
+                return sns.kdeplot(x=y_vals, ax=ax, **kwargs)
             
-            return sns.kdeplot(x=y_vals, ax=ax, **kwargs)
-        else:
-            x_vals, y_vals, kwargs = self._plot_helper(ax, x, y, default, kwargs)
+            case [str(x), str(y)]:
+                x_vals, y_vals, kwargs = self._plot_helper(ax, x, y, default, kwargs)
+                
+                return sns.kdeplot(x=x_vals, y=y_vals, ax=ax, **kwargs)
             
-            return sns.kdeplot(x=x_vals, y=y_vals, ax=ax, **kwargs)
+            case _:
+                msg = f'Could not parse the parameter argument {parameter}.'
+                raise ValueError(msg)
     
     def plot_histogram(self, 
-                       ax : axes.Axes, 
-                       x  : str, 
-                       y  : str=None, 
+                       ax        : axes.Axes, 
+                       parameter : str|tuple[str, str],
                        **kwargs
                        ) -> axes.Axes:
         
@@ -314,19 +312,26 @@ class Trace:
                    **self.trace_args.get('hist', {}), 
                    }
         
-        if y is None:
-            y_vals, kwargs = self._plot_helper(ax, x, y, default, kwargs)
+        match parameter:
+            case str(x):
+                y = None
+                
+                y_vals, kwargs = self._plot_helper(ax, x, y, default, kwargs)
+                
+                return sns.histplot(x=y_vals, ax=ax, **kwargs)
             
-            return sns.histplot(x=y_vals, ax=ax, **kwargs)
-        else:
-            x_vals, y_vals, kwargs = self._plot_helper(ax, x, y, default, kwargs)
+            case [str(x), str(y)]:
+                x_vals, y_vals, kwargs = self._plot_helper(ax, x, y, default, kwargs)
+                
+                return sns.histplot(x=x_vals, y=y_vals, ax=ax, **kwargs)
             
-            return sns.histplot(x=x_vals, y=y_vals, ax=ax, **kwargs)
+            case _:
+                msg = f'Could not parse the parameter argument {parameter}.'
+                raise ValueError(msg)
         
     def plot_steps(self, 
-                   ax : axes.Axes, 
-                   x  : str, 
-                   y  : str=None, 
+                   ax        : axes.Axes, 
+                   parameter : str|tuple[str, str],
                    **kwargs
                    ) -> axes.Axes:
         default = {'marker'          : '+', 
@@ -334,15 +339,48 @@ class Trace:
                    'markeredgewidth' : 3,
                    'linestyle'       : 'None'
                    }
-
-        if y is None:
-            y_vals, kwargs = self._plot_helper(ax, x, y, default, kwargs)
+        
+        match parameter:
+            case str(x):
+                y = None
+                
+                y_vals, kwargs = self._plot_helper(ax, x, y, default, kwargs)
+                x_vals         = np.arange(len(y_vals))
+                
+                if 'colors' in kwargs:
+                    kwargs.pop('color', None)
+                    stacked  = np.stack([x_vals, y_vals], axis=1)
+                    n        = len(kwargs['colors'])
+                    d        = int(len(stacked) / n + 1)
+                    segments = [stacked[i*d:(i+1)*d+1] for i in range(n)]
+                    lines    = LineCollection(segments, **kwargs)
+                    result   = ax.add_collection(collection=lines)
+                    
+                    ax.autoscale()
+                    return result
+                else:
+                    return ax.plot(y_vals, **kwargs)
             
-            return ax.plot(y_vals, **kwargs)
-        else:
-            x_vals, y_vals, kwargs = self._plot_helper(ax, x, y, default, kwargs)
+            case [str(x), str(y)]:
+                x_vals, y_vals, kwargs = self._plot_helper(ax, x, y, default, kwargs)
+                
+                if 'colors' in kwargs:
+                    kwargs.pop('color', None)
+                    stacked  = np.stack([x_vals, y_vals], axis=1)
+                    n        = len(kwargs['colors'])
+                    d        = int(len(stacked) / n + 1)
+                    segments = [stacked[i*d:(i+1)*d+1] for i in range(n)]
+                    lines    = LineCollection(segments, **kwargs)
+                    result   = ax.add_collection(collection=lines)
+                    
+                    ax.autoscale()
+                    return result
+                else:
+                    return ax.plot(x_vals, y_vals, **kwargs)
             
-            return ax.plot(x_vals, y_vals, **kwargs)
+            case _:
+                msg = f'Could not parse the parameter argument {parameter}.'
+                raise ValueError(msg)
     
     ###########################################################################
     #Export

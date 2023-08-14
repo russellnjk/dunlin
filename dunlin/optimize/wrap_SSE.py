@@ -1,16 +1,19 @@
-import numpy    as np
-import pandas   as pd
+import matplotlib.axes as axes
+import numpy           as np
+import pandas          as pd
 import warnings
-from numba   import njit
-from numbers import Number
-from typing  import Literal
+from matplotlib.collections import LineCollection
+from numba                  import njit
+from numbers                import Number
+from typing                 import Literal
 
-import dunlin.utils as ut
-from ..ode.odemodel import ODEModel
+import dunlin.utils      as ut
+import dunlin.utils_plot as upp
+from ..ode.odemodel import ODEModel, is_scenario
 
 Parameter = str
 State     = str
-Scenario  = Number|str|tuple[Number|str]
+Scenario  = Number|str
 
 class SSECalculator:
     @staticmethod
@@ -40,8 +43,14 @@ class SSECalculator:
                    *getattr(model, 'extra', [])
                    }
         
+        #Make cleaned copies of the data
+        cleaned_data = {}
+        
         for first, dct in data.items():
             for second, series in dct.items():
+                #Clean the series
+                series = series.dropna()
+                
                 #Determine the scenario and state
                 if by == 'scenario':
                     scenario = first
@@ -61,16 +70,26 @@ class SSECalculator:
                     raise ValueError(msg)
                 
                 #Reformat the series if it has a multiindex
+                default  = np.percentile(series, 75)/20
                 if series.index.nlevels == 1:
-                    default  = np.percentile(series, 75)/20
+                    temp     = pd.Series(np.zeros(len(series)), index=series.index)
+                    sd_      = getattr(series, 'sd', temp)
                     sd       = getattr(series, 'sd', default)
                     y_array  = series.values
                     t_array  = series.index.values
                     
                 else:
-                    msg = ''
-                    raise NotImplementedError(msg)
-                
+                    if 'time' in series.index.names:
+                        groupby = series.groupby(by='time')
+                    else:
+                        groupby = series.groupby(level=0)
+                    
+                    mean    = groupby.mean()
+                    sd_     = groupby.std()
+                    sd     = sd.fillna(default)
+                    y_array = mean
+                    t_array = series.index.values
+                    
                 #Update the result
                 scenario2y_data.setdefault(scenario, {})
                 scenario2y_data[scenario][state] = y_array
@@ -84,7 +103,10 @@ class SSECalculator:
                 scenario2tpoints.setdefault(scenario, set())
                 scenario2tpoints[scenario].update(t_array)
                 
-
+                cleaned_data.setdefault(scenario, {})
+                series.sd_                    = sd_  
+                cleaned_data[scenario][state] = series
+                
         #Determine the indices for extracting y_model
         #Make the tspans for numerical integration
         scenario2t_idxs = {}
@@ -108,7 +130,8 @@ class SSECalculator:
                 scenario2t_data, 
                 scenario2sd_data, 
                 scenario2t_idxs, 
-                scenario2tspan
+                scenario2tspan,
+                cleaned_data
                 )
     
     ###########################################################################
@@ -160,7 +183,7 @@ class SSECalculator:
         free_parameters = model.optim_args['free_parameters'] 
         scenario2y0     = model.state_dict
         
-        nominal               = model.parameter_dict
+        nominal                = model.parameter_dict
         parameters             = model.parameters
         sampled_parameter_idxs = [i for i, p in enumerate(parameters) if p in free_parameters]
         
@@ -174,16 +197,22 @@ class SSECalculator:
         #Assign attributes
         self.ref                    = model.ref
         self.scenario2y0            = scenario2y0 
-        self.nominal               = nominal
+        self.nominal                = nominal
         self.sampled_parameter_idxs = np.array(sampled_parameter_idxs)
         self.model                  = model
+        
+        if model.data_args: 
+            self.data_args = model.data_args
+        else:
+            self.data_args = getattr(model, 'sim_args', {}).get('line_args', {})
         
         #Preprocess and get mappings
         (self.scenario2y_data, 
          self.scenario2t_data, 
          self.scenario2sd_data, 
          self.scenario2t_idxs, 
-         self.scenario2tspan
+         self.scenario2tspan,
+         self.data
          ) = self.parse_data(model, data)
         
     ###########################################################################
@@ -233,5 +262,90 @@ class SSECalculator:
     
     def __str__(self):
         return self.__repr__()
+    
+    ###########################################################################
+    #Plotting
+    ###########################################################################
+    def plot_data(self,
+                  ax            : axes.Axes,
+                  var           : str|tuple[str, str],
+                  scenarios     : Scenario|list[Scenario] = None,
+                  **kwargs
+                  ) -> axes.Axes:
+        match scenarios:
+            case None:
+                scenarios = set(self.data)
+            case [*scenarios]:
+                scenarios = set(scenarios)
+            case c if isinstance(c, Scenario):
+                scenarios = {c}
+            case _:
+                msg = ''
+                raise ValueError(msg)
+        
+        result = {}
+        for scenario in scenarios:
+            result[scenario] = self._plot_data(ax, var, scenario, **kwargs)
+            
+        return result
+    
+    def _plot_data(self,
+                   ax       : axes.Axes,
+                   var      : str|tuple[str, str],
+                   scenario : Scenario,
+                   **kwargs
+                   ) -> axes.Axes:
+        
+        match var:
+            case str(y):
+                x_vals = self.data[scenario][y].index
+                y_vals = self.data[scenario][y].values
+                
+            case [str(x), str(y)]:
+                x_series = self.data[scenario][x]
+                y_series = self.data[scenario][y]
+                
+                #The two series may not have the same indices
+                #Get only the common indices
+                common = x_series.index.intersection(y_series.index)
+                x_vals = x_series.loc[common].values
+                y_vals = y_series.loc[common].values
+            
+            case _:
+                msg = f'Could not parse the var argument {var}.'
+                raise ValueError(msg)
+        
+        label      = lambda ref, scenario, var: '{} {} {}'.format(ref, scenario, var)
+        default    = {'linestyle'  : 'None', 
+                      'marker'     : 'o', 
+                      'markersize' : 5, 
+                      'label'      : label,
+                      **self.data_args
+                      }
+        sub_args   = {'ref': self.ref, 'scenario': scenario, 'var': var}
+        converters = {'color'  : upp.get_color,
+                      'colors' : upp.get_colors
+                      }
+        kwargs     = upp.process_kwargs(kwargs, 
+                                        [scenario, var], 
+                                        default    = {**default, 'label': label},
+                                        sub_args   = sub_args, 
+                                        converters = converters
+                                        )
+        
+        if 'colors' in kwargs:
+            kwargs.pop('color', None)
+            stacked  = np.stack([x_vals, y_vals], axis=1)
+            n        = len(kwargs['colors'])
+            d        = int(len(stacked) / n + 1)
+            segments = [stacked[i*d:(i+1)*d+1] for i in range(n)]
+            lines    = LineCollection(segments, **kwargs)
+            result   = ax.add_collection(collection=lines)
+            
+            ax.autoscale()
+            return result
+            
+        else:
+            return ax.plot(x_vals, y_vals, **kwargs)
     
         

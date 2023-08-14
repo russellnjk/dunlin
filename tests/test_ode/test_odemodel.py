@@ -5,7 +5,7 @@ import addpath
 import dunlin.utils as ut
 import dunlin.comp as cmp
 import dunlin.ode.ode_coder as odc
-import dunlin.ode.event    as oev 
+import dunlin.ode.event     as oev 
 import dunlin.ode.ivp       as ivp
 from odemodel_test_files.data import all_data
 
@@ -91,3 +91,20 @@ answer = np.array([3.00000000e-02, 1.81959198e-02, 1.10363831e-02, 6.69390476e-0
                    1.00639909e-05, 1.00639909e-05, 3.00000000e-02, 1.81959679e-02,
                    1.10364249e-02, 6.69394669e-03, 4.06009157e-03])
 assert np.allclose(answer, value, atol=1e-4)
+
+###############################################################################
+#Test Plotting Methods
+###############################################################################
+fig = plt.figure()
+AX  = [fig.add_subplot(2, 2, i+1) for i in range(4)]
+
+ir.plot_line(AX[0], 'm0.x0')
+ir.plot_line(AX[1], 'm0.x1')
+ir.plot_line(AX[2], 'm0.x2')
+ir.plot_line(AX[3], 'x0', colors=['red', 'blue', 'green'])
+
+
+
+
+
+

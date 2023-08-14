@@ -1,23 +1,32 @@
-import numpy as np
-from collections import namedtuple
+import matplotlib.axes as axes
+import numpy           as np
+import pandas          as pd
+from matplotlib.collections import LineCollection
+from typing                 import Callable, Literal
 
 ###############################################################################
 #Non-Standard Imports
 ###############################################################################
 import dunlin.simulate           as sim
 import dunlin.utils              as ut 
-import dunlin.optimize.wrap_SSE  as ws
+import dunlin.utils_plot         as upp 
 import dunlin.optimize.optimizer as opt
 import dunlin.data               as ddt
+from ..ode.odemodel import ODEModel, ODEResultDict
+from .wrap_SSE      import SSECalculator, State, Parameter, Scenario
 
 ###############################################################################
 #High-Level Algorithms
 ###############################################################################
-def fit_model(model, dataset, runs=1, algo='differential_evolution', 
-              const_sd=False, **kwargs
+def fit_model(model : ODEModel, 
+              data  : dict[Scenario, dict[State, pd.Series]]|dict[State, dict[Scenario, pd.Series]], 
+              by    : Literal['scenario', 'state'] = 'scenario',
+              runs  : int                          = 1, 
+              algo  : str                          = 'differential_evolution', 
+              **kwargs
               ):
     curvefitters = []
-    curvefitter  = Curvefitter(model, dataset, const_sd=const_sd)
+    curvefitter  = Curvefitter(model, data, by=by)
     
     for i in range(runs):
         if i > 0:
@@ -25,7 +34,7 @@ def fit_model(model, dataset, runs=1, algo='differential_evolution',
         
         method = getattr(curvefitter, 'run_' + algo, None)
         if method is None:
-            raise opt.DunlinOptimizationError.no_algo(algo)
+            raise ValueError(f'No algorithm called "{algo}".')
             
         method(**kwargs)
         
@@ -34,133 +43,191 @@ def fit_model(model, dataset, runs=1, algo='differential_evolution',
     return curvefitters 
 
 ###############################################################################
-#Plotting
-###############################################################################
-def plot_curvefit(AX_line,/, curvefitters=None, dataset=None, model=None, 
-                  guess_line_args=None, data_line_args=None, posterior_line_args=None,
-                  plot_guess=True, n=0
-                  ):
-    
-    #Plot guess
-    guess_plot_result = {}
-    guess_sim_result  = None
-    if plot_guess and model is not None:
-        #Set up the plotting args
-        guess_line_args = {} if guess_line_args is None else dict(guess_line_args)
-        guess_line_args.setdefault('linestyle', ':')
-        
-        if curvefitters:    
-            guess_line_args.setdefault('label', '_nolabel')
-        
-        guess_line_args.update(model.optim_args.get('line_args', {}))
-        
-        #Simulate and plot
-        sim_result = sim.simulate_model(model)
-        sim.plot_line(AX_line, sim_result, **guess_line_args)
-        
-        #Update the result
-        guess_sim_result = sim_result
-    
-    #Plot data
-    data_plot_result = {}
-    data_line_args   = {} if data_line_args is None else dict(data_line_args)
-    dataset_         = None
-    
-    if dataset is not None:
-        #Set up the plotting args
-        if plot_guess or curvefitters:
-            data_line_args['label'] = '_nolabel'
-        
-        #Generate dataset and plot
-        if type(dataset) == ddt.TimeResponseData:
-            dataset_ = dataset
-        elif model is None:
-            msg = 'A model must be provided as if dataset is neither None nor dunlin.Dataset.'
-            raise ValueError(msg)
-        else:
-            dataset_ = ddt.TimeResponseData(*dataset, model=model)
-        
-        sim.plot_line(AX_line, dataset_, **data_line_args)
-        
-    #Plot curvefitting result
-    curvefitters          = [] if not curvefitters else curvefitters
-    posterior_plot_result = {}
-    posterior_sim_result  = []
-    
-    #Set up plot args
-    posterior_line_args = {} if posterior_line_args is None else dict(posterior_line_args)
-    
-    #Iterate and plot
-    for cft in curvefitters:
-        sim_results = cft.simulate(n)
-        
-        if ut.isnum(n):
-            sim_results = [sim_results]
-        
-        temp = sim.plot_line(AX_line, sim_results, **posterior_line_args)
-      
-        #Update
-        posterior_sim_result.append(temp)
-    
-    #Collate the results
-    result = {'posterior_plot_result' : posterior_plot_result, 
-              'guess_plot_result'     : guess_plot_result, 
-              'data_plot_result'      : data_plot_result, 
-              'posterior_sim_result'  : posterior_sim_result,
-              'dataset_'              : dataset_,
-              'guess_sim_result'      : guess_sim_result
-              }
-    
-    return result
-
-###############################################################################
 #Curvefitter
 ###############################################################################
 class Curvefitter(opt.Optimizer):
-    def __init__(self, model, dataset, **kwargs):
-        if type(dataset) == ddt.TimeResponseData:
-            sse_calc = ws.SSECalculator(model, dataset, **kwargs)
-        else:
-            sse_calc = ws.SSECalculator(model, *dataset, **kwargs)
+    def __init__(self, 
+                 model : ODEModel,
+                 data  : dict[Scenario, dict[State, pd.Series]]|dict[State, dict[Scenario, pd.Series]], 
+                 by    : Literal['scenario', 'state'] = 'scenario',
+                 ):
         
-        #Call superclass constructor
-        nominal         = model.parameters
+        get_SSE    = SSECalculator(model, data, by)
+        
+        #Instantiate
+        nominal         = model.parameter_df
         free_parameters = model.optim_args.get('free_parameters', {})
         settings        = model.optim_args.get('settings',    {})
-        trace_args      = model.optim_args.get('trace_args',  {})
+        trace_args      = model.trace_args
         
-        super().__init__(nominal, free_parameters, sse_calc, settings, trace_args)
-        
-        #Add subclass attributes
+        super().__init__(nominal, 
+                         free_parameters, 
+                         get_SSE, 
+                         settings, 
+                         trace_args
+                         )
+
+        #Allows access to the model's methods later
+        #Add the model as an attribute
+        self.ref   = model.ref
         self.model = model
+        self.data  = get_SSE.data
+        self.by    = by
+        
+        #Create a cache for the integration results
+        self.cache = {}
     
     ###########################################################################
     #Access and Modification
     ###########################################################################
     @property
-    def sse_calc(self):
+    def sse_calc(self) -> Callable:
         return self.neg_log_likelihood
+    
+    def get(self, 
+            n           : int|list[int] = 0, 
+            sort        : bool          = True, 
+            _df         : bool          = True
+            ) -> dict|dict[int, dict]:
+        if type(n) == list:
+            return {i: self.get(i, sort) for i in n}
+        elif type(n) != int:
+            msg = f'Argument n must be an integer. Received {type(n)}.'
+            raise TypeError(msg)
+        
+        #Use the get method of the trace
+        result = self.trace.get(n, sort)
+        row    = result['sample']
+        dct    = self.sse_calc.reconstruct(row.values)
+        
+        result['parameter_dict'] = dct
+        
+        if _df:
+            df         = pd.DataFrame.from_dict(result['parameter_dict'], 
+                                                orient='index'
+                                                )
+            df.columns = self.model.parameters                     
+            
+            #Update the results
+            result['parameter_df'] = df
+            
+        return result
     
     ###########################################################################
     #Simulation
     ###########################################################################
-    def simulate(self, n=0):
-        parameters, *_ = self.trace.get_best(n)
-        array          = parameters.values 
-        
-        if len(array.shape) == 1:
-            p_dict     = self.sse_calc.reconstruct(array)
-            sim_result = sim.simulate_model(self.model, p0=p_dict)
+    def integrate(self, 
+                  n              : int|list[int]  = 0, 
+                  sort           : bool           = True, 
+                  scenarios      : list[Scenario] = None,
+                  raw            : bool           = False,
+                  include_events : bool           = True,
+                  ) -> ODEResultDict:
+        if type(n) == list:
+            return [self.simulate(i, sort) for i in n]
+        elif type(n) != int:
+            msg = f'Argument n must be an integer. Received {type(n)}.'
+            raise TypeError(msg)
             
-            return sim_result
+        search_result = self.get(n, sort, _df=False)
+        idx           = search_result['sample'].name
         
-        else:
-            sim_results = []
-            for fpa in array:
-                p_dict     = self.sse_calc.reconstruct(fpa)
-                sim_result = sim.simulate_model(self.model, p0=p_dict)
+        if idx in self.cache:
+            resultdict     = self.cache[idx]
+            all_scenarios  = set(self.sse_calc.nominal)
+            scenarios      = all_scenarios if scenarios is None else scenarios
+            to_integrate   = all_scenarios - scenarios
+            
+            if to_integrate:
+                parameter_dict  = search_result['parameter_dict']
+                temp            = self.model.integrate(scenarios = to_integrate, 
+                                                       _p0       = parameter_dict
+                                                       )
+                to_update       = temp.scenario2intresult
                 
-                sim_results.append(sim_result)
-        
-            return sim_results
+                resultdict.scenario2intresult.update(to_update)
+            
+            return resultdict
+        else:
+            parameter_dict  = search_result['parameter_dict']
+            resultdict      = self.model.integrate(scenarios = scenarios, 
+                                                   _p0       = parameter_dict
+                                                   )
+            self.cache[idx] = resultdict
+            
+            return resultdict
     
+    def plot_line(self, 
+                  ax             : axes.Axes,
+                  var            : str|tuple[str, str],
+                  n              : int|list[int]  = 0, 
+                  sort           : bool           = True, 
+                  scenario      : list[Scenario]  = None,
+                  **kwargs
+                  ) -> axes.Axes:
+        
+        resultdict = self.integrate(n, sort, scenario)
+        return resultdict.plot_line(ax, var, **kwargs)
+    
+    def plot_data(self,
+                  ax            : axes.Axes,
+                  var           : str|tuple[str, str],
+                  scenarios     : Scenario|list[Scenario] = None,
+                  **kwargs
+                  ) -> axes.Axes:
+        return self.sse_calc.plot_data(ax, 
+                                       var       = var, 
+                                       scenarios = scenarios, 
+                                       **kwargs
+                                       )
+        
+        
+    def plot_result(self,
+                    ax           : axes.Axes,
+                    var          : str|tuple[str, str],
+                    scenarios    : list[Scenario] = None,
+                    guess_ax     : axes.Axes      = None,
+                    data_ax      : axes.Axes      = None,
+                    guess_kwargs : dict           = None,
+                    data_kwargs  : dict           = None,
+                    **kwargs
+                    ) -> axes.Axes:
+        result = []
+        
+        #Plot the data
+        data_ax     = ax if data_ax     is None else ax 
+        data_kwargs = {} if data_kwargs is None else data_kwargs
+        
+        r = self.plot_data(data_ax, 
+                           var       = var, 
+                           scenarios = scenarios, 
+                           **data_kwargs
+                           )
+        result.append(r)
+        
+        #Plot the guess first
+        default      = {'linestyle' : '--'}
+        guess_kwargs = default if guess_kwargs is None else {**default, **guess_kwargs}
+        guess_ax     = ax      if guess_ax     is None else guess_ax
+        
+        r = self.plot_line(guess_ax, 
+                           var       = var, 
+                           n         = 0, 
+                           sort      = False, 
+                           scenarios = scenarios, 
+                           **guess_kwargs
+                           )
+        result.append(r)
+        
+        #Plot the best 
+        r = self.plot_line(ax, 
+                           var       = var, 
+                           n         = 0, 
+                           sort      = True, 
+                           scenarios = scenarios, 
+                           **kwargs
+                           )
+        result.append(r)
+        
+        return result
+        

@@ -11,6 +11,7 @@ class SampledParam:
     '''A class for sampling parameter values. Definition based on PETab. Not 
     meant to be mutable.
     '''
+    #Functions for scaling and prior calculation
     _scale = {'lin'   : lambda x: x,
               'log'   : lambda x: np.log(x),
               'log10' : lambda x: np.log10(x)
@@ -21,77 +22,187 @@ class SampledParam:
                 'log10' : lambda x: 10**x
                 }
     
-    _priors = {'uniform'    : lambda lb, ub    : 1,
-               'normal'     : lambda mean, sd  : norm(mean, sd),
+    _priors = {'normal'     : lambda mean, sd  : norm(mean, sd),
                'laplace'    : lambda loc, scale: laplace(loc, scale),
-               'logNormal'  : lambda mean, sd  : lognorm(mean, sd),
-               'logLaplace' : lambda loc, scale: loglaplace(loc, scale),
+               'lognormal'  : lambda mean, sd  : lognorm(mean, sd),
+               'loglaplace' : lambda loc, scale: loglaplace(loc, scale),
                }
     
-    _priors['parameterScaleUniform'] = _priors['uniform']
     _priors['parameterScaleNormal' ] = _priors['normal' ]
     _priors['parameterScaleLaplace'] = _priors['laplace' ]
-    
-    _priors['uni']     = _priors['uniform']
-    _priors['norm']    = _priors['normal']
-    _priors['lap']     = _priors['laplace']
-    _priors['lognorm'] = _priors['logNormal']
-    _priors['loglap']  = _priors['logLaplace']
-    _priors['psuni']   = _priors['uniform']
-    _priors['psnorm']  = _priors['normal']
-    _priors['pslap']   = _priors['laplace']
-
-    _priors['u']  = _priors['uniform']
-    _priors['n']  = _priors['normal']
-    _priors['l']  = _priors['laplace']
-    _priors['ln'] = _priors['logNormal']
-    _priors['ll'] = _priors['logLaplace']
-    
-    @classmethod
-    def read_prior(cls, prior, scale, _name='prior'):
-        try:
-            if hasattr(prior, 'items'):
-                ptype, a, b = prior['type'], prior['loc'], prior['scale']
-            else:
-                ptype, a, b = prior
-
-            func = cls._priors[ptype]
-        except KeyError:
-            raise InvalidPrior(_name, prior, list(cls._priors.keys()))
-        except:
-            raise InvalidPrior(_name, prior, 'list/tuple in the order [type, loc, scale] or dict with keys type, loc and scale')
-        return ptype, func(a, b)
             
     def __init__(self, 
                  name, 
                  bounds       : tuple[Number, Number], 
-                 prior        : Literal['uni', 'norm', 'lap', 'lognorm', ...] = None, 
-                 sample       : Literal['uni', 'norm', 'lap', 'lognorm', ...] = None, 
+                 prior        : dict = None, 
+                 sample       : dict = None, 
                  scale        : Literal['lin', 'log', 'log10'] = 'lin', 
                  guess        : np.ndarray = None, 
                  scaled_guess : bool = False):
         #Set name
         self.name  = name
         
-        #Set bounds
-        if hasattr(bounds, 'items'):
-            self.bounds = bounds['lb'], bounds['ub']
-        else:
-            self.bounds = tuple(bounds)
-        if self.bounds[0] >= self.bounds[1] or len(self.bounds) != 2:
-            raise InvalidBoundsError(name, self.bounds)
-        
-        #Create priors
-        prior_                             = ['uniform', *self.bounds] if prior is None else prior
-        sample_                            = prior_ if sample is None else sample
-        self.prior_type, self.prior_calc   = self.read_prior(prior_,   scale)
-        self.sample_type, self.sample_calc = self.read_prior(sample_, scale, 'sample')
+        #Set bounds. Use absolute values.
+        match bounds:
+            case {'lb': lb, 'ub': ub} if len(bounds) == 2:
+                self.bounds = lb, ub
+                self.lb     = lb
+                self.ub     = ub
+            case [lb, ub]:
+                self.bounds = lb, ub
+                self.lb     = lb
+                self.ub     = ub
+            case _:
+                msg  = f'Invalid bounds provided for sampled parameter {name}. '
+                msg += f'Received {bounds}.'
+                raise ValueError(msg)
         
         #Set scale
         if scale not in self._scale:
             msg = f'Invalid scale. Must be one of: {list(self._scale.keys())}\nReceived: {scale}'
-            raise ScaleError(msg)
+            raise ValueError(msg)
         self.scale_type = scale
+        self.scale      = self._scale[scale]
+        self.unscale    = self._unscale[scale]
+        
+        #Set the function for calculating the prior
+        match prior:
+            case None:
+                self.prior_type = 'uniform'
+                self.prior_calc = None
+            
+            case ['uniform', lb, ub] :
+                msg  = f'Error in instantiating sampled parameter {name}. '
+                msg += 'The keyword argument "prior" can only be used for non-uniform priors.'
+                raise ValueError(msg)
+            
+            case [prior_type, arg0, arg1]:
+                self.prior_type = prior_type
+                self.prior_calc = self._priors[prior_type](arg0, arg1)
+            
+            case {'type': 'uniform'}:
+                msg  = f'Error in instantiating sampled parameter {name}. '
+                msg += 'The keyword argument "prior" can only be used for non-uniform priors.'
+                raise ValueError(msg)
+            
+            case {'type' : 'normal'|'lognormal'|'parameterScaleNormal', 
+                  'mean' : mean, 
+                  'sd'   : sd, 
+                  **rest
+                  }:
+                if rest:
+                    msg  = f'Error in instantiating sampled parameter {name}. '
+                    msg += 'Laplace/loglaplace priors cannot have keys other than "mean" and "sd". '
+                    msg += 'Extra keys: {list(rest)}.'
+                    raise ValueError(msg)
+                
+                prior_type      = prior['type']
+                self.prior_type = prior_type
+                self.prior_calc = self._priors[prior_type](mean, sd)
+            
+            case {'type' : 'laplace'|'loglaplace'|'parameterScaleLaplace', 
+                  'loc'  : loc, 
+                  'scale': scale, 
+                  **rest
+                  }:
+                if rest:
+                    msg  = f'Error in instantiating sampled parameter {name}. '
+                    msg += 'Laplace/loglaplace priors cannot have keys other than "loc" and "scale". '
+                    msg += 'Extra keys: {list(rest)}.'
+                    raise ValueError(msg)
+                
+                prior_type      = prior['type']
+                self.prior_type = prior_type
+                self.prior_calc = self._priors[prior_type](loc, scale)
+            
+            case _:
+                msg  = f'Error in instantiating sampled parameter {name}. '
+                msg += 'Invalid format for the keyword argument "prior". '
+                msg += 'Uniform priors must not use this keyword argument. '
+                msg += 'For normal/lognormal priors the correct format is [<prior_type>, <mean>, <sd>]. '
+                msg += 'For laplace/loglaplace priors the correct format is [<prior_type>, <loc>, <scale>]. '
+                msg += 'Received {prior}.'
+                
+                raise ValueError(msg)
+                
+        #Set the function for sampling the prior
+        match sample:
+            case None:
+                self.sample_type = 'uniform'
+                self.sample_calc = None
+            
+            case ['uniform', lb, ub] :
+                msg  = f'Error in instantiating sampled parameter {name}. '
+                msg += 'The keyword argument "sample" can only be used for non-uniform samples.'
+                raise ValueError(msg)
+            
+            case [sample_type, arg0, arg1]:
+                self.sample_type = sample_type
+                self.sample_calc = self._priors[sample_type](arg0, arg1)
+            
+            case {'type': 'uniform'}:
+                msg  = f'Error in instantiating sampled parameter {name}. '
+                msg += 'The keyword argument "sample" can only be used for non-uniform samples.'
+                raise ValueError(msg)
+            
+            case {'type' : 'normal'|'lognormal'|'parameterScaleNormal', 
+                  'mean' : mean, 
+                  'sd'   : sd, 
+                  **rest
+                  }:
+                if rest:
+                    msg  = f'Error in instantiating sampled parameter {name}. '
+                    msg += 'Laplace/loglaplace samples cannot have keys other than "mean" and "sd". '
+                    msg += 'Extra keys: {list(rest)}.'
+                    raise ValueError(msg)
+                
+                sample_type      = sample['type']
+                self.sample_type = sample_type
+                self.sample_calc = self._priors[sample_type](mean, sd)
+            
+            case {'type': 'laplace'|'loglaplace', 'loc': loc, 'scale': scale, **rest}:
+                if rest:
+                    msg  = f'Error in instantiating sampled parameter {name}. '
+                    msg += 'Laplace/loglaplace samples cannot have keys other than "loc" and "scale". '
+                    msg += 'Extra keys: {list(rest)}.'
+                    raise ValueError(msg)
+                
+                sample_type      = sample['type']
+                self.sample_type = sample_type
+                self.sample_calc = self._priors[sample_type](loc, scale)
+            
+            case _:
+                msg  = f'Error in instantiating sampled parameter {name}. '
+                msg += 'Invalid format for the keyword argument "sample". '
+                msg += 'Uniform samples must not use this keyword argument. '
+                msg += 'For normal/lognormal samples the correct format is [<sample_type>, <mean>, <sd>]. '
+                msg += 'For laplace/loglaplace samples the correct format is [<sample_type>, <loc>, <scale>]. '
+                msg += 'Received {sample}.'
+                
+                raise ValueError(msg)
+        
+        # if prior is None:
+        #     self.prior_type = 'uniform'
+        #     self.prior_calc = self._priors['uniform'](self.lb, self.ub)
+        # elif prior == 'uniform':
+        #     self.prior_type = 'uniform'
+        #     self.prior_calc = self._priors['uniform'](self.lb, self.ub)
+        # elif prior in self._priors:
+        #     if prior == 'uniform':
+        #         self.prior_type = 'uniform'
+        #         self.prior_calc = self._priors['uniform'](self.lb, self.ub)
+        #     else:
+        #         self.prior_type = prior
+        #         self.prior_calc = self._priors[prior](self.)
+            
+        
+        # #Create priors
+        # prior_                             = ['uniform', *self.bounds] if prior is None else prior
+        # sample_                            = prior_ if sample is None else sample
+        # self.prior_type, self.prior_calc   = self.read_prior(prior_,   scale)
+        # self.sample_type, self.sample_calc = self.read_prior(sample_, scale, 'sample')
+        
+        
         
         #Set guess. Set underlying attr first then use setter.
         self._guess = None
@@ -114,47 +225,48 @@ class SampledParam:
         try:
             value = float(value)
         except:
-            raise InvalidGuessError('Could not convet guess into a float.')
-        
+            msg = 'Could not convet guess into a float.'
+            raise ValueError(msg)
+            
         lb, ub = self.get_opt_bounds() if scaled else self.bounds
         if value < lb or value > ub:
             msg0 = f'Attempted to set guess attribute of {type(self).__name__} with a value outside bounds.'
-            msg1 = '\nlb={}, ub={}, guess={}, scaled={}'
-        
-            raise InvalidGuessError(msg0+msg1.format(lb, ub, value, scaled))
+            msg1 = f'\nlb={lb}, ub={ub}, guess={value}, scaled={scaled}'
+            msg  = msg0 + msg1
+            
+            raise ValueError(msg)
         else:
             self._guess = self.unscale(value) if scaled else value
     
-    def scale(self, x):
-        return self._scale[self.scale_type](x)
-    
-    def unscale(self, x):
-        return self._unscale[self.scale_type](x)
-    
-    def get_prior(self, x):
-        if self.prior_type == 'uniform':
-            return 1
-        
-        if self.prior_type in ['normal', 'laplace', 'logNormal', 'logLaplace']:
-            x_ = self.unscale(x)
-        else:
-            x_ = x
-
-        prior_value = self.prior_calc.pdf(x_)
-        return prior_value
-    
-    def get_opt_bounds(self):
+    @property
+    def scaled_bounds(self) -> tuple[Number, Number]:
         #This depends solely on the scale
         lb, ub = self.bounds
         return self.scale(lb), self.scale(ub)
             
-    def __call__(self, x):
+    def __call__(self, x) -> Number:
         return self.get_prior(x)
     
-    def new_sample(self):
+    def get_prior(self, scaled_x: Number) -> Number:
+        prior_type = self.prior_type
+        
+        #Case 0: The prior is uniform
+        if prior_type == 'uniform':
+            return 1
+        
+        #Case 1: The prior was defined in linear units
+        elif prior_type in {'normal', 'lognormal', 'laplace', 'loglaplace'}:
+            unscaled_x = self.unscale(scaled_x)
+            return self.prior_calc.pdf(unscaled_x)
+        
+        #Case 2: The prior was defined in scaled units
+        else:
+            return self.prior_calc.pdf(scaled_x)
+        
+    def new_sample(self) -> np.ndarray:
         return self.sample_calc.rvs()
 
-    def to_dict(self):
+    def to_dict(self) -> dict:
         return {'name'   : self.name,  
                 'bounds' : self.bounds,     
                 'prior'  : [self.prior_type, *self.prior.args], 
@@ -166,21 +278,7 @@ class SampledParam:
         return str(self)
     
     def __str__(self):
-        return f'{type(self).__name__} {self.name}<bounds: {self.get_opt_bounds()}, scale: {self.scale_type}, prior: {self.prior_type}, sample: {self.sample_type}>'
-
-class ScaleError(Exception):
-    pass
-
-class InvalidGuessError(Exception):
-    pass
-
-class InvalidPrior(Exception):
-    def __init__(self, arg, value, correct):
-        super().__init__(f'Invalid {arg} format: {value}\nValue must be {correct} ')
-
-class InvalidBoundsError(Exception):
-    def __init__(cls, name, bounds):
-        super().__init__(f'Invalid bounds given for {name}: {bounds}')
+        return f'{type(self).__name__} {self.name}<bounds: {self.scaled_bounds}, scale: {self.scale_type}, prior: {self.prior_type}, sample: {self.sample_type}>'
 
 ###############################################################################
 #Bounds
@@ -250,24 +348,4 @@ class Bounds:
         xmin = self._xmin
         
         return [*zip(xmin, xmax)]
-        
-###############################################################################
-#Dunlin Errors
-###############################################################################    
-class DunlinOptimizationError(Exception):
-    @classmethod
-    def raise_template(cls, msg):
-        return cls(msg)
-    
-    @classmethod
-    def no_opt_result(cls):
-        return cls.raise_template('No optimization yet. Make sure you have run one of the optimization algorithms.')
-    
-    @classmethod
-    def no_algo(cls, algo):
-        return cls.raise_template(f'No algorithm called "{algo}".')
-    
-    @classmethod
-    def no_optim_args(cls, model_name):
-        return cls.raise_template(f'The optim_args attribute for Model{model_name} has not been set.')
-    
+      

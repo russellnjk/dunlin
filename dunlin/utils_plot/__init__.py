@@ -1,5 +1,6 @@
 from .color            import (xkcd_colors,
-                               get_color
+                               get_color,
+                               get_colors
                                )
 from .plot             import (label_ax,
                                set_title, 

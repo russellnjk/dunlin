@@ -206,6 +206,7 @@ class BaseModel(ABC):
             arr = np.unique(tspan)
             if len(arr.shape) != 1:
                 raise ValueError('tspan for each scenario must be one dimensional.')
+            formatted[scenario] = arr
         self._tspans = formatted
             
     def get_tspan(self, scenario: Scenario) -> np.ndarray:
@@ -252,6 +253,7 @@ class BaseModel(ABC):
                  tspan          : np.array, 
                  raw            : bool = False, 
                  include_events : bool = True,
+                 scenario       : str  = ''
                  ) -> np.array:
         #Reassign and/or extract
         events   = self._events
@@ -267,20 +269,22 @@ class BaseModel(ABC):
         if raw:
             return t, y, p
         else:
-            return self._convert_raw_output(t, y, p)
+            return self._convert_call(t, y, p, scenario)
    
     @abstractmethod
-    def _convert_raw_output(self, t, y, p) -> type:
+    def _convert_call(self, t, y, p, c) -> Any:
         pass
     
     def integrate(self, 
                   scenarios      : list = None,
                   raw            : bool = False, 
                   include_events : bool = True,
-                  ) -> dict:
+                  _y0            : dict[Scenario, np.ndarray] = None,
+                  _p0            : dict[Scenario, np.ndarray] = None,
+                  _tspans        : dict[Scenario, np.ndarray] = None
+                  ) -> dict|Any:
         '''
-        Numerical integration from the front end. If the developer needs to 
-        override y0, p0 or tspan, use the __call__ method instead.
+        Numerical integration from the front end. 
 
         Parameters
         ----------
@@ -293,17 +297,27 @@ class BaseModel(ABC):
             default is False.
         include_events : bool, optional
             Include overlapping time points for events. The default is True.
-
+        _y0 : dict[Scenario, np.ndarray], optional
+            For overriding the model's stored state values. The default is None. 
+            Not meant for use by end-users.
+        _p0 : dict[Scenario, np.ndarray], optional
+            For overriding the model's stored parameter values. The default is None.
+            Not meant for use by end-users.
+        _tspans : dict[Scenario, np.ndarray], optional
+            For overriding the model's stored tspan values. The default is None.
+            Not meant for use by end-users.
+            
         Returns
         -------
         dict
             A dictionary where keys are scenarios and the values are the results 
-            of the numerical integration.
+            of the numerical integration. 
 
         '''
+        
         result     = {}
-        states     = self.state_dict
-        parameters = self.parameter_dict
+        states     = self.state_dict     if _y0 is None else _y0
+        parameters = self.parameter_dict if _p0 is None else _p0
         
         
         for scenario, y0 in states.items():
@@ -312,13 +326,20 @@ class BaseModel(ABC):
                     continue
                 
             p0    = parameters[scenario]
-            tspan = self.get_tspan(scenario)
+            tspan = self.get_tspan(scenario) if _tspans is None else _tspans[scenario]
             
             result[scenario] = self(y0, 
                                     p0, 
                                     tspan, 
-                                    raw=raw, 
-                                    include_events=include_events
+                                    raw            = raw, 
+                                    include_events = include_events,
+                                    scenario       = scenario
                                     )
-            
-        return result
+        if raw:
+            return result
+        else:
+            return self._convert_integrate(result)
+    
+    @abstractmethod
+    def _convert_integrate(self, scenario2intresult: dict[Scenario, Any]) -> Any:
+        pass

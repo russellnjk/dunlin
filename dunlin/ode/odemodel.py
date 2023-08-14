@@ -1,6 +1,9 @@
-import numpy  as np
-import pandas as pd
-from typing import Any, Union
+import matplotlib.axes as axes
+import numpy           as np
+import pandas          as pd
+from matplotlib.collections import LineCollection
+from numbers                import Number
+from typing                 import Any
 
 ###############################################################################
 #Non-Standard Imports
@@ -13,8 +16,19 @@ import dunlin.utils_plot     as upp
 from .basemodel import BaseModel
 
 #Type hints
-Scenario = Union[str, float, int, tuple]
+Scenario = str|Number
 
+def is_scenario(c: Any) -> bool:
+    try:
+        if isinstance(c, Scenario):
+            return True
+        elif all(isinstance(i, Scenario) for i in c):
+            return True
+        else:
+            return False
+    except:
+        return False
+    
 class ODEModel(BaseModel):
     '''
     '''
@@ -41,6 +55,7 @@ class ODEModel(BaseModel):
                  int_args     : dict = None, 
                  sim_args     : dict = None, 
                  optim_args   : dict = None, 
+                 trace_args   : dict = None,
                  data_args    : dict = None, 
                  meta         : dict = None,
                  dtype        : str  = 'ode',
@@ -87,14 +102,23 @@ class ODEModel(BaseModel):
         self.parameter_df = parameters
         
         #Specific to this class
-        self.optim_args = optim_args
-        self.sim_args   = sim_args
+        self.trace_args = {} if trace_args is None else trace_args 
+        self.optim_args = {} if optim_args is None else optim_args
+        self.sim_args   = {} if sim_args   is None else sim_args
+        self.data_args  = {} if data_args  is None else data_args
         
-    def _convert_raw_output(self, t, y, p) -> type:
-        return ODEResult(t, y, p, self)
-        
-    def simulate(self, **kwargs):
-        return ODESimResult(self, **kwargs)
+    def _convert_call(self, 
+                      t : np.ndarray, 
+                      y : np.ndarray, 
+                      p : np.ndarray,
+                      c : Scenario
+                      ) -> 'ODEResult':
+        return ODEResult(t, y, p, c, self)
+    
+    def _convert_integrate(self, 
+                           scenario2intresult: dict[Scenario, 'ODEResult']
+                           ) -> 'ODEResultDict':
+        return ODEResultDict(scenario2intresult, self)
         
 ###############################################################################
 #Integration Results
@@ -107,6 +131,7 @@ class ODEResult:
                  t     : np.ndarray, 
                  y     : np.ndarray, 
                  p     : np.ndarray, 
+                 c     : Scenario,
                  model : ODEModel
                  ):
         
@@ -119,14 +144,17 @@ class ODEResult:
                      )
         namespace = frozenset(namespace)
         
+        self.ref         = model.ref
         self.t           = t
         self.y           = dict(zip(model.states,     y))
         self.p           = dict(zip(model.parameters, p)) 
+        self.scenario    = c
         self.internals   = {}
         self.externals   = {}
         self.args        = t, y, p
         self.rhsdct      = model.rhsdct
         self.rhsexternal = model.externals
+        self.line_args   = model.sim_args.get('line_args', {})
         
         #Keep track of names for lazy evaluation
         self.internal_names = frozenset(model.variables  
@@ -187,267 +215,99 @@ class ODEResult:
     ###########################################################################
     def __str__(self):
         s = tuple(self.ref)
-        return f'{type(self).__name__}{s}'
+        c = self.scenario
+        return f'{type(self).__name__}{s} {c}'
     
     def __repr__(self):
-        return self.__str__()
+        return str(self)
     
+    ###########################################################################
+    #Plotting
+    ###########################################################################
+    def plot_line(self,
+                  ax     : axes.Axes,
+                  var    : str|tuple[str, str],
+                  **kwargs
+                  ) -> axes.Axes:
+        
+        match var:
+            case str(y):
+                x_vals = self['time']
+                y_vals = self[y]
+                
+            case [str(x), str(y)]:
+                x_vals = self[x]
+                y_vals = self[y]
+            
+            case _:
+                msg = f'Could not parse the var argument {var}.'
+                raise ValueError(msg)
+        
+        label      = lambda ref, scenario, var: '{} {} {}'.format(ref, scenario, var)
+        default    = {'label': label, **self.line_args}
+        sub_args   = {'ref': self.ref, 'scenario': self.scenario, 'var': var}
+        converters = {'color'  : upp.get_color,
+                      'colors' : upp.get_colors
+                      }
+        kwargs     = upp.process_kwargs(kwargs, 
+                                        [self.scenario, var], 
+                                        default    = default,
+                                        sub_args   = sub_args, 
+                                        converters = converters
+                                        )
+        
+        if 'colors' in kwargs:
+            kwargs.pop('color', None)
+            stacked  = np.stack([x_vals, y_vals], axis=1)
+            n        = len(kwargs['colors'])
+            d        = int(len(stacked) / n + 1)
+            segments = [stacked[i*d:(i+1)*d+1] for i in range(n)]
+            lines    = LineCollection(segments, **kwargs)
+            result   = ax.add_collection(collection=lines)
+            
+            ax.autoscale()
+            return result
+            
+        else:
+            return ax.plot(x_vals, y_vals, **kwargs)
+        
 ###############################################################################
 #SimResult Class
 ###############################################################################
-class ODESimResult:
-    _line_args = {'label': '{scenario}'}
-    _bar_args  = {'width': 0.4, 'bottom': 0}
-    
-    ###########################################################################
-    #Instantiators
-    ###########################################################################
-    def __init__(self, model, sim_args=None, **kwargs):
-        self.intresults      = dict(model.integrate(**kwargs).items())
-        self.levels          = list(model.states.index.names) 
-        self.ref             = model.ref
-        self.variables       = set()
-        self.extra_variables = set()
-        
-        for ir in self.intresults.values():
-            self.variables.update(ir.namespace)
-            self.extra_variables.update(ir.extra_variables)
-        
-        if sim_args is not None:
-            self.sim_args = sim_args 
-        elif model.sim_args is None: 
-            self.sim_args = {}
-        else:
-            self.sim_args = model.sim_args
-            
-    ###########################################################################
-    #Accessors
-    ###########################################################################
-    def get(self, variable=None, scenario=None, _extract=True):
-        if type(variable) == list:
-            dct = {}
-            for v in variable:
-                temp = self.get(v, scenario, False)
-                dct.update(temp)
-            return dct
-        elif type(scenario) == list:
-            dct = {}
-            for c in scenario:
-                temp = self.get(variable, c, False)
-                dct.update(temp)
-            return dct
-        
-        
-        if variable is not None and variable not in self.variables:
-            raise ValueError(f'Unexpected variable: {repr(variable)}')
-        elif scenario is not None and scenario not in self.intresults:
-            raise ValueError(f'Unexpected scenario: {repr(scenario)}')
-        
-        dct  = {}
-        
-        for c, ir in self.intresults.items():
-            if not ut.compare_scenarios(c, scenario):
-                continue
-            
-            time = ir['time']
-
-            for v in ir.namespace:
-                
-                if not ut.compare_variables(v, variable):
-                    continue
-                
-                values = ir[v]
-                name   = v, c
-                
-                if v in ir.extra_variables:
-                    dct.setdefault(v, {})[c] = values
-                else:
-                    series = pd.Series(values, index=time, name=name)
-                    dct.setdefault(v, {})[c] = series
-        
-        if variable is not None and scenario is not None and _extract:
-            return dct[variable][scenario]
-        else:
-            return dct
-        
-    def __getitem__(self, key):
-        if type(key) == tuple:
-            if len(key) != 2:
-                raise ValueError('Expected a tuple of length 2.')
-            variable, scenario = key  
-        else:
-            variable = key
-            scenario = None
-            
-        return self.get(variable, scenario)
-    
-    def has(self, variable=None, scenario=None):
-        if type(variable) in [list, tuple]:
-            return all([self.has(v, scenario) for v in variable])
-        elif type(scenario) == list:
-            return all([self.has(variable, c) for c in scenario])
-        
-        if variable is None and scenario is None:
-            raise ValueError('variable and scenario cannot both be None.')
-        elif variable is None:
-            return scenario in self.intresults
-        elif scenario is None:
-            return variable in self.variables
-        else:
-            return variable in self.variables and scenario in self.intresults
-    
-    ###########################################################################
-    #Representation
-    ###########################################################################
-    def __str__(self):
-        
-        return f'{type(self).__name__}{tuple(self.intresults.keys())}'
-    
-    def __repr__(self):
-        return self.__str__()
-    
-    ###########################################################################
-    #Master Plotting Method
-    ###########################################################################
-    def plot(self, AX_lst, *args, **sim_args):
-        '''Still in the works. Meant to be used for future work on high-level 
-        declarative plotting.
-        '''
-        raise NotImplementedError('Not implemented yet.')
-        if not ut.islistlike(AX_lst):
-            AX_lst_ = [AX_lst]
-        
-        result = []
-        for ax in AX_lst_:
-            plot_type = getattr(ax, 'plot_type', '2D')
-            method    = getattr(self, 'plot_'+plot_type, None)
-        
-            if method is None:
-                raise AttributeError(f'No method found for plot_type "{plot_type}"')
-            
-            kwargs = getattr(ax, 'args', {})
-            kwargs = {**kwargs, **sim_args}
-            result.append( method(ax, *args, **kwargs) )
-        
-        if not ut.islistlike(AX_lst):
-            return result[0]
-        else:
-            return result
-        
-    ###########################################################################
-    #Plotting Functions
-    ###########################################################################
-    def plot_line(self, ax_dct, variable, xlabel=None, ylabel=None, title=None, 
-                  skip=None, **line_args
-                  ):
-        
-        #Determine which variables to plot
-        if ut.islistlike(variable):
-            x, y = variable
-        else:
-            x, y = 'time', variable
-        
-        #Set user line_args
-        if line_args:
-            line_args = {**self.sim_args.get('line_args', {}), **line_args}
-        else: 
-            line_args = self.sim_args.get('line_args', {})
-            
-        result      = {}
-        #Iterate and plot
-        for c, ir in self.intresults.items():
-            if upp.check_skip(skip, c):
-                continue
-            
-            #Process the plotting args
-            keys       = [c, variable]
-            sub_args   = dict(scenario=c, variable=variable, ref=self.ref)
-            converters = {'color': upp.get_color}
-            line_args_ = upp.process_kwargs(line_args, 
-                                            keys, 
-                                            default=self._line_args, 
-                                            sub_args=sub_args, 
-                                            converters=converters
-                                            )
-            
-            #Determine axs
-            ax = upp.recursive_get(ax_dct, c)
-            
-            if ax is None:
-                continue
-            
-            #Plot
-            result[c] = ax.plot(ir[x], ir[y], **line_args_)           
-            
-            #Label axes
-            upp.label_ax(ax, x, xlabel, y, ylabel)
-            upp.set_title(ax, title, self.ref, variable, c)
-            
-        return result
-         
-    def plot_bar(self, ax, variable, by='scenario', xlabel=None, ylabel=None, 
-                 skip=None, horizontal=False, stacked=False, **bar_args
+class ODEResultDict:
+    def __init__(self, 
+                 scenario2intresult : dict[Scenario, ODEResult],
+                 model              : ODEModel
                  ):
-        '''For extra only
-        '''
-        #Determine which variables to plot
-        if ut.islistlike(variable):
-            variables = list(variable)
-        else:
-            variables = [variable]
+        self.scenario2intresult = scenario2intresult
+    
+    def __getitem__(self, key: Scenario) -> ODEResult:
+        return self.scenario2intresult[key]
+    
+    def plot_line(self,
+                  ax        : axes.Axes,
+                  var       : str|tuple[str, str],
+                  scenarios : Scenario|list[Scenario] = None,
+                  **kwargs
+                  ) -> axes.Axes:
         
-        #Create the dataframe
-        dct = {}
-        for c, ir in self.intresults.items():
-            if upp.check_skip(skip, c):
+        match scenarios:
+            case None:
+                scenarios = set(self.scenario2intresult)
+            case [*scenarios]:
+                scenarios = set(scenarios)
+            case c if isinstance(c, Scenario):
+                scenarios = {c}
+            case _:
+                msg = ''
+                raise ValueError(msg)
+        
+        result = {}
+        for scenario, oderesult in self.scenario2intresult.items():
+            if scenario not in scenarios:
                 continue
             
-            for v in variables:
-                
-                if v not in self.extra_variables:
-                    msg = f'plot_bar can only be used extra variables. Received {v}'
-                    raise ValueError(msg)
-                    
-                dct.setdefault(v, {})[c] = ir[v]
-                
-        df = pd.DataFrame(dct)
+            result[scenario] = oderesult.plot_line(ax, var, **kwargs)
         
-        #Determine how the bars should be grouped
-        if by == 'scenario':
-            pass
-        elif by == 'variable':
-            df = df.T
-        else:
-            df = df.unstack(by).stack(0)
-        
-
-        #Prepare the sim args
-        def getter(d, f=None):
-            if hasattr(d, 'items') and f:
-                return {k: f(v) for k, v in d.items()}
-            else:
-                return d
-        
-        bar_args   = bar_args if bar_args else self.sim_args.get('bar_args', {})
-        keys       = []
-        sub_args   = dict(scenario=c, variable=variable, ref=self.ref)
-        converters = {'color'     : lambda d: getter(d, upp.get_color),
-                      'edgecolor' : lambda d: getter(d, upp.get_color),
-                      }
-        bar_args_  = upp.process_kwargs(bar_args, 
-                                        keys, 
-                                        default=self._bar_args, 
-                                        sub_args=sub_args, 
-                                        converters=converters
-                                        )
-        
-        result = upp.plot_bar(ax, 
-                              df, 
-                              xlabel, 
-                              ylabel, 
-                              horizontal=horizontal, 
-                              stacked=stacked, 
-                              **bar_args_
-                              )
         return result
-    
+     

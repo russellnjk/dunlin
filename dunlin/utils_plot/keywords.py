@@ -33,8 +33,8 @@ def process_kwargs(kwargs    : dict,
     keys : list
         The keys for recursive flattening.
     default : dict, optional
-        Default values which will be merged with the flattened keyword arguments. 
-        The default is None.
+        Default values which will be merged with the keyword arguments BEFORE 
+        flattening. The default is None.
     sub_args : dict, optional
         The arguments for substitution after flattening. 
     converters : dict[str, Callable]
@@ -59,16 +59,19 @@ def process_kwargs(kwargs    : dict,
         plotting functions.
 
     '''
-    if keys:
-        kwargs = flatten_kwargs(kwargs, keys)
-    elif not kwargs:
-        kwargs = {}
-    else:
-        kwargs = dict(kwargs)
-        
-    if default:
-        kwargs = {**default, **kwargs}
     
+    if keys:
+        if default:
+            kwargs = {**default, **kwargs}
+            
+        kwargs = flatten_kwargs(kwargs, keys)
+        
+    elif not kwargs:
+        kwargs = {**default}
+        
+    else:
+        kwargs = {**default, **kwargs}
+        
     for key in kwargs:
         converter = converters.get(key)
         substitute(kwargs, key, converter, sub_args)
@@ -78,7 +81,7 @@ def process_kwargs(kwargs    : dict,
 ###############################################################################
 #Flattening Keyword Args
 ###############################################################################
-def flatten_kwargs(dct, keys):
+def flatten_kwargs(dct: dict, keys: list) -> dict:
     if dct is None:
         flattened = {}
     else:
