@@ -127,6 +127,9 @@ class Optimizer(SensitivityMixin):
     ###########################################################################
     #Optimization and Calculation
     ###########################################################################       
+    def __call__(self, free_parameters_array: np.ndarray) -> Number:
+        return self.get_objective(free_parameters_array)
+    
     def get_objective(self, free_parameters_array: np.ndarray) -> Number:
         priors   = np.zeros(len(free_parameters_array))
         unscaled = np.zeros(len(free_parameters_array))

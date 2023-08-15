@@ -46,7 +46,7 @@ class BaseModel(ABC):
     
     #For back-end only
     #Store the datastructures generated from the raw input
-    _model_data : type
+    _model_data : dict
     
     #For back-end only
     #Required for integration
@@ -109,10 +109,6 @@ class BaseModel(ABC):
         self._parameter_names = list(model_data.parameters)
         self._events          = events
         self._externals       = {}
-        
-    @property
-    def _dtype(self) -> str:
-        return 'ode'
     
     ###########################################################################
     #State and Parameter Management

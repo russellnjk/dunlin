@@ -115,7 +115,4 @@ class SensitivityMixin:
          )
         
         return sp
-        
-        
-        
-    
+       

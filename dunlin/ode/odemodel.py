@@ -31,10 +31,14 @@ def is_scenario(c: Any) -> bool:
     
 class ODEModel(BaseModel):
     '''
+    After instantiation, the model's `external` attribute can be modified 
     '''
+    
+    #Class attributes not defined in the parent class
+    #Refer to the parent class for other class attributes as well as required 
+    #attributes
+    _dtype        = 'ode'
     default_tspan = np.linspace(0, 1000, 21)
-    _locked       = ['state_names', 'parameter_names', 'functions', 'reactions', 
-                     'variables']
     
     @classmethod
     def from_data(cls, all_data: dict, ref: str) -> 'ODEModel':
@@ -166,18 +170,6 @@ class ODEResult:
     ###########################################################################
     #Accessors/Lazy Evaluators
     ###########################################################################
-    @property
-    def eval_extra(self):
-        if self._eval_extra is None:
-            self._eval_extra = self.extra(*self._args)
-        return self._eval_extra
-    
-    @property
-    def eval_dct(self):
-        if self._eval_dct is None:
-            self._eval_dct = self.dct(*self._args)
-        return self._eval_dct
-    
     def __getitem__(self, name: str):
         if ut.islistlike(name):
             return [self[i] for i in name]
