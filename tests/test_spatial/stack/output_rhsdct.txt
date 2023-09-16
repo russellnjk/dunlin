@@ -1,4 +1,4 @@
-def model_M0_dct(time, states, parameters):
+def model_M0_dct(time, states, parameters, _cytosolic2extracellular, _adv_cytosolic_1_left, _adv_cytosolic_1_right, _vol_cytosolic, _adv_cytosolic_2_left, _adv_cytosolic_2_right, _adv_extracellular_1_left, _adv_extracellular_1_right, _vol_extracellular, _adv_extracellular_2_left, _adv_extracellular_2_right, _dfn_cytosolic_1_left, _dfn_cytosolic_2_left, _dfn_extracellular_1_left, _dfn_extracellular_2_left, _bc_extracellular_2_min, _bc_extracellular_2_max, _bc_extracellular_1_min, _bc_extracellular_1_max):
 
 	#States
 	A = states[0:4]
@@ -34,13 +34,13 @@ def model_M0_dct(time, states, parameters):
 	vrb0 = func0(k_degA, A)
 
 	#vrb1
-	vrb1 = k_pump*B[__array([0, 1, 2, 3, 0, 1, 2, 3])]*C[__array([1, 2, 6, 7, 4, 5, 9, 10])]
+	vrb1 = k_pump*B[_cytosolic2extracellular["cytosolic_idx"]]*C[_cytosolic2extracellular["extracellular_idx"]]
 
 	#vrb2
 	vrb2 = 1
 
 	#vrb3
-	vrb3 = vrb0[__array([0, 1, 2, 3, 0, 1, 2, 3])]*vrb1*vrb2
+	vrb3 = vrb0[_cytosolic2extracellular["cytosolic_idx"]]*vrb1*vrb2
 
 
 	#Reactions
@@ -50,11 +50,11 @@ def model_M0_dct(time, states, parameters):
 	_d_B += 1*synB
 
 	#pumpB
-	pumpB = k_pump*B[__array([0, 1, 2, 3, 0, 1, 2, 3])]
+	pumpB = k_pump*B[_cytosolic2extracellular["cytosolic_idx"]]
 
-	_d_B[__array([0, 1, 2, 3])] += -1*pumpB[4:8]*__array([1, 1, 1, 1])[:,__newaxis]/__array([1, 1, 1, 1])[:,__newaxis]
+	__surface_reaction(_d_B, _cytosolic2extracellular["cytosolic_idx"], -1, pumpB, _cytosolic2extracellular["area"], _cytosolic2extracellular["cytosolic_volume"])
 
-	_d_C[__array([4, 5, 9, 10])] += 1*pumpB[4:8]*__array([1, 1, 1, 1])[:,__newaxis]/__array([1, 1, 1, 1])[:,__newaxis]
+	__surface_reaction(_d_C, _cytosolic2extracellular["extracellular_idx"], 1, pumpB, _cytosolic2extracellular["area"], _cytosolic2extracellular["extracellular_volume"])
 
 	#synD
 	synD = k_synD*C - vrb2*D
@@ -63,97 +63,65 @@ def model_M0_dct(time, states, parameters):
 	_d_D += 1*synD
 
 
-	##Advection B
+	#Advection B
 	_adv_B = __zeros(B.shape)
-
-	_left = (__array([[-1,  0, -1,  2],  [ 0,  1,  0,  1]]),)
-	_right = (__array([[ 1, -1,  3, -1],  [ 1,  0,  1,  0]]),)
-	_adv_B += __advection(B, __ones(B.shape)*F_B, _left, _right, __array([1, 1, 1, 1]))
-
-	_left = (__array([[-1, -1,  0,  1],  [ 0,  0,  1,  1]]),)
-	_right = (__array([[ 2,  3, -1, -1],  [ 1,  1,  0,  0]]),)
-	_adv_B += __advection(B, __ones(B.shape)*F_B, _left, _right, __array([1, 1, 1, 1]))
-
+	_adv_B += __advection(B, F_B, _adv_cytosolic_1_left, _adv_cytosolic_1_right, _vol_cytosolic)
+	_adv_B += __advection(B, F_B, _adv_cytosolic_2_left, _adv_cytosolic_2_right, _vol_cytosolic)
 	_d_B += _adv_B
 
-	##Advection C
+	#Advection C
 	_adv_C = __zeros(C.shape)
-
-	_left = (__array([[-1,  0,  1,  2, -1, -1, -1, -1, -1,  8,  9, 10],  [ 0,  1,  1,  1,  0,  0,  0,  0,  0,  1,  1,  1]]),)
-	_right = (__array([[ 1,  2,  3, -1, -1, -1, -1, -1,  9, 10, 11, -1],  [ 1,  1,  1,  0,  0,  0,  0,  0,  1,  1,  1,  0]]),)
-	_adv_C += __advection(C, __ones(C.shape)*F_C_x, _left, _right, __array([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]))
-
-	_left = (__array([[-1, -1, -1, -1,  0,  3,  4,  5,  6, -1, -1,  7],  [ 0,  0,  0,  0,  1,  1,  1,  1,  1,  0,  0,  1]]),)
-	_right = (__array([[ 4, -1, -1,  5,  6,  7,  8, 11, -1, -1, -1, -1],  [ 1,  0,  0,  1,  1,  1,  1,  1,  0,  0,  0,  0]]),)
-	_adv_C += __advection(C, __ones(C.shape)*F_C_y, _left, _right, __array([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]))
-
+	_adv_C += __advection(C, F_C_x, _adv_extracellular_1_left, _adv_extracellular_1_right, _vol_extracellular)
+	_adv_C += __advection(C, F_C_y, _adv_extracellular_2_left, _adv_extracellular_2_right, _vol_extracellular)
 	_d_C += _adv_C
 
-	##Advection D
+	#Advection D
 	_adv_D = __zeros(D.shape)
-
-	_left = (__array([[-1,  0,  1,  2, -1, -1, -1, -1, -1,  8,  9, 10],  [ 0,  1,  1,  1,  0,  0,  0,  0,  0,  1,  1,  1]]),)
-	_right = (__array([[ 1,  2,  3, -1, -1, -1, -1, -1,  9, 10, 11, -1],  [ 1,  1,  1,  0,  0,  0,  0,  0,  1,  1,  1,  0]]),)
-	_adv_D += __advection(D, __ones(D.shape)*1, _left, _right, __array([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]))
-
-	_left = (__array([[-1, -1, -1, -1,  0,  3,  4,  5,  6, -1, -1,  7],  [ 0,  0,  0,  0,  1,  1,  1,  1,  1,  0,  0,  1]]),)
-	_right = (__array([[ 4, -1, -1,  5,  6,  7,  8, 11, -1, -1, -1, -1],  [ 1,  0,  0,  1,  1,  1,  1,  1,  0,  0,  0,  0]]),)
-	_adv_D += __advection(D, __ones(D.shape)*1, _left, _right, __array([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]))
-
+	_adv_D += __advection(D, 1, _adv_extracellular_1_left, _adv_extracellular_1_right, _vol_extracellular)
+	_adv_D += __advection(D, 1, _adv_extracellular_2_left, _adv_extracellular_2_right, _vol_extracellular)
 	_d_D += _adv_D
 
 
 
-	##Diffusion B
+	#Diffusion B
 	_dfn_B = __zeros(B.shape)
-
-	_left = (__array([[-1,  0, -1,  2],  [ 0,  1,  0,  1]]),)
-	_dfn_B += __diffusion(B, __ones(B.shape)*J_B, _left, __array([1, 1, 1, 1]))
-
-	_left = (__array([[-1, -1,  0,  1],  [ 0,  0,  1,  1]]),)
-	_dfn_B += __diffusion(B, __ones(B.shape)*J_B, _left, __array([1, 1, 1, 1]))
-
+	_dfn_B += __diffusion(B, J_B, _dfn_cytosolic_1_left, _vol_cytosolic)
+	_dfn_B += __diffusion(B, J_B, _dfn_cytosolic_2_left, _vol_cytosolic)
 	_d_B += _dfn_B
 
-	##Diffusion C
+	#Diffusion C
 	_dfn_C = __zeros(C.shape)
-
-	_left = (__array([[-1,  0,  1,  2, -1, -1, -1, -1, -1,  8,  9, 10],  [ 0,  1,  1,  1,  0,  0,  0,  0,  0,  1,  1,  1]]),)
-	_dfn_C += __diffusion(C, __ones(C.shape)*J_C_x, _left, __array([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]))
-
-	_left = (__array([[-1, -1, -1, -1,  0,  3,  4,  5,  6, -1, -1,  7],  [ 0,  0,  0,  0,  1,  1,  1,  1,  1,  0,  0,  1]]),)
-	_dfn_C += __diffusion(C, __ones(C.shape)*J_C_y, _left, __array([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]))
-
+	_dfn_C += __diffusion(C, J_C_x, _dfn_extracellular_1_left, _vol_extracellular)
+	_dfn_C += __diffusion(C, J_C_y, _dfn_extracellular_2_left, _vol_extracellular)
 	_d_C += _dfn_C
 
-	##Diffusion D
+	#Diffusion D
 	_dfn_D = __zeros(D.shape)
-
-	_left = (__array([[-1,  0,  1,  2, -1, -1, -1, -1, -1,  8,  9, 10],  [ 0,  1,  1,  1,  0,  0,  0,  0,  0,  1,  1,  1]]),)
-	_dfn_D += __diffusion(D, __ones(D.shape)*1, _left, __array([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]))
-
-	_left = (__array([[-1, -1, -1, -1,  0,  3,  4,  5,  6, -1, -1,  7],  [ 0,  0,  0,  0,  1,  1,  1,  1,  1,  0,  0,  1]]),)
-	_dfn_D += __diffusion(D, __ones(D.shape)*1, _left, __array([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]))
-
+	_dfn_D += __diffusion(D, 1, _dfn_extracellular_1_left, _vol_extracellular)
+	_dfn_D += __diffusion(D, 1, _dfn_extracellular_2_left, _vol_extracellular)
 	_d_D += _dfn_D
 
 
 
-	##Boundary Conditions C
+	#Boundary conditions C
 	_bc_C = __zeros(C.shape)
 
-	_left = __array([[0., 1., 2., 3.],  [1., 1., 1., 1.]])
-	_bc_C += __Dirichlet(C, __ones(C.shape)*J_C_y, __ones(C.shape)*0, _left, __array([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]))
-	_right = __array([[ 8.,  9., 10., 11.],  [ 1.,  1.,  1.,  1.]])
-	_bc_C += __Dirichlet(C, __ones(C.shape)*J_C_y, __ones(C.shape)*0, _right, __array([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]))
-	_left = __array([[0., 4., 6., 8.],  [1., 1., 1., 1.]])
-	_bc_C += __Neumann(C, __ones(C.shape)*1, _left, __array([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]))
-	_right = __array([[ 3.,  5.,  7., 11.],  [ 1.,  1.,  1.,  1.]])
-	_bc_C += __Neumann(C, __ones(C.shape)*-1, _right, __array([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]))
-	_d_C += _bc_C
+	#Dirichlet boundary, C, 2, min
+	_bc_C += __Dirichlet(C, J_C_y, __ones(C.shape) * 0, _bc_extracellular_2_min, _vol_extracellular)
 
+	#Dirichlet boundary, C, 2, max
+	_bc_C += __Dirichlet(C, J_C_y, __ones(C.shape) * 0, _bc_extracellular_2_max, _vol_extracellular)
+
+	#Neumann boundary, C, 1, min
+	_bc_C += __Neumann(C, __ones(C.shape) * 1, _bc_extracellular_1_min, _vol_extracellular)
+
+	#Neumann boundary, C, 1, max
+	_bc_C += __Neumann(C, __ones(C.shape) * -1, _bc_extracellular_1_max, _vol_extracellular)
+
+	_d_C += _bc_C
 
 
 	_d_A += vrb0
 
+	_d_states = __concatenate((_d_A, _d_B, _d_C, _d_D, ))
 	return (time, A, B, C, D, k_degA, k_synB, k_synD, k_degD, k_pump, J_B, J_C_x, J_C_y, F_B, F_C_x, F_C_y, vrb0, vrb1, vrb2, vrb3, synB, pumpB, synD, _adv_B, _adv_C, _adv_D, _dfn_B, _dfn_C, _dfn_D, _bc_C, _d_A, _d_B, _d_C, _d_D)

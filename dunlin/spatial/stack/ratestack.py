@@ -43,8 +43,10 @@ class RateStack(MassTransferStack):
     parameter_code    : str
     function_code     : str
     diff_code         : str
-    signature         : tuple[str]
-    rhs_functions     : dict[str, callable]
+    signature         : list[str]
+    args              : dict
+    rhs_functions     : dict[str, Callable]
+    rhsdct_functions  : dict[str, Callable]
     formatter         : str
     
     surface_data         : dict[Surface_type, dict]
@@ -54,15 +56,14 @@ class RateStack(MassTransferStack):
     variable_code        : str
     bulk_reactions       : dict[str, Domain_type]
     surface_reactions    : dict[str, Surface_type]
-    reaction_code_rhsdct : str
+    reaction_code        : str
     
-    domain_type2volume : dict[Domain_type, dict[int, float]]
-    advection_terms    : dict[Domain_type, dict[int, dict]]
-    diffusion_terms    : dict[Domain_type, dict[int, dict]]
-    boundary_terms     : dict[Domain_type, dict[int, dict]]
-    advection_code     : str
-    diffusion_code     : str
-    boundary_code      : str
+    domain_type2volume      : dict[Domain_type, dict[int, float]]
+    bulk_data               : dict[Domain_type, dict[int, dict]]
+    boundary_data           : dict[Domain_type, dict[int, dict]]
+    advection_code          : str
+    diffusion_code          : str
+    boundary_condition_code : str
     
     rate_code     : str
     d_states_code : str
@@ -97,15 +98,11 @@ class RateStack(MassTransferStack):
         self._make_d_states()
         
         #Combine all code and execute
-        self.rhs_name   = ''
-        self.rhs_code   = ''
-        self._rhs_funcs = tuple()
-        self._rhs       = None
+        self._rhs_funcs : [Callable, Callable] = None
+        self._rhs       : Callable             = None
         
-        self.rhsdct_name   = ''
-        self.rhsdct_code   = ''
-        self._rhsdct_funcs = tuple()
-        self._rhsdct       = None
+        self._rhsdct_funcs : [Callable, Callable] = None
+        self._rhsdct       : Callable             = None
         
         self._make_rhs()
         
@@ -169,7 +166,7 @@ class RateStack(MassTransferStack):
         #Extract and preprocess
         model_ref = spatial_data.ref
         signature = ', '.join(self.signature)
-    
+        
         #Make rhs function
         body_code = '\n'.join([self.state_code,
                                self.parameter_code,
@@ -184,34 +181,30 @@ class RateStack(MassTransferStack):
                                self.d_states_code
                                ])
         
-        self.rhs_name = f'model_{model_ref}'
-        function_def  = f'def {self.rhs_name}({signature}):\n'
+        function_name = f'model_{model_ref}'
+        function_def  = f'def {function_name}({signature}):\n'
         return_val    = f'\treturn {ut.diff("states")}'
         
         code = '\n'.join([function_def, body_code, return_val])
         
-        self.rhs_code = code
-        
         scope = {}
         exec(code, self.rhs_functions, scope)
-        self._rhs_funcs = scope[self.rhs_name], njit(scope[self.rhs_name])
-        self._rhs       = self._rhs_funcs[1]
         
+        f  = scope[function_name]
+        nf = njit(f)
+        
+        f_  = lambda time, states, parameters:  f(time, states, parameters, **self.args)
+        nf_ = lambda time, states, parameters: nf(time, states, parameters, **self.args)
+        
+        f_.code  = code
+        nf_.code = code
+        
+        self._rhs_funcs = f_, nf_
+        self._rhs       = nf_
+    
         #Make rhsdct function
-        body_code = '\n'.join([self.state_code,
-                               self.parameter_code,
-                               self.diff_code, 
-                               self.function_code,
-                               self.variable_code,
-                               self.reaction_code_rhsdct,
-                               self.advection_code,
-                               self.diffusion_code,
-                               self.boundary_condition_code,
-                               self.rate_code, 
-                               ])
-        
-        self.rhsdct_name = f'model_{model_ref}_dct'
-        function_def     = f'def {self.rhsdct_name}({signature}):\n'
+        function_name = f'model_{model_ref}_dct'
+        function_def  = f'def {function_name}({signature}):\n'
         
         lst  = ['time']
         lst  += list(spatial_data.states)
@@ -229,29 +222,21 @@ class RateStack(MassTransferStack):
         
         code = '\n'.join([function_def, body_code, return_val])
         
-        self.rhsdct_code = code
         
         #Execute code
         exec(code, self.rhsdct_functions, scope)
-        tuple_func0 = scope[self.rhsdct_name]
-        tuple_func1 = njit(tuple_func0)
         
-        dct_func0   = self._wrap(lst, tuple_func0)
-        dct_func1   = self._wrap(lst, tuple_func1)
+        fd  = scope[function_name]
+        nfd = njit(f)
         
-        self._rhsdct_funcs = dct_func0, dct_func1
-        self._rhsdct       = self._rhsdct_funcs[1]
-    
-    @staticmethod
-    def _wrap(keys: list[str], func: Callable) -> Callable:
-        def helper(t, y, p):
-            tup_values = func(t, y, p)
-            dct        = dict(zip(keys, tup_values))
-            
-            return dct
+        fd_  = lambda time, states, parameters: dict(zip(lst,  fd(time, states, parameters, **self.args)))
+        nfd_ = lambda time, states, parameters: dict(zip(lst, nfd(time, states, parameters, **self.args)))
         
-        helper.func = func
-        return helper
+        fd_.code  = code
+        nfd_.code = code
+        
+        self._rhsdct_funcs = fd_, nfd_
+        self._rhsdct       = nfd_
     
     ###########################################################################
     #Plotting

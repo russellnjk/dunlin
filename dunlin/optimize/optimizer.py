@@ -76,24 +76,26 @@ class Optimizer(SensitivityMixin):
         
         #Instantiate
         nominal         = model.parameter_df
-        free_parameters = model.optim_args.get('free_parameters', {})
-        settings        = model.optim_args.get('settings',    {})
+        free_parameters = model.opt_args.get('free_parameters', {})
+        opt_args        = model.opt_args
         trace_args      = model.trace_args
-        opt_result      = cls(nominal, free_parameters, to_minimize, settings, trace_args)
+        opt_result      = cls(nominal, free_parameters, to_minimize, opt_args, trace_args)
         
         return opt_result
     
     def __init__(self, 
                  nominal         : pd.DataFrame, 
-                 free_parameters : list[Parameter], 
+                 free_parameters : dict[Parameter, dict], 
                  to_minimize     : Callable, 
-                 settings        : dict = None, 
+                 opt_args        : dict = None, 
                  trace_args      : dict = None, 
                  ref             : str  = None
                  ):
-        
+        '''opt_args in this case does not include free parameters, only the 
+        algorithm settings.
+        '''
         self.ref                 = ref
-        self.settings            = {} if settings   is None else settings
+        self.opt_args            = {} if opt_args   is None else opt_args
         self.trace_args          = {} if trace_args is None else trace_args
         self.neg_log_likelihood  = to_minimize
         self.fixed               = []
@@ -199,11 +201,11 @@ class Optimizer(SensitivityMixin):
     def run_differential_evolution(self, **kwargs):
         func     = lambda x: self.get_objective(x)
         bounds   = self.get_bounds()
-        settings = {**{'bounds': bounds}, 
-                    **self.settings.get('differential_evolution', {}), 
+        opt_args = {**{'bounds': bounds}, 
+                    **self.opt_args.get('differential_evolution', {}), 
                     **kwargs
                     }
-        result   = ag.differential_evolution(func, **settings)
+        result   = ag.differential_evolution(func, **opt_args)
         
         #Cache and return the result
         return self.make_trace(result)
@@ -217,22 +219,22 @@ class Optimizer(SensitivityMixin):
         step             = lambda x: x + gen.rvs()
         minimizer_bounds = [tuple(pair) for pair in zip(bounds.xmin, bounds.xmax)]
         
-        settings = {**{'take_step'        : step,
+        opt_args = {**{'take_step'        : step,
                        'minimizer_kwargs' : {}
                        }, 
-                    **self.settings.get('basinhopping', {}), 
+                    **self.opt_args.get('basinhopping', {}), 
                     **kwargs
                     }
-        settings['minimizer_kwargs'].setdefault('bounds', minimizer_bounds)
+        opt_args['minimizer_kwargs'].setdefault('bounds', minimizer_bounds)
         
         #Convert dict to array if user provides x0 as a dict
-        settings['x0'] = self._x02array(settings['x0'])
+        opt_args['x0'] = self._x02array(opt_args['x0'])
         
         #Check initial guess
-        self._check_x0(settings['x0'], bounds)
+        self._check_x0(opt_args['x0'], bounds)
         
         #Run algorithm
-        result = ag.basinhopping(func, bounds, x0, **settings)
+        result = ag.basinhopping(func, bounds, x0, **opt_args)
         
         #Cache and return the result
         return self.make_trace(result)
@@ -244,21 +246,21 @@ class Optimizer(SensitivityMixin):
         x0, step         = self.get_x0step(x0_nominal)
         minimizer_bounds = [tuple(pair) for pair in zip(bounds.xmin, bounds.xmax)]
         
-        settings = {**{'minimizer_kwargs' : {}, 
+        opt_args = {**{'minimizer_kwargs' : {}, 
                        }, 
-                    **self.settings.get('dual_annealing', {}),
+                    **self.opt_args.get('dual_annealing', {}),
                     **kwargs
                     }
-        settings['minimizer_kwargs'].setdefault('bounds', minimizer_bounds)
+        opt_args['minimizer_kwargs'].setdefault('bounds', minimizer_bounds)
         
         #Convert dict to array if user provides x0 as a dict
-        settings['x0'] = self._x02array(settings['x0'])
+        opt_args['x0'] = self._x02array(opt_args['x0'])
         
         #Check initial guess
-        self._check_x0(settings['x0'], bounds)
+        self._check_x0(opt_args['x0'], bounds)
         
         #Run algorithm
-        result = ag.dual_annealing(func, bounds, x0, **settings)
+        result = ag.dual_annealing(func, bounds, x0, **opt_args)
         
         #Cache and return the result
         return self.make_trace(result)
@@ -268,21 +270,21 @@ class Optimizer(SensitivityMixin):
         func     = lambda x: self.get_objective(x)
         bounds   = Bounds(self.sampled_parameters)
         x0, step = self.get_x0step(x0_nominal)
-        settings = {**{'bounds'      : bounds, 
+        opt_args = {**{'bounds'      : bounds, 
                        'x0'          : x0
                        }, 
-                    **self.settings.get('local_minimize', {}), 
+                    **self.opt_args.get('local_minimize', {}), 
                     **kwargs
                     }
         
         #Convert dict to array if user provides x0 as a dict
-        settings['x0'] = self._x02array(settings['x0'])
+        opt_args['x0'] = self._x02array(opt_args['x0'])
         
         #Check initial guess
-        self._check_x0(settings['x0'], bounds)
+        self._check_x0(opt_args['x0'], bounds)
         
         #Run algorithm
-        result = ag.local_minimize(func, **settings)
+        result = ag.local_minimize(func, **opt_args)
         
         #Cache and return the result
         return self.make_trace(result)
@@ -294,22 +296,22 @@ class Optimizer(SensitivityMixin):
         x0, step = self.get_x0step(x0_nominal)
         gen      = norm(0, step)
         step     = lambda x: x + gen.rvs()
-        settings = {**{'bounds' : bounds, 
+        opt_args = {**{'bounds' : bounds, 
                        'x0'     : x0, 
                        'step'   : step
                        }, 
-                    **self.settings.get('simulated_annealing', {}), 
+                    **self.opt_args.get('simulated_annealing', {}), 
                     **kwargs
                     }
         
         #Convert dict to array if user provides x0 as a dict
-        settings['x0'] = self._x02array(settings['x0'])
+        opt_args['x0'] = self._x02array(opt_args['x0'])
         
         #Check initial guess
-        self._check_x0(settings['x0'], bounds)
+        self._check_x0(opt_args['x0'], bounds)
             
         #Run algorithm
-        result = ag.simulated_annealing(func, **settings)
+        result = ag.simulated_annealing(func, **opt_args)
         
         #Cache and return the result
         return self.make_trace(result)
@@ -368,7 +370,7 @@ class Optimizer(SensitivityMixin):
         
         args = {'free_parameters' : self.free_parameters, 
                 'to_minimize'     : self.neg_log_likelihood,
-                'settings'        : self.settings,    
+                'opt_args'        : self.opt_args,    
                 'trace_args'      : self.trace_args,
                 'name'            : new_name
                 }

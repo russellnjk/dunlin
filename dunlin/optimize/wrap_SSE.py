@@ -180,7 +180,7 @@ class SSECalculator:
                  ):
         
         #Determine the free parameters
-        free_parameters = model.optim_args['free_parameters'] 
+        free_parameters = model.opt_args['free_parameters'] 
         scenario2y0     = model.state_dict
         
         nominal                = model.parameter_dict

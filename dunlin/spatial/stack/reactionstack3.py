@@ -2,10 +2,12 @@ import matplotlib        as mpl
 import matplotlib.pyplot as plt
 import numpy             as np
 import re
+import warnings
 from matplotlib.patches import Rectangle
 from numba   import njit 
 from numbers import Number
-from typing  import Callable, Literal
+from scipy   import spatial
+from typing  import Literal, Union
 
 import dunlin.utils      as ut
 from ..grid.grid  import RegularGrid, NestedGrid
@@ -20,7 +22,7 @@ from dunlin.datastructures import SpatialModelData
 Surface_type = tuple[Domain_type, Domain_type]
 
 @njit
-def calculate_surface_reaction(d_state, indices, stoich, reaction_rate, area, volume):
+def update_d_state(d_state, indices, stoich, reaction_rate, area, volume):
     for i in range(len(indices)):
         d_state[indices[i]] += stoich*reaction_rate[i]*area[i]/volume[i]
     
@@ -29,7 +31,7 @@ def calculate_surface_reaction(d_state, indices, stoich, reaction_rate, area, vo
 #ReactionStack
 class ReactionStack(StateStack):
     #Expected mappings and attributes
-    grid                  : RegularGrid|NestedGrid
+    grid                  : Union[RegularGrid, NestedGrid]
     ndims                 : int
     shifts                : list
     sizes                 : dict[Voxel, Number]
@@ -56,10 +58,8 @@ class ReactionStack(StateStack):
     parameter_code    : str
     function_code     : str
     diff_code         : str
-    signature         : list[str]
-    args              : dict
-    rhs_functions     : dict[str, Callable]
-    rhsdct_functions  : dict[str, Callable]
+    signature         : tuple[str]
+    rhs_functions     : dict[str, callable]
     formatter         : str
     
     surface_data         : dict[Surface_type, dict]
@@ -70,6 +70,7 @@ class ReactionStack(StateStack):
     bulk_reactions       : dict[str, Domain_type]
     surface_reactions    : dict[str, Surface_type]
     reaction_code        : str
+    reaction_code_rhsdct : str
     
     def __init__(self, spatial_data: SpatialModelData):
         #Data structures for self._add_surface
@@ -79,8 +80,8 @@ class ReactionStack(StateStack):
         super().__init__(spatial_data)
         self._reformat_surface_data()
         
-        self.rhs_functions['__surface_reaction']    = calculate_surface_reaction
-        self.rhsdct_functions['__surface_reaction'] = calculate_surface_reaction
+        self.rhs_functions['__surface_reaction']    = update_d_state
+        self.rhsdct_functions['__surface_reaction'] = update_d_state
         
         #For keeping track of code
         self.seen_code = set()
@@ -97,6 +98,12 @@ class ReactionStack(StateStack):
         self.surface_reactions = {}
         self.reaction_code     = '\t#Reactions\n'
         self._add_reaction_code()
+        
+        # pattern = '[^[]__array\([^)]*\)'
+        # repl    = lambda match: match[0] + '[:,__newaxis]'
+        # edit    = lambda x: re.sub(pattern, repl, x)
+        
+        # self.reaction_code_rhsdct = edit(self.reaction_code)
         
     ###########################################################################
     #Preprocessing
@@ -130,13 +137,13 @@ class ReactionStack(StateStack):
         default       = {'mappings' : []}
         surface_datum = surface_data.setdefault(surface_type, default)
         
-        area     = min(size0, size1)**(ndims - 1)
+        A        = min(size0, size1)**(ndims - 1)
         midpoint = tuple(np.mean([voxel0, voxel1], axis=0))
         volume0  = size0**ndims
         volume1  = size1**ndims
         datum    = (voxel0_idx, 
                     voxel1_idx, 
-                    area, 
+                    A, 
                     shift, 
                     volume0, 
                     volume1,
@@ -148,29 +155,31 @@ class ReactionStack(StateStack):
         
     def _reformat_surface_data(self) -> None:
         surface_data = self.surface_data
-        ndims        = self.ndims
-        signature    = self.signature
-        args         = self.args 
+        
+        
+        #Functions for code chunks
+        array_template ='__array([{}])'
+        make_arr       = lambda x: array_template.format( ', '.join([str(i) for i in x]) )
         
         for surface_type in surface_data.keys():
-            #Convert the list of tuples into a structured array
-            #This allows tabular access
             domain_type0, domain_type1 = surface_type
             surface_datum              = surface_data[surface_type]  
             mappings                   = surface_datum['mappings']
             
+            #Convert the list of tuples into a structured array
+            #This allows tabular access
             xyz = [('x', np.float64), 
                    ('y', np.float64), 
                    ('z', np.float64)
                    ]
             
-            dtype    = [(f'{domain_type0}_idx',    np.int64),
-                        (f'{domain_type1}_idx',    np.int64),
-                        ('area',                   np.float64),
-                        ('shift',                  np.int8),
-                        (f'{domain_type0}_volume', np.float64),
-                        (f'{domain_type1}_volume', np.float64),
-                        *xyz[:ndims]
+            dtype    = [('voxel0_idx', np.int64),
+                        ('voxel1_idx', np.int64),
+                        ('A',          np.float64),
+                        ('shift',      np.int8),
+                        ('volume0',    np.float64),
+                        ('volume1',    np.float64),
+                        *xyz[:self.ndims]
                         ]
             
             mappings                  = np.array(mappings,
@@ -178,17 +187,16 @@ class ReactionStack(StateStack):
                                                  )
             surface_datum['mappings'] = mappings
             
-            #Update signature and arguments
-            arg_name  = '_' + '2'.join(surface_type)
-            arg_value = mappings[[f'{domain_type0}_idx', 
-                                  f'{domain_type1}_idx',
-                                  'area',
-                                  f'{domain_type0}_volume',
-                                  f'{domain_type1}_volume'
-                                  ]
-                                 ]
-            signature.append(arg_name)
-            args[arg_name] = arg_value
+            #Make code chunks
+            code = {}
+            
+            code[f'__{domain_type0}2surface_idx'] = make_arr(mappings['voxel0_idx']) 
+            code[f'__{domain_type1}2surface_idx'] = make_arr(mappings['voxel1_idx']) 
+            code['A']                             = make_arr(mappings['A'])
+            code['volume0']                       = make_arr(mappings['volume0'])
+            code['volume1']                       = make_arr(mappings['volume1'])
+            
+            surface_datum['code'] = code
             
             #Convert surface_idx2midpoint into One2One to allow 2 way access
             midpoints            = mappings[['x', 'y', 'z'][:self.ndims]]
@@ -196,6 +204,86 @@ class ReactionStack(StateStack):
             surface_idx2midpoint = One2One('surface_idx', 'midpoint', surface_idx2midpoint)
             
             surface_datum['surface_idx2midpoint'] = surface_idx2midpoint
+            
+        # start = 0
+        # for surface_type in surface_data.keys():
+        #     domain_type0, domain_type1 = surface_type
+        #     surface_datum              = surface_data[surface_type]  
+        #     batches                    = surface_datum['batch_data']
+        #     template                   = '__array({})'
+        #     collated0                  = []
+        #     collated1                  = []
+        #     split                      = []
+        #     surface_idx2midpoint       = {}
+        #     domain_type_idxs           = []
+        #     shifts                     = []
+            
+        #     for batch in batches:
+        #         #Create code chunks corresponding to indices
+        #         domain_type_idxs0, domain_type_idxs1 = zip(*batch['idxs'].items()) 
+        
+        #         stop         = start + len(domain_type_idxs0) 
+        #         split_       = {domain_type0 : template.format(list(domain_type_idxs0)),
+        #                         domain_type1 : template.format(list(domain_type_idxs1)),
+        #                         '_scale'     : template.format(batch['scales']),
+        #                         '_idxs'      : (start, stop),
+        #                         '_volumes'   : {}
+        #                         }
+                
+        #         split.append(split_)
+        #         collated0.extend(domain_type_idxs0)
+        #         collated1.extend(domain_type_idxs1)
+                
+        #         #Update surface_idx2midpoint
+        #         midpoints             = batch['mids'] 
+        #         surface_idx2midpoint_ = dict(enumerate(midpoints, start=start))
+        #         surface_idx2midpoint.update(surface_idx2midpoint_)
+                
+        #         #Update surface_idx2domain_type_idx
+        #         pairs = list(zip(domain_type_idxs0, domain_type_idxs1))
+                
+        #         domain_type_idxs.extend(pairs)
+                
+        #         #Update shifts
+        #         shifts.extend(batch['shifts'])
+                
+        #         #Update volumes
+        #         volumes0 = list(batch['volumes'][domain_type0])
+        #         volumes1 = list(batch['volumes'][domain_type1])
+                
+        #         volumes0 = template.format(volumes0)
+        #         volumes1 = template.format(volumes1)
+                
+        #         split_['_volumes'][domain_type0] = volumes0
+        #         split_['_volumes'][domain_type1] = volumes1
+                
+        #         #Update start
+        #         start = stop
+            
+        #     #Convert collated from list to string
+        #     collated0 = template.format('[' + ', '.join([str(i) for i in collated0]) + ']')
+        #     collated1 = template.format('[' + ', '.join([str(i) for i in collated1]) + ']')
+            
+        #     #Convert surface_idx2midpoint into One2One to allow 2 way access
+        #     surface_idx2midpoint = One2One('surface_idx', 'midpoint', surface_idx2midpoint)
+            
+        #     #Update surface_datum
+        #     #Add code chunks to surface_datum
+        #     surface_datum['code'] = {'collated': {domain_type0 : collated0,
+        #                                           domain_type1 : collated1,
+        #                                           }, 
+        #                              'split'   : split,
+        #                              }
+            
+        #     #Add spatial data to surface_datum
+        #     surface_datum['spatial'] = {'surface_idx2midpoint' : surface_idx2midpoint,
+        #                                 'domain_type_idxs'     : domain_type_idxs,
+        #                                 'shifts'               : shifts 
+        #                                 }
+            
+        #     #Add a tree for searching
+        #     midpoints             = list(surface_idx2midpoint.values())
+        #     surface_datum['tree'] = spatial.KDTree(midpoints)
             
     ###########################################################################
     #Utils
@@ -288,13 +376,28 @@ class ReactionStack(StateStack):
         return self._add_global_variable_code(variable)
     
     def _add_surface_variable_code(self, variable, surface) -> None:
+        surface_data = self.surface_data
+        
+        #Define the surface indices if they have not already been defined
+        surface_datum = surface_data[surface]
+        
+        if ('vrb', surface) not in self.seen_code:
+            lhs_ = [f'__{surface[0]}2surface_idx', f'__{surface[1]}2surface_idx']
+            
+            for lhs in lhs_:
+                rhs   = surface_datum['code'][lhs]    
+                chunk = '\t' + lhs + ' = ' + rhs
+                self.variable_code += chunk + '\n'
+                self.seen_code.add( ('vrb', surface))
+            
+            self.variable_code += '\n'
+            
         #Update variable code
         expr          = variable.expr
         lhs           = ut.undot(variable.name)
         rhs           = ut.undot(self.sub(expr))
-        temp          = '_' + '2'.join(surface)
-        idxs          = {surface[0]: f'{temp}["{surface[0]}_idx"]',
-                         surface[1]: f'{temp}["{surface[1]}_idx"]',
+        idxs          = {surface[0]: f'__{surface[0]}2surface_idx',
+                         surface[1]: f'__{surface[1]}2surface_idx',
                          }
         rhs           = rhs.format(**idxs)
         variable_code = f'\t{lhs} = {rhs}\n'
@@ -307,12 +410,12 @@ class ReactionStack(StateStack):
     def _add_reaction_code(self) -> None:
         spatial_data      = self.spatial_data
         reactions         = spatial_data.reactions
-        state2domain_type = self.state2domain_type
-        states            = set(spatial_data.states)
-        bulk_variables    = self.bulk_variables
-        surface_variables = self.surface_variables
-        bulk_reactions    = self.bulk_reactions
-        surface_reactions = self.surface_reactions
+        state2domain_type    = self.state2domain_type
+        states               = set(spatial_data.states)
+        bulk_variables       = self.bulk_variables
+        surface_variables    = self.surface_variables
+        bulk_reactions       = self.bulk_reactions
+        surface_reactions    = self.surface_reactions
         
         for reaction in reactions.values():
             self.reaction_code += f'\t#{reaction.name}\n'
@@ -367,69 +470,121 @@ class ReactionStack(StateStack):
         self.reaction_code += diff_code + '\n'
         
     def _add_surface_reaction_code(self, reaction, surface) -> None:
+        surface_data      = self.surface_data
         state2domain_type = self.state2domain_type
+        
+        #Define the surface indices if they have not already been defined
+        surface_datum = surface_data[surface]
+        
+        if ('vrb', surface) not in self.seen_code:
+            lhs_ = [f'__{surface[0]}2surface_idx', f'__{surface[1]}2surface_idx']
+            
+            for lhs in lhs_:
+                rhs   = surface_datum['code'][lhs]    
+                chunk = '\t' + lhs + ' = ' + rhs
+                self.reaction_code += chunk + '\n'
+                self.seen_code.add( ('vrb', surface))
+            
+            self.reaction_code += '\n'
+        
+        A         = surface_datum['code']['A']
+        volume0   = surface_datum['code']['volume0'] 
+        volume1   = surface_datum['code']['volume1']
+        
+        if ('rxn', surface) not in self.seen_code:
+            self.reaction_code += f'\t__A_{surface[0]}_{surface[1]}       = {A}\n'
+            self.reaction_code += f'\t__volume0_{surface[0]}_{surface[1]} = {volume0}\n'
+            self.reaction_code += f'\t__volume1_{surface[0]}_{surface[1]} = {volume1}\n'
+            self.reaction_code += '\n'
+            self.seen_code.add(('rxn', surface))
         
         #Update reaction code
         expr          = reaction.rate
         lhs           = ut.undot(reaction.name)
         rhs           = ut.undot(self.sub(expr))
-        temp          = '_' + '2'.join(surface)
-        idxs          = {surface[0]: f'{temp}["{surface[0]}_idx"]',
-                         surface[1]: f'{temp}["{surface[1]}_idx"]',
+        idxs          = {surface[0]: f'__{surface[0]}2surface_idx',
+                         surface[1]: f'__{surface[1]}2surface_idx',
                          }
         rhs           = rhs.format(**idxs)
         reaction_code = f'\t{lhs} = {rhs}\n\n'
         
         self.reaction_code += reaction_code 
         
+        loop = 'for __i in range(len({idxs})): '
+        itr  = '{dstate}[{idxs}[__i]] += {stoich}*{A}[__i]*{rxn}[__i]/{volume}[__i]'
+        
+        make_loop = lambda **kw: loop.format(**kw) + itr.format(**kw)
+        
         #Update diff code
-        area     = f'{temp}["area"]'
-        template = '__surface_reaction({d_state}, {indices}, {stoich}, {reaction_name}, {area}, {volume})'
+        diff_code = ''
+        
         
         for state, stoich in reaction.stoichiometry.items():
             domain_type = state2domain_type[state]
             
-            d_state   = ut.diff(ut.undot(state))
-            indices   = f'{temp}["{domain_type}_idx"]'
-            volume    = f'{temp}["{domain_type}_volume"]'
-            line      = template.format(d_state       = d_state,
-                                        indices       = indices,
-                                        stoich        = stoich,
-                                        reaction_name = reaction.name,
-                                        area          = area,
-                                        volume        = volume
-                                        )
-            self.reaction_code += f'\t{line}\n\n' 
+            if domain_type == surface[0]:
+                volume_ = f'__volume0_{surface[0]}_{surface[1]}'
+            else:
+                volume_ = f'__volume1_{surface[0]}_{surface[1]}'
+            
+            # line = make_loop(idxs    = f'__{domain_type}2surface_idx',
+            #                  dstate  = ut.diff(ut.undot(state)),
+            #                  rxn     = ut.undot(reaction.name),
+            #                  A       = f'__A_{surface[0]}_{surface[1]}',
+            #                  volume  = volume_,
+            #                  stoich  = stoich
+            #                  )
+            d_state  = ut.diff(ut.undot(state))
+            indices  = f'__{domain_type}2surface_idx'
+            A        = f'__A_{surface[0]}_{surface[1]}'
+            line     = f'__surface_reaction({d_state}, {indices}, {stoich}, {reaction.name}, {A}, {volume_})'   
+            diff_code   = f'\t{line}\n' 
+            
+            self.reaction_code += diff_code + '\n'
          
     ###########################################################################
     #Retrieval
     ###########################################################################
     def get_surface_midpoints(self,
                               surface : Surface_type
-                              ) -> One2One:
-        surface_idx2midpoint = self.surface_data[surface]['surface_idx2midpoint']
-        return surface_idx2midpoint
+                              ) -> list[tuple]:
+        surface_idx2midpoint = self.surface_data[surface]['spatial']['surface_idx2midpoint']
+        surface_midpoints    = list(surface_idx2midpoint.values())
+        return surface_midpoints 
     
     def get_surface_idx(self, 
                         surface : Surface_type,
-                        *points
+                        *points : tuple[Number], 
                         ) -> int:
         #Set up variables
-        surface_datum        = self.surface_data[surface]
-        surface_idx2midpoint = surface_datum['surface_idx2midpoint']
-        midpoints            = np.array(list(surface_datum['surface_idx2midpoint'].values()))
+        surface_datum        = self.surface_data
+        surface_idx2midpoint = surface_datum[surface]['spatial']['surface_idx2midpoint']
+        midpoint2surface_idx = surface_idx2midpoint.inverse
+        surface_idxs         = []
+        surface_midpoints    = []
         
-        surface_idxs      = []
-        surface_midpoints = []
-        
+        #Iterate and perform search for each point
         for point in points:
-            distance    = np.sum( (midpoints - point)**2, axis=1)**0.5
-            surface_idx = np.argmin(distance)
-            midpoint    = surface_idx2midpoint[surface_idx]
+            point = tuple(point)
+            try:
+                idx      = midpoint2surface_idx[point]
+                midpoint = point
+                
+            except KeyError:
+                dist, idx = surface_datum['tree'].query(point)
+                midpoint  = surface_idx2midpoint[idx]
+                
+                if dist > self.grid.step:
+                    msg  = 'Attempted to find closest point to {point} for {name}. '
+                    msg += 'The resulting closest point is further than the step size of the largest grid.'
+                    warnings.warn(msg)
+            except Exception as e:
+                raise e
             
-            surface_idxs.append(surface_idx)
+            #Update results
+            surface_idxs.append(idx)
             surface_midpoints.append(midpoint)
-        
+
         return surface_idxs, surface_midpoints
     
     ###########################################################################
@@ -458,10 +613,7 @@ class ReactionStack(StateStack):
         surface_datum         = self.surface_data[surface]
         mappings              = surface_datum['mappings']
         surface_idx2midpoint  = surface_datum['surface_idx2midpoint']
-        domain_type_idxs      = mappings[[f'{surface[0]}_idx', 
-                                          f'{surface[1]}_idx'
-                                          ]
-                                         ]
+        domain_type_idxs      = mappings[['voxel0_idx', 'voxel1_idx']]
         shifts                = mappings['shift']
         
         #Other overhead

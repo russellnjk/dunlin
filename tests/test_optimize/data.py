@@ -24,18 +24,15 @@ m1 = {'states'     : {'x0' : [0, 100],
       'tspans'    : {0: [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100],
                      1: [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100],
                      },
-      'optim_args': {'free_parameters' : {'u0': {'bounds': [0, 10], 
-                                                 },
-                                          'u1': {'bounds': [0, 10], 
-                                                 },
-                                          },
-                     'settings'   : {'disp'   : False,
-                                     'popsize': 5
-                                     },
-                     'line_args'  : {'color': {0: 'steel'}, 
-                                     'marker': '+'
-                                     }
-                     },
+      'opt_args': {'free_parameters'        : {'u0': {'bounds': [0, 10], 
+                                                      },
+                                               'u1': {'bounds': [0, 10], 
+                                                      },
+                                               },
+                   'differential_evolution' : {'disp'   : False,
+                                               'popsize': 5
+                                               },
+                   },
       'sim_args': {'line_args': {'color': {0: 'coral',
                                            1: 'dark yellow'
                                            }

@@ -281,8 +281,8 @@ class Trace:
                  **kwargs
                  ) -> axes.Axes:
         
-        default = {**self.trace_args.get('kde', {}), 
-                   'gridsize' : 100
+        default = {'gridsize' : 100,
+                   **self.trace_args.get('kde', {}), 
                    }
         
         match parameter:
@@ -337,7 +337,8 @@ class Trace:
         default = {'marker'          : '+', 
                    'markersize'      : 10,
                    'markeredgewidth' : 3,
-                   'linestyle'       : 'None'
+                   'linestyle'       : 'None',
+                   **self.trace_args.get('steps', {})
                    }
         
         match parameter:

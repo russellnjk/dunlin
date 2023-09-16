@@ -1,10 +1,10 @@
-def model_M0(time, states, parameters, _cytosolic2extracellular, _adv_cytosolic_1_left, _adv_cytosolic_1_right, _vol_cytosolic, _adv_cytosolic_2_left, _adv_cytosolic_2_right, _adv_extracellular_1_left, _adv_extracellular_1_right, _vol_extracellular, _adv_extracellular_2_left, _adv_extracellular_2_right, _dfn_cytosolic_1_left, _dfn_cytosolic_2_left, _dfn_extracellular_1_left, _dfn_extracellular_2_left, _bc_extracellular_2_min, _bc_extracellular_2_max, _bc_extracellular_1_min, _bc_extracellular_1_max):
+def model_M1(time, states, parameters, _cytosolic2extracellular, _adv_cytosolic_1_left, _adv_cytosolic_1_right, _vol_cytosolic, _adv_cytosolic_2_left, _adv_cytosolic_2_right, _adv_extracellular_1_left, _adv_extracellular_1_right, _vol_extracellular, _adv_extracellular_2_left, _adv_extracellular_2_right, _dfn_cytosolic_1_left, _dfn_cytosolic_2_left, _dfn_extracellular_1_left, _dfn_extracellular_2_left, _bc_extracellular_2_min, _bc_extracellular_2_max, _bc_extracellular_1_min, _bc_extracellular_1_max):
 
 	#States
-	A = states[0:4]
-	B = states[4:8]
-	C = states[8:20]
-	D = states[20:32]
+	A = states[0:400]
+	B = states[400:800]
+	C = states[800:2000]
+	D = states[2000:3200]
 
 	#Parameters
 	k_degA = parameters[0]

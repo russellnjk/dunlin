@@ -1,5 +1,6 @@
-import numpy as np
-import pandas as pd
+import matplotlib.axes as axes
+import numpy           as np
+import pandas          as pd
 from numba   import njit  
 from numbers import Number
 from scipy   import spatial
@@ -10,110 +11,228 @@ from typing  import Union
 ###############################################################################
 import dunlin.utils          as ut
 import dunlin.comp           as cmp
-import dunlin.datastructures as dst
-import dunlin.ode.ode_coder  as odc
-import dunlin.ode.event      as oev
-import dunlin.ode.ivp        as ivp
 import dunlin.utils_plot     as upp
-from .grid.grid            import RegularGrid, NestedGrid
-from .grid.bidict          import One2One, One2Many
-from .ratestack            import RateStack
-from dunlin.datastructures import SpatialModelData
+from .stack.eventstack import (EventStack,
+                               Domain_type, Domain, Voxel, 
+                               State, Parameter,
+                               Surface_type,
+                               )
+from ..datastructures  import SpatialModelData
+from ..ode.basemodel   import BaseModel
+from ..ode.odemodel    import ODEResult
 
-class SpatialModel:
+###############################################################################
+#Typing
+###############################################################################
+Scenario = str|Number
+
+###############################################################################
+#Model
+###############################################################################
+class SpatialModel(BaseModel):
     default_tspan = np.linspace(0, 1000, 21)
     _df           = ['states', 'parameters']
-    _locked       = ['state_names', 'parameter_names', 'functions', 'reactions', 
-                     'variables']
+    _locked       = BaseModel._locked + ['advection', 
+                                         'diffusion', 
+                                         'boundary_conditions',
+                                         'coordinate_components',
+                                         'grid_config',
+                                         'domain_types',
+                                         'surfaces',
+                                         'geometry_definitions',
+                                         ]
+    _dtype        = 'spatial'
     
     @classmethod
     def from_data(cls, all_data: dict, ref: str) -> 'SpatialModel':
-        flattened = cmp.flatten_ode(all_data, ref)
+        flattened = cmp.flatten_model(all_data, ref, SpatialModelData.required_fields)
         
         return cls(**flattened)
     
     def __init__(self, 
-                 ref                 : str, 
-                 geometry            : dict,
-                 states              : pd.DataFrame, 
-                 parameters          : pd.DataFrame, 
-                 functions           : dict = None, 
-                 variables           : dict = None, 
-                 reactions           : dict = None, 
-                 rates               : dict = None, 
-                 events              : dict = None, 
-                 extra               : dict = None, 
-                 tspan               : dict = None,
-                 compartments        : dict = None, 
-                 advection           : dict = None,
-                 diffusion           : dict = None,
-                 boundary_conditions : dict = None,
-                 int_args            : dict = None, 
-                 sim_args            : dict = None, 
-                 optim_args          : dict = None, 
-                 data_args           : dict = None, 
-                 meta                : dict = None,
-                 dtype               : str = 'spatial',
-                 **kwargs
+                 ref                   : str, 
+                 states                : dict|pd.DataFrame, 
+                 parameters            : dict|pd.DataFrame, 
+                 coordinate_components : dict,
+                 grid_config           : dict,
+                 domain_types          : dict,
+                 geometry_definitions  : dict,
+                 surfaces              : dict = None,
+                 functions             : dict = None, 
+                 variables             : dict = None, 
+                 reactions             : dict = None, 
+                 rates                 : dict = None, 
+                 events                : dict = None, 
+                 tspans                : dict = None,
+                 units                 : dict = None,
+                 advection             : dict = None,
+                 diffusion             : dict = None,
+                 boundary_conditions   : dict = None,
+                 meta                  : dict = None,
+                 int_args              : dict = None,
+                 sim_args              : dict = None,
+                 opt_args              : dict = None,
+                 trace_args            : dict = None,
+                 dtype                 : str  = 'spatial'
                  ):
         
-        if dtype != 'spatial':
-            msg = f'Attempted to instantiate {type(self).__name__} with {dtype} data.'
-            raise TypeError(msg)
-        
-        spatial_data = dst.ODEModelData(ref, 
+        #Parse the data using the datastructures submodule
+        spatial_data = SpatialModelData(ref, 
                                         states, 
                                         parameters, 
+                                        coordinate_components,
+                                        grid_config,
+                                        domain_types,
+                                        geometry_definitions,
+                                        surfaces,
                                         functions, 
                                         variables, 
                                         reactions, 
                                         rates, 
                                         events, 
-                                        extra, 
+                                        units,
+                                        advection,
+                                        diffusion,
+                                        boundary_conditions,
+                                        meta,
+                                        int_args,
+                                        sim_args,
+                                        opt_args,
+                                        trace_args
                                         )
         
+        stk      = EventStack(spatial_data)
+        self.stk = stk
         
-        stk = RateStack(spatial_data)
+        #Call the parent constructors to save key information
+        BaseModel.__init__(self,
+                           model_data = spatial_data, 
+                           ref        = ref, 
+                           tspans     = tspans, 
+                           int_args   = int_args, 
+                           dtype      = dtype, 
+                           events     = stk._events
+                           )
         
-        #Assign ode attributes
-        self._rhs       = stk.rhs
-        self._events    = oev.make_events(stk, spatial_data)
-        self._extra     = stk.rhsextra
-        self._dct       = stk.rhsdct 
-        self.namespace  = spatial_data.namespace
-        self.variables  = tuple(variables)
-        self.functions  = tuple([ut.split_functionlike(f)[0] for f in functions])
-        self.reactions  = tuple(reactions)
-        self.extra      = () if extra is None else tuple(spatial_data['extra'].keys())
+        #Assign rhs 
+        self._rhs_functions    = stk._rhs_funcs
+        self._rhsdct_functions = stk._rhsdct_funcs
         
-        #Assign data-related attributes
-        self._state_dict     = spatial_data['states']
-        self._parameter_dict = spatial_data['parameters']
-        self.ref             = ref
-        self.state_names     = tuple(spatial_data['states'].keys())
-        self.parameter_names = tuple(spatial_data['parameters'].keys())
-        self.states          = states
-        self.parameters      = parameters
-        self.int_args        = int_args
-        self.sim_args        = {} if sim_args   is None else sim_args
-        self.optim_args      = {} if optim_args is None else optim_args
-        self.data_args       = {} if data_args  is None else data_args
-        self.tspan           = tspan
-        self.meta            = meta
-    
+        #Viewable but not editable by front-end users
+        #To be set once during instantiation and subsequently locked
+        self.states     = tuple(spatial_data.states)
+        self.parameters = tuple(spatial_data.parameters)
+        self.functions  = tuple(spatial_data.functions)
+        self.variables  = tuple(spatial_data.variables)
+        self.reactions  = tuple(spatial_data.reactions)
+        self.events     = tuple(spatial_data.events)
+        self.meta       = spatial_data.meta
+        
+        #For back-end only
+        #For storing state and parameters
+        self.state_df     = states
+        self.parameter_df = parameters
+        
+        #Specific to this class
+        self.int_args   = {} if spatial_data.int_args   is None else spatial_data.int_args
+        self.sim_args   = {} if spatial_data.sim_args   is None else spatial_data.sim_args
+        self.opt_args   = {} if spatial_data.opt_args   is None else spatial_data.opt_args
+        self.trace_args = {} if spatial_data.trace_args is None else spatial_data.trace_args 
+        
     ###########################################################################
     #Integration
     ###########################################################################
-    def integrate(self, 
-                  tspan: np.array, 
-                  y0: np.array, 
-                  p0: np.array,
+    def __call__(self, 
+                 y0             : np.ndarray, 
+                 p0             : np.ndarray, 
+                 tspan          : np.ndarray, 
+                 raw            : bool = False, 
+                 include_events : bool = True,
+                 scenario       : str  = ''
+                 ) -> np.array:
+        
+        y0_expanded = self.stk.expand_init(y0)
+        
+        return super().__call__(y0_expanded,
+                                p0,
+                                tspan,
+                                raw,
+                                include_events,
+                                scenario
+                                )
+    
+    def _convert_call(self, 
+                      t : np.ndarray, 
+                      y : np.ndarray, 
+                      p : np.ndarray,
+                      c : Scenario
+                      ) -> 'SpatialResult':
+        return SpatialResult(t, y, p, c, self)
+    
+    # def integrate(self, 
+    #               scenarios      : list = None,
+    #               raw            : bool = False, 
+    #               include_events : bool = True,
+    #               _y0            : dict[Scenario, np.ndarray] = None,
+    #               _p0            : dict[Scenario, np.ndarray] = None,
+    #               _tspans        : dict[Scenario, np.ndarray] = None
+    #               ) -> Union[dict, 'SpatialResultDict']:
+    #     pass
+    
+    def _convert_integrate(self, 
+                           scenario2intresult: dict[Scenario, 'SpatialResult']
+                           ) -> 'SpatialResultDict':
+        return SpatialResultDict(scenario2intresult, self)
+
+###############################################################################
+#Integration Results
+###############################################################################
+class SpatialResult(ODEResult):
+    def __init__(self, 
+                 t     : np.ndarray, 
+                 y     : np.ndarray, 
+                 p     : np.ndarray, 
+                 c     : Scenario,
+                 model : SpatialModel
+                 ):
+        super().__init__(t, y, p, c, model)
+
+class SpatialResultDict:
+    def __init__(self, 
+                 scenario2intresult : dict[Scenario, SpatialResult],
+                 model              : SpatialModel
+                 ):
+        self.scenario2intresult = scenario2intresult
+    
+    def __getitem__(self, key: Scenario) -> SpatialResult:
+        return self.scenario2intresult[key]
+    
+    def plot_line(self,
+                  ax        : axes.Axes,
+                  var       : str|tuple[str, str],
+                  scenarios : Scenario|list[Scenario] = None,
                   **kwargs
-                  ) -> tuple[np.array, np.array, np.array]:
+                  ) -> axes.Axes:
         
-        t, y, p = integrate(self.rhs, tspan, y0, p0, **kwargs)
+        match scenarios:
+            case None:
+                scenarios = set(self.scenario2intresult)
+            case [*scenarios]:
+                scenarios = set(scenarios)
+            case c if isinstance(c, Scenario):
+                scenarios = {c}
+            case _:
+                msg = ''
+                raise ValueError(msg)
         
-        return t, y, p
-    
-    
+        result = {}
+        for scenario, intresult in self.scenario2intresult.items():
+            if scenario not in scenarios:
+                continue
+            
+            result[scenario] = intresult.plot_line(ax, var, **kwargs)
+        
+        return result
+     
+
         

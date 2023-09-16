@@ -2,9 +2,10 @@ import matplotlib        as mpl
 import matplotlib.pyplot as plt
 import numpy             as np
 import textwrap          as tw
-from collections import Counter
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-
+from numba                   import njit
+from time                    import time as get_time
+   
 import addpath
 import dunlin         as dn 
 import dunlin.ode.ivp as ivp
@@ -48,6 +49,11 @@ def make_colorbar_ax(ax):
 
 AX = []
 
+template  = '''
+{body}\n\treturn {return_val}
+    
+'''
+
 ###############################################################################
 #Test Instantiation
 ###############################################################################
@@ -65,30 +71,49 @@ stk.plot_voxels(AX[0], domain_type_args=domain_type_args)
 ###############################################################################
 #Test Rate
 ###############################################################################
-code  = tw.dedent(stk.rate_code)
-scope = {ut.diff('A') : np.zeros(4),
-         'vrb0'       : np.array([1, 2, 3, 4]),
-         **stk.rhs_functions
-         }
+code  = (stk.rhsdef           + '\n' 
+         + stk.state_code     + '\n' 
+         + stk.diff_code      + '\n'
+         + stk.parameter_code + '\n' 
+         + stk.function_code  + '\n'
+         + stk.variable_code  + '\n'
+         + stk.rate_code      + '\n' 
+         )
+code  = template.format(body       = code,
+                        return_val = '_d_A, '
+                        )
 
-# print(stk.rate_code)
-exec(code, None, scope)
+# print(code)
 
-assert all(scope[ut.diff('A')] == [1, 2, 3, 4]) 
+scope = {}
+exec(code, {**stk.rhs_functions}, scope)
+# print(scope.keys())
+
+model      = njit(scope['model_M0'])
+time       = 0
+states     = np.array([1, 2, 3, 4,
+                       0, 0, 0, 0,
+                       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                       ])
+parameters = np.array([1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+
+r = model(time, states, parameters, **stk.args)
+
+assert all(r[0] == [-1, -2, -3, -4]) 
 
 cax = make_colorbar_ax(AX[1])
-stk.plot_rate(AX[1], 'A', scope[ut.diff('A')], cmap='coolwarm', colorbar_ax=cax)
+stk.plot_rate(AX[1], 'A', r[0], cmap='coolwarm', colorbar_ax=cax)
 AX[1].set_title('Rate A')
 
 ###############################################################################
 #Test RHS
 ###############################################################################
-code = stk.rhs_code
+stk.numba = False
+code      = stk.rhs.code
 
 with open('output_rhs.txt', 'w') as file:
     file.write(code)
-
-stk.numba = False
 
 time       = 0
 states     = np.arange(0, 32)
@@ -98,32 +123,26 @@ d_states = stk.rhs(time, states, parameters)
 
 fig, AX = make_fig(AX)
 
-dxidx = stk.state2dxidx
-
-start, stop = dxidx['A']
 cax = make_colorbar_ax(AX[4])
-stk.plot_rate(AX[4], 'A', d_states[start: stop], cmap='coolwarm', colorbar_ax=cax)
+stk.plot_rate(AX[4], 'A', stk.get_state_from_array('A', d_states), cmap='coolwarm', colorbar_ax=cax)
 AX[4].set_title(ut.diff('A'))
 
-start, stop = dxidx['B']
 cax = make_colorbar_ax(AX[5])
-stk.plot_rate(AX[5], 'B', d_states[start: stop], cmap='coolwarm', colorbar_ax=cax)
+stk.plot_rate(AX[5], 'B', stk.get_state_from_array('B', d_states), cmap='coolwarm', colorbar_ax=cax)
 AX[5].set_title(ut.diff('B'))
 
-start, stop = dxidx['C']
 cax = make_colorbar_ax(AX[6])
-stk.plot_rate(AX[6], 'C', d_states[start: stop], cmap='coolwarm', colorbar_ax=cax)
+stk.plot_rate(AX[6], 'C', stk.get_state_from_array('C', d_states), cmap='coolwarm', colorbar_ax=cax)
 AX[6].set_title(ut.diff('C'))
 
-start, stop = dxidx['D']
 cax = make_colorbar_ax(AX[7])
-stk.plot_rate(AX[7], 'D', d_states[start: stop], cmap='coolwarm', colorbar_ax=cax)
+stk.plot_rate(AX[7], 'D', stk.get_state_from_array('C', d_states), cmap='coolwarm', colorbar_ax=cax)
 AX[7].set_title(ut.diff('D'))
 
 ###############################################################################
 #Test RHS dct
 ###############################################################################
-code = stk.rhsdct_code
+code = stk.rhsdct.code
 
 with open('output_rhsdct.txt', 'w') as file:
     file.write(code)
@@ -167,12 +186,12 @@ AX[11].set_title(ut.diff('D'))
 ###############################################################################
 #Test Integration
 ###############################################################################
-time       = 0
 states     = np.arange(0, 32)
 parameters = spatial_data.parameters.df.loc[0].values
 tspan      = np.linspace(0, 50, 11)
 
-t, y, p = ivp.integrate(stk.rhs, tspan, states, parameters)
+rhs     = stk.rhs
+t, y, p = ivp.integrate(rhs, tspan, states, parameters)
 
 A = stk.get_state_from_array('A', y)
 assert A.shape == (4, 11)
@@ -189,3 +208,82 @@ assert D.shape == (12, 11)
 #Get rhsdct
 dct = stk.rhsdct(t, y, p)
 
+###############################################################################
+#Test RHS Performance
+###############################################################################
+states     = np.array([1, 2, 3, 4])
+states     = stk.expand_init(states)
+parameters = spatial_data.parameters.df.loc[0].values
+rhs        = stk.rhs
+
+rhs(time, states, parameters)
+
+#Test performance by increasing voxels
+print('Test model M1')
+
+spatial_data = SpatialModelData.from_all_data(all_data, 'M1')
+
+print('Making stack')
+start = get_time()
+stk_  = Stack(spatial_data)
+stop  = get_time()
+print('time taken', stop - start)
+print()
+
+with open('Performance test code 1.txt' , 'w') as file:
+    file.write(stk_.rhs.code)
+    
+states_     = np.array([1, 2, 3, 4])
+states_     = stk_.expand_init(states_)
+parameters_ = spatial_data.parameters.df.loc[0].values
+rhs_        = stk_.rhs
+
+rhs_(time, states_, parameters_)
+
+print('Test model M2')
+
+spatial_data = SpatialModelData.from_all_data(all_data, 'M2')
+
+print('Making stack')
+start = get_time()
+stk__  = Stack(spatial_data)
+stop  = get_time()
+print('time taken', stop - start)
+print()
+
+with open('Performance test code 2.txt' , 'w') as file:
+    file.write(stk__.rhs.code)
+    
+states__     = np.array([1, 2, 3, 4])
+states__     = stk__.expand_init(states__)
+parameters__ = spatial_data.parameters.df.loc[0].values
+rhs__        = stk__.rhs
+
+rhs__(time, states__, parameters__)
+
+###############################################################################
+#Testing Large Numerical Integration
+###############################################################################
+states_     = np.array([1, 2, 3, 4])
+states_     = stk_.expand_init(states_)
+parameters_ = spatial_data.parameters.df.loc[0].values
+rhs_        = stk_.rhs
+
+print('Test large integration for M1')
+start = get_time()
+t, y, p = ivp.integrate(rhs_, tspan, states_, parameters_, )
+stop  = get_time()
+print('time taken', stop - start)
+print()
+
+states__     = np.array([1, 2, 3, 4])
+states__     = stk__.expand_init(states__)
+parameters__ = spatial_data.parameters.df.loc[0].values
+rhs__        = stk__.rhs
+
+print('Test large integration for M2')
+start = get_time()
+t, y, p = ivp.integrate(rhs__, tspan, states__, parameters__)
+stop  = get_time()
+print('time taken', stop - start)
+print()

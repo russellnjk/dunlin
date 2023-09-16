@@ -1,8 +1,9 @@
 import numpy  as np
 import pandas as pd
 from abc     import ABC, abstractmethod
+from inspect import signature 
 from numbers import Number
-from typing  import Any, Union
+from typing  import Any, Callable, Union
 
 ###############################################################################
 #Non-Standard Imports
@@ -50,8 +51,8 @@ class BaseModel(ABC):
     
     #For back-end only
     #Required for integration
-    _rhs_functions    : tuple[callable]
-    _rhsdct_functions : tuple[callable]
+    _rhs_functions    : tuple[Callable]
+    _rhsdct_functions : tuple[Callable]
     _events           : tuple[oev.Event]
     _default_tspan = np.linspace(0, 1000, 21)
     
@@ -81,12 +82,6 @@ class BaseModel(ABC):
                '_events'
                ]
     
-    @classmethod
-    def from_dict(cls, all_data: dict, ref: str) -> type:
-        flattened = cmp.flatten_ode(all_data, ref)
-        
-        return cls(**flattened)
-        
     def __init__(self, 
                  model_data    : Any,
                  ref           : str, 
@@ -172,12 +167,30 @@ class BaseModel(ABC):
     def externals(self) -> dict:
         return self._externals
     
-    def add_external(self, name: str, function: callable) -> None:
-        ut.check_valid_name(name)
+    def add_external(self, name: str, function: Callable) -> None:
+        '''An external function must have the signature 
+        `function(time, states, parameters)`. It will be lazily applied to the 
+        integration results for each scenario and should return a scalar value 
+        for each scenario. 
         
+        Currently, this module does not validate the format of the return value 
+        of the external function. This is admittedly problematic.
+        '''
+        ut.check_valid_name(name)
+        if not callable(function):
+            msg = f'Attempted to add external function {name} to model {self.ref} that was not callable.'
+            raise ValueError(msg)
+        
+        sig = list(signature(function).parameters)
+        if len(sig) != 1:
+            msg  = f'Attempted to add external function {name} to model {self.ref}. '
+            msg += 'The function must have signature of length 1. '
+            msg += f'Received {sig}.'
+            raise ValueError(msg)
+            
         self._externals[name] = function
     
-    def pop_external(self, name: str) -> callable:
+    def pop_external(self, name: str) -> Callable:
         return self._externals.pop(name)
     
     ###########################################################################
@@ -244,9 +257,9 @@ class BaseModel(ABC):
             return self._rhsdct_functions[0]
     
     def __call__(self, 
-                 y0             : np.array, 
-                 p0             : np.array, 
-                 tspan          : np.array, 
+                 y0             : np.ndarray, 
+                 p0             : np.ndarray, 
+                 tspan          : np.ndarray, 
                  raw            : bool = False, 
                  include_events : bool = True,
                  scenario       : str  = ''

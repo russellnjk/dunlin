@@ -47,24 +47,24 @@ class ODEModel(BaseModel):
     
     def __init__(self, 
                  ref          : str, 
-                 states       : pd.DataFrame, 
-                 parameters   : pd.DataFrame, 
+                 states       : dict|pd.DataFrame, 
+                 parameters   : dict|pd.DataFrame, 
                  functions    : dict = None, 
                  variables    : dict = None, 
                  reactions    : dict = None, 
                  rates        : dict = None, 
                  events       : dict = None, 
                  tspans       : dict = None,
-                 compartments : dict = None, 
+                 domain_types : dict = None, 
                  int_args     : dict = None, 
                  sim_args     : dict = None, 
-                 optim_args   : dict = None, 
+                 opt_args     : dict = None, 
                  trace_args   : dict = None,
-                 data_args    : dict = None, 
                  meta         : dict = None,
                  dtype        : str  = 'ode',
                  ):
         
+        #Parse the data using the datastructures submodule
         model_data = dst.ODEModelData(ref        = ref, 
                                       tspans     = tspans, 
                                       states     = states,
@@ -77,8 +77,10 @@ class ODEModel(BaseModel):
                                       meta       = meta
                                       )
         
+        #Generate code, functions and events
         (rhs0, rhs1), (rhsdct0, rhsdct1), event_objects = odc.make_ode_callables(model_data)
         
+        #Call the parent constructor to save key information
         super().__init__(model_data = model_data, 
                          ref        = ref, 
                          tspans     = tspans, 
@@ -86,7 +88,7 @@ class ODEModel(BaseModel):
                          dtype      = dtype, 
                          events     = event_objects
                          )
-        
+        #Assign rhs 
         self._rhs_functions    = rhs0, rhs1
         self._rhsdct_functions = rhsdct0, rhsdct1
         
@@ -106,10 +108,11 @@ class ODEModel(BaseModel):
         self.parameter_df = parameters
         
         #Specific to this class
-        self.trace_args = {} if trace_args is None else trace_args 
-        self.optim_args = {} if optim_args is None else optim_args
-        self.sim_args   = {} if sim_args   is None else sim_args
-        self.data_args  = {} if data_args  is None else data_args
+        self.domain_types = {} if model_data.domain_types is None else model_data.domain_types
+        self.int_args     = {} if model_data.int_args     is None else model_data.int_args
+        self.sim_args     = {} if model_data.sim_args     is None else model_data.sim_args
+        self.opt_args     = {} if model_data.opt_args     is None else model_data.opt_args
+        self.trace_args   = {} if model_data.trace_args   is None else model_data.trace_args 
         
     def _convert_call(self, 
                       t : np.ndarray, 
@@ -295,11 +298,11 @@ class ODEResultDict:
                 raise ValueError(msg)
         
         result = {}
-        for scenario, oderesult in self.scenario2intresult.items():
+        for scenario, intresult in self.scenario2intresult.items():
             if scenario not in scenarios:
                 continue
             
-            result[scenario] = oderesult.plot_line(ax, var, **kwargs)
+            result[scenario] = intresult.plot_line(ax, var, **kwargs)
         
         return result
      

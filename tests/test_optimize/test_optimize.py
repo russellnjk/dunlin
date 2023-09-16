@@ -93,42 +93,42 @@ nominal      = pd.DataFrame([nominal])
 free_params  = {'p1': {'bounds': [0,   100], 'scale': 'lin',   'prior': ['normal', 50, 10]},
                 'p3': {'bounds': [0.1, 100], 'scale': 'log10', 'prior': ['normal', 50, 10]}
                 }
-OptResult    = opt.Optimizer(nominal, free_params, lambda x: 0)
+optr    = opt.Optimizer(nominal, free_params, lambda x: 0)
 free_p_array = np.array([1, 1])
 
-r  = OptResult.sampled_parameters[0](1)
+r  = optr.sampled_parameters[0](1)
 a0 = norm(50, 10).pdf(1)
 assert r == a0
 
-r  = OptResult.sampled_parameters[1](1)
+r  = optr.sampled_parameters[1](1)
 a1 = norm(50, 10).pdf(10)
 assert r == a1
 
-r = OptResult.get_objective(free_p_array)
+r = optr.get_objective(free_p_array)
 assert r == -logsum(np.array([a0 , a1]))
 
 free_params  = {'p1': {'bounds': [0,   100], 'scale': 'lin',   'prior': ['parameterScaleNormal', 50, 10]},
                 'p3': {'bounds': [0.1, 100], 'scale': 'log10', 'prior': ['parameterScaleNormal',  1,  1]}
                 }
-OptResult    = opt.Optimizer(nominal, free_params, lambda x: 0)
+optr    = opt.Optimizer(nominal, free_params, lambda x: 0)
 free_p_array = np.array([1, 1])
 
-r  = OptResult.sampled_parameters[0](1)
+r  = optr.sampled_parameters[0](1)
 a0 = norm(50, 10).pdf(1)
 assert r == a0
 
-r  = OptResult.sampled_parameters[1](1)
+r  = optr.sampled_parameters[1](1)
 a1 = norm(1, 1).pdf(1)
 assert r == a1
 
-r = OptResult.get_objective(free_p_array)
+r = optr.get_objective(free_p_array)
 assert r == -logsum(np.array([a0 , a1]))
 
 #Test with log_likelihood
 print('Test with log_likelihood')
-OptResult.neg_log_likelihood = lambda x: sum(x)
+optr.neg_log_likelihood = lambda x: sum(x)
 
-r    = OptResult.get_objective(free_p_array)
+r    = optr.get_objective(free_p_array)
 temp = -logsum(np.array([a0 , a1]))
 temp = temp + sum(np.array([1, 10]))
 assert r == temp
@@ -136,14 +136,14 @@ assert r == temp
 def log_likelihood(params):
     return sum([abs(params[0] - 50), abs(params[1]-10)])
 
-OptResult.neg_log_likelihood = log_likelihood
+optr.neg_log_likelihood = log_likelihood
 
-r    = OptResult.get_objective(free_p_array)
+r    = optr.get_objective(free_p_array)
 temp1 = sum([abs(free_p_array[0] - 50), abs(10**free_p_array[1]-10)])
 temp2 = -logsum(np.array([a0 , a1]))
 assert r == temp1 + temp2
 
-r    = OptResult.get_objective(np.array([50, 1]))
+r    = optr.get_objective(np.array([50, 1]))
 temp1 = 0
 temp2 = -logsum(np.array([norm(50, 10).pdf(50) , norm(1, 1).pdf(1)]))
 assert r == temp1 + temp2

@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import numpy             as np
 from matplotlib.patches import Rectangle
 from numbers            import Number
-from typing             import Literal, Union
+from typing             import Callable, Literal, Union
 
 import dunlin.utils      as ut
 from ..grid.grid   import RegularGrid, NestedGrid
@@ -53,8 +53,10 @@ class StateStack(DomainStack):
     parameter_code    : str
     function_code     : str
     diff_code         : str
-    signature         : tuple[str]
-    rhs_functions     : dict[str, callable]
+    signature         : list[str]
+    args              : dict
+    rhs_functions     : dict[str, Callable]
+    rhsdct_functions  : dict[str, Callable]
     formatter         : str
     
     def __init__(self, spatial_data: SpatialModelData):
@@ -62,8 +64,14 @@ class StateStack(DomainStack):
         grid_config        = spatial_data['grid_config']
         shapes             = make_shapes(spatial_data['geometry_definitions'])
         domain_type2domain = {k: {kk: vv for kk, vv in v.domain2internal_point.items()} for k, v in spatial_data.domain_types.items()}
-        domain2surface     = One2One('surface', 'domain', spatial_data.surfaces.domain2surface)
-        surface2domain     = domain2surface.inverse
+        
+        if spatial_data.surfaces.domain2surface:
+            domain2surface = One2One('surface', 'domain', spatial_data.surfaces.domain2surface)
+            surface2domain = domain2surface.inverse
+            
+        else:
+            domain2surface = One2One('surface', 'domain', {})
+            surface2domain = domain2surface.inverse
         
         #Template the mappings for _add_voxel 
         state2domain_type      = spatial_data.domain_types.state2domain_type
@@ -88,7 +96,8 @@ class StateStack(DomainStack):
         self._add_function_code()
         
         #For code excution
-        self.signature        = 'time', 'states', 'parameters'
+        self.signature        = ['time', 'states', 'parameters']
+        self.args             = {}
         self.rhs_functions    = {'__array'   : np.array,
                                  '__ndarray' : np.ndarray,
                                  '__ones'    : np.ones,
@@ -98,8 +107,22 @@ class StateStack(DomainStack):
         self.rhsdct_functions = self.rhs_functions.copy()
         
         #For plotting
-        self.formatter        = '{:.2f}'
+        self.formatter = '{:.2f}'
     
+    @property
+    def rhsdef(self) -> str:
+        signature = ', '.join(self.signature)
+        ref       = self.spatial_data.ref
+        
+        return f'def model_{ref}({signature}):'
+    
+    @property
+    def rhsdctdef(self) -> str:
+        signature = ', '.join(self.signature)
+        ref       = self.spatial_data.ref
+        
+        return f'def modeldct_{ref}({signature}):'
+        
     def _add_state_code(self) -> None:
         spatial_data      = self.spatial_data
         voxel2domain_type = self.voxel2domain_type

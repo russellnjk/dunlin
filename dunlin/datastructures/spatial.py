@@ -82,7 +82,9 @@ class SpatialModelData(ODEModelData):
                  meta                  : dict = None,
                  int_args              : dict = None,
                  sim_args              : dict = None,
-                 opt_args              : dict = None
+                 opt_args              : dict = None,
+                 trace_args            : dict = None,
+                 data_args             : dict = None
                  ):
         
         #Call the parent constructor to specify which attributes are exportable
@@ -164,5 +166,6 @@ class SpatialModelData(ODEModelData):
         self.int_args     = self.deep_copy('int_args', int_args)
         self.sim_args     = self.deep_copy('sim_args', sim_args)
         self.opt_args     = self.deep_copy('opt_args', opt_args)
+        self.trace_args   = self.deep_copy('trace_args', trace_args)
       
         

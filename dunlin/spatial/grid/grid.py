@@ -1,6 +1,7 @@
-import numpy             as np
-from numbers            import Number
-from typing             import Iterable, Union
+import numpy as np
+from numbers       import Number
+from scipy.spatial import KDTree
+from typing        import Iterable, Union
 
 import dunlin.utils_plot     as upp
     
@@ -236,8 +237,7 @@ class RegularGrid(BaseGrid):
         slices        = (slice(1, None, 2), )*ndims
         voxel_centers = np.stack([a[slices].flatten().astype(np.float64) for a in grid], axis=1)
         sizes         = {}
-        
-        # self.underlying = voxel_centers.copy()
+        voxel_tup     = []
         
         for point in voxel_centers:
             #Use tuples instead of numpy arrays for hashing
@@ -258,6 +258,7 @@ class RegularGrid(BaseGrid):
             #Update voxels
             voxels[key] = neighbours
             sizes[key]  = step
+            voxel_tup.append(key)
         
         #Determine vertices
         slices   = (slice(0, None, 2), )*ndims
@@ -280,14 +281,22 @@ class RegularGrid(BaseGrid):
             vertices[key] = neighbours
         
         super().__init__(name, step, np.array(spans), ndims, voxels, sizes, vertices)
-    
+        
+        #Make KDTree to search for nearest voxel
+        self.voxel_tree = KDTree(voxel_tup)
+        self.voxel_tup  = tuple(voxel_tup)
+        self.voxel_array = np.array(voxel_centers)
+        
     def voxelize(self, point) -> tuple:
         '''Map a point to a voxel.
         '''
-        step = self.step
-        temp = [np.floor(i/step)*step + 0.5*step for i in point]
+        # idx   = self.voxel_tree.query(point)[1]
+        # voxel = self.voxel_tup[idx]
+        dist  = np.sum( (self.voxel_array - point)**2, axis=1 )**0.5
+        idx   = np.argmin(dist)
+        voxel = tuple(self.voxel_array[idx])
         
-        return tuple(temp)
+        return voxel
     
     def shift_point(self, point, shift) -> tuple:
         step = self.step

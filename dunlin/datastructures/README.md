@@ -1,4 +1,4 @@
-# # Description
+# Description
 The `datastructures` submodule processes and checks raw input and instantiates classes corresponding to the various data structures used by Dunlin for instantiating models.
 
 

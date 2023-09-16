@@ -140,6 +140,7 @@ class EventStack(RateStack):
                                     )
         
         self._events.extend(event_objects)
+        
     
     
     

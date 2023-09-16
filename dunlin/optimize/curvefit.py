@@ -56,14 +56,14 @@ class Curvefitter(opt.Optimizer):
         
         #Instantiate
         nominal         = model.parameter_df
-        free_parameters = model.optim_args.get('free_parameters', {})
-        settings        = model.optim_args.get('settings',    {})
+        free_parameters = model.opt_args.get('free_parameters', {})
+        opt_args        = model.opt_args.get('opt_args',    {})
         trace_args      = model.trace_args
         
         super().__init__(nominal, 
                          free_parameters, 
                          get_SSE, 
-                         settings, 
+                         opt_args, 
                          trace_args
                          )
 

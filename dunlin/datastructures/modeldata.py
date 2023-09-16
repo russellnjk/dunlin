@@ -1,5 +1,8 @@
 from abc    import ABC, abstractclassmethod
-from typing import Any, Union
+from numbers                import Number
+from datetime import datetime
+
+from typing import Any
     
 class ModelData(ABC):
     '''
@@ -9,9 +12,37 @@ class ModelData(ABC):
     def from_all_data(cls, all_data, ref):
         ...
     
-    def _set_exportable_attributes(self, exportable_attributes: list[Union[str, tuple[str]]]):
+    def _set_exportable_attributes(self, exportable_attributes: list[str|tuple[str]]):
         self.__exportable_attributes = tuple(exportable_attributes)
+    
+    @classmethod
+    def deep_copy(cls, 
+                  name   : str, 
+                  data   : dict|list|str|Number|datetime|None,
+                  _first : bool = True
+                  ) -> Any:
+        if data is None and _first:
+            return data
+
+        elif type(data) == dict:
+            result = {}
+            for k, v in data.items():
+                k_ = cls.deep_copy(name, k, False)
+                v_ = cls.deep_copy(name, v, False)
+                
+                result[k_] = v_
+            return result
         
+        elif type(data) == list or type(data) == tuple:
+            return [cls._deep_copy(name, x, False) for x in data]
+        elif isinstance(data, (Number, str, datetime)):
+            return data
+        else:
+            msg  = 'Error when parsing {name}. '
+            msg += 'Expected a dict, list, str, number or datetime. '
+            msg += f'Received {type(data)}.'
+            raise TypeError(msg)
+            
     ###########################################################################
     #Representation
     ###########################################################################
