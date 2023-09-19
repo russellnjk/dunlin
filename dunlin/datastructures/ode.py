@@ -42,7 +42,8 @@ class ODEModelData(ModelData):
                  int_args     : dict = None,
                  sim_args     : dict = None,
                  opt_args     : dict = None,
-                 trace_args   : dict = None
+                 trace_args   : dict = None,
+                 data_args    : dict = None
                  ) -> None:
         
         #Call the parent constructor to specify which attributes are exportable
@@ -62,7 +63,8 @@ class ODEModelData(ModelData):
                                             'int_args',
                                             'sim_args',
                                             'opt_args',
-                                            'trace_args'
+                                            'trace_args',
+                                            'data_args'
                                             ]
                                            )  
         
@@ -86,6 +88,7 @@ class ODEModelData(ModelData):
         self.sim_args     = self.deep_copy('sim_args', sim_args)
         self.opt_args     = self.deep_copy('opt_args', opt_args)
         self.trace_args   = self.deep_copy('trace_args', trace_args)
+        self.data_args    = self.deep_copy('data_args', data_args)
         
         #Freeze all_names and save it
         self.all_names = frozenset(all_names)

@@ -281,9 +281,9 @@ states__     = stk__.expand_init(states__)
 parameters__ = spatial_data.parameters.df.loc[0].values
 rhs__        = stk__.rhs
 
-print('Test large integration for M2')
-start = get_time()
-t, y, p = ivp.integrate(rhs__, tspan, states__, parameters__)
-stop  = get_time()
-print('time taken', stop - start)
-print()
+# print('Test large integration for M2')
+# start = get_time()
+# t, y, p = ivp.integrate(rhs__, tspan, states__, parameters__)
+# stop  = get_time()
+# print('time taken', stop - start)
+# print()

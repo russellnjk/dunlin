@@ -60,21 +60,28 @@ class ODEModel(BaseModel):
                  sim_args     : dict = None, 
                  opt_args     : dict = None, 
                  trace_args   : dict = None,
+                 data_args    : dict = None,
                  meta         : dict = None,
                  dtype        : str  = 'ode',
                  ):
         
         #Parse the data using the datastructures submodule
-        model_data = dst.ODEModelData(ref        = ref, 
-                                      tspans     = tspans, 
-                                      states     = states,
-                                      parameters = parameters,
-                                      functions  = functions,
-                                      variables  = variables,
-                                      reactions  = reactions,
-                                      rates      = rates,
-                                      events     = events,
-                                      meta       = meta
+        model_data = dst.ODEModelData(ref          = ref, 
+                                      tspans       = tspans, 
+                                      states       = states,
+                                      parameters   = parameters,
+                                      functions    = functions,
+                                      variables    = variables,
+                                      reactions    = reactions,
+                                      rates        = rates,
+                                      events       = events,
+                                      meta         = meta,
+                                      domain_types = domain_types, 
+                                      int_args     = int_args, 
+                                      sim_args     = sim_args, 
+                                      opt_args     = opt_args, 
+                                      trace_args   = trace_args,
+                                      data_args    = data_args
                                       )
         
         #Generate code, functions and events
@@ -108,11 +115,11 @@ class ODEModel(BaseModel):
         self.parameter_df = parameters
         
         #Specific to this class
-        self.domain_types = {} if model_data.domain_types is None else model_data.domain_types
-        self.int_args     = {} if model_data.int_args     is None else model_data.int_args
-        self.sim_args     = {} if model_data.sim_args     is None else model_data.sim_args
-        self.opt_args     = {} if model_data.opt_args     is None else model_data.opt_args
-        self.trace_args   = {} if model_data.trace_args   is None else model_data.trace_args 
+        self.int_args   = {} if model_data.int_args   is None else model_data.int_args
+        self.sim_args   = {} if model_data.sim_args   is None else model_data.sim_args
+        self.opt_args   = {} if model_data.opt_args   is None else model_data.opt_args
+        self.trace_args = {} if model_data.trace_args is None else model_data.trace_args 
+        self.data_args  = {} if model_data.data_args is None else model_data.data_args
         
     def _convert_call(self, 
                       t : np.ndarray, 
@@ -161,7 +168,6 @@ class ODEResult:
         self.args        = t, y, p
         self.rhsdct      = model.rhsdct
         self.rhsexternal = model.externals
-        self.line_args   = model.sim_args.get('line_args', {})
         
         #Keep track of names for lazy evaluation
         self.internal_names = frozenset(model.variables  
@@ -169,6 +175,11 @@ class ODEResult:
                                         + tuple([ut.diff(x) for x in model.states])
                                         )
         self.external_names = frozenset(model.externals.keys())
+        
+        
+        #For plotting
+        label          = lambda ref, scenario, var: '{} {} {}'.format(ref, scenario, var)
+        self.line_args = {'label': label, **model.sim_args.get('line_args', {})}
         
     ###########################################################################
     #Accessors/Lazy Evaluators
@@ -220,8 +231,9 @@ class ODEResult:
     #Plotting
     ###########################################################################
     def plot_line(self,
-                  ax     : axes.Axes,
-                  var    : str|tuple[str, str],
+                  ax             : axes.Axes,
+                  var            : str|tuple[str, str],
+                  ignore_default : bool = False,
                   **kwargs
                   ) -> axes.Axes:
         
@@ -238,8 +250,7 @@ class ODEResult:
                 msg = f'Could not parse the var argument {var}.'
                 raise ValueError(msg)
         
-        label      = lambda ref, scenario, var: '{} {} {}'.format(ref, scenario, var)
-        default    = {'label': label, **self.line_args}
+        default    = {} if ignore_default else self.line_args
         sub_args   = {'ref': self.ref, 'scenario': self.scenario, 'var': var}
         converters = {'color'  : upp.get_color,
                       'colors' : upp.get_colors
@@ -252,7 +263,6 @@ class ODEResult:
                                         )
         
         if 'colors' in kwargs:
-            kwargs.pop('color', None)
             stacked  = np.stack([x_vals, y_vals], axis=1)
             n        = len(kwargs['colors'])
             d        = int(len(stacked) / n + 1)

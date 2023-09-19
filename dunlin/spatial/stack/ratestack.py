@@ -134,10 +134,34 @@ class RateStack(MassTransferStack):
     #Code Generation
     ###########################################################################
     def _add_rate_code(self) -> None:
-        rates = self.spatial_data.rates
+        rates             = self.spatial_data.rates
+        parameters        = self.spatial_data.parameters
+        state2domain_type = self.state2domain_type
+        
         
         code = ''
         for state, rate in rates.items():
+            domain_type = state2domain_type[state]
+            
+            #Check the namespace
+            for name in rate.namespace:
+                if name in self.global_variables:
+                    pass
+                elif name in parameters:
+                    pass
+                elif self.bulk_variables.get(name, '') == domain_type:
+                    pass
+                elif state2domain_type.get(name, '') == domain_type:
+                    pass
+                else:
+                    msg  = f'Rate for {state} contains a term {name} that is neither '
+                    msg += 'a parameter, global variable, '
+                    msg += 'bulk variable of the same domain type, '
+                    msg += 'state of the same domain type.'
+                    
+                    raise ValueError(msg)
+            
+            #Make code
             state_ = ut.undot(state)
             lhs    = f'{ut.diff(state_)}'
             rhs    = ut.undot(rate.expr)

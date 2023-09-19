@@ -69,6 +69,9 @@ class MassTransfer(DataValue):
                          coefficients = coefficients
                          )
     
+    def __str__(self) -> str:
+        return f'{type(self).__name__}({repr(self.state)})'
+    
     def __getitem__(self, axis: str) -> str|Number:
         return self.coefficients[axis]
     

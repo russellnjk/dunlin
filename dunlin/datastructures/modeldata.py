@@ -34,7 +34,7 @@ class ModelData(ABC):
             return result
         
         elif type(data) == list or type(data) == tuple:
-            return [cls._deep_copy(name, x, False) for x in data]
+            return [cls.deep_copy(name, x, False) for x in data]
         elif isinstance(data, (Number, str, datetime)):
             return data
         else:

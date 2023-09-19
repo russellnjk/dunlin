@@ -30,12 +30,16 @@ class Rate(DataValue):
             
         #Save attributes
         super().__init__(all_names, 
-                         name     = None, 
-                         expr     = expr_str, 
-                         expr_ori = expr, 
-                         state    = state
+                         name      = None, 
+                         expr      = expr_str, 
+                         expr_ori  = expr, 
+                         state     = state,
+                         namespace = namespace
                          )
-
+    
+    def __str__(self) -> str:
+        return f'{type(self).__name__}({repr(self.state)})'
+    
     ###########################################################################
     #Export
     ###########################################################################

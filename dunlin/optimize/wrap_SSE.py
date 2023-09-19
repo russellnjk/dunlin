@@ -22,7 +22,7 @@ class SSECalculator:
                    by    : Literal['scenario', 'state'] = 'scenario'
                    ):
         #Check input
-        if by != 'scenario' and by!= 'state':
+        if by != 'scenario' and by != 'state':
             msg = f'The "by" argument must be "scenario" or "state". Received {by}.'
             raise ValueError(msg)
         
@@ -48,8 +48,11 @@ class SSECalculator:
         
         for first, dct in data.items():
             for second, series in dct.items():
-                #Clean the series
-                series = series.dropna()
+                #Get the sd
+                sd = getattr(series, 'sd', None)
+                
+                #Clean and copy the series
+                series_ = series.dropna()
                 
                 #Determine the scenario and state
                 if by == 'scenario':
@@ -69,26 +72,34 @@ class SSECalculator:
                     msg = f'Data contains a scenario "{scenario}" not found in model {model.ref}.'
                     raise ValueError(msg)
                 
+                #Extract y, t, sd for SSE calculation and sd for plotting
                 #Reformat the series if it has a multiindex
                 default  = np.percentile(series, 75)/20
-                if series.index.nlevels == 1:
-                    temp     = pd.Series(np.zeros(len(series)), index=series.index)
-                    sd_      = getattr(series, 'sd', temp)
-                    sd       = getattr(series, 'sd', default)
+                if series_.index.nlevels == 1:
+                    if sd is None:
+                        sd  = default
+                        series_.sd = None
+                        # sd_ = pd.Series(np.zeros(len(series)), index=series_.index)
+                    else:
+                        series_.sd = sd
+                        # sd_        = sd
+                    
                     y_array  = series.values
                     t_array  = series.index.values
                     
                 else:
-                    if 'time' in series.index.names:
-                        groupby = series.groupby(by='time')
+                    if 'time' in series_.index.names:
+                        groupby = series_.groupby(by='time')
                     else:
-                        groupby = series.groupby(level=0)
+                        msg = f'Multi-index Series {series.name} missing a level named "time".'
+                        raise ValueError(msg)
                     
-                    mean    = groupby.mean()
-                    sd_     = groupby.std()
-                    sd     = sd.fillna(default)
-                    y_array = mean
-                    t_array = series.index.values
+                    mean       = groupby.mean()
+                    sd         = groupby.std()
+                    sd         = sd.fillna(default)
+                    series_.sd = sd
+                    y_array    = mean
+                    t_array    = series_.index.unique('time')
                     
                 #Update the result
                 scenario2y_data.setdefault(scenario, {})
@@ -104,8 +115,7 @@ class SSECalculator:
                 scenario2tpoints[scenario].update(t_array)
                 
                 cleaned_data.setdefault(scenario, {})
-                series.sd_                    = sd_  
-                cleaned_data[scenario][state] = series
+                cleaned_data[scenario][state] = series_
                 
         #Determine the indices for extracting y_model
         #Make the tspans for numerical integration
@@ -201,11 +211,6 @@ class SSECalculator:
         self.sampled_parameter_idxs = np.array(sampled_parameter_idxs)
         self.model                  = model
         
-        if model.data_args: 
-            self.data_args = model.data_args
-        else:
-            self.data_args = getattr(model, 'sim_args', {}).get('line_args', {})
-        
         #Preprocess and get mappings
         (self.scenario2y_data, 
          self.scenario2t_data, 
@@ -214,6 +219,10 @@ class SSECalculator:
          self.scenario2tspan,
          self.data
          ) = self.parse_data(model, data)
+        
+        #For plotting
+        label          = lambda ref, scenario, var: '{} {} {}'.format(ref, scenario, var)
+        self.line_args = {'label' : label, **model.data_args.get('line_args', {})} 
         
     ###########################################################################
     #Integration
@@ -290,9 +299,10 @@ class SSECalculator:
         return result
     
     def _plot_data(self,
-                   ax       : axes.Axes,
-                   var      : str|tuple[str, str],
-                   scenario : Scenario,
+                   ax             : axes.Axes,
+                   var            : str|tuple[str, str],
+                   scenario       : Scenario,
+                   ignore_default : bool = False,
                    **kwargs
                    ) -> axes.Axes:
         
@@ -300,6 +310,8 @@ class SSECalculator:
             case str(y):
                 x_vals = self.data[scenario][y].index
                 y_vals = self.data[scenario][y].values
+                xerr   = None
+                yerr   = self.data[scenario][y].sd
                 
             case [str(x), str(y)]:
                 x_series = self.data[scenario][x]
@@ -308,20 +320,20 @@ class SSECalculator:
                 #The two series may not have the same indices
                 #Get only the common indices
                 common = x_series.index.intersection(y_series.index)
-                x_vals = x_series.loc[common].values
-                y_vals = y_series.loc[common].values
+                x_series = x_series.loc[common]
+                y_series = y_series.loc[common]
+                
+                x_vals = x_series.values
+                y_vals = y_series.values
+                xerr   = x_series.sd
+                yerr   = y_series.sd
             
             case _:
                 msg = f'Could not parse the var argument {var}.'
                 raise ValueError(msg)
         
         label      = lambda ref, scenario, var: '{} {} {}'.format(ref, scenario, var)
-        default    = {'linestyle'  : 'None', 
-                      'marker'     : 'o', 
-                      'markersize' : 5, 
-                      'label'      : label,
-                      **self.data_args
-                      }
+        default    = {} if ignore_default else self.line_args
         sub_args   = {'ref': self.ref, 'scenario': scenario, 'var': var}
         converters = {'color'  : upp.get_color,
                       'colors' : upp.get_colors
@@ -334,11 +346,11 @@ class SSECalculator:
                                         )
         
         if 'colors' in kwargs:
-            kwargs.pop('color', None)
             stacked  = np.stack([x_vals, y_vals], axis=1)
             n        = len(kwargs['colors'])
             d        = int(len(stacked) / n + 1)
             segments = [stacked[i*d:(i+1)*d+1] for i in range(n)]
+            
             lines    = LineCollection(segments, **kwargs)
             result   = ax.add_collection(collection=lines)
             
@@ -346,6 +358,11 @@ class SSECalculator:
             return result
             
         else:
-            return ax.plot(x_vals, y_vals, **kwargs)
-    
+            return ax.errorbar(x_vals, 
+                               y_vals, 
+                               yerr=yerr, 
+                               xerr=xerr, 
+                               **kwargs
+                               ) 
+            
         

@@ -9,6 +9,9 @@ import addpath
 import dunlin                   as dn
 import dunlin.optimize.wrap_SSE as ws
 
+plt.close('all')
+plt.ion()
+
 all_data = {'M1': {'states'     : {'x0': [1, 1], 
                                    'x1': [0, 0]
                                    },
@@ -26,9 +29,17 @@ all_data = {'M1': {'states'     : {'x0': [1, 1],
                                    },
                    'int_args'   : {'method': 'LSODA'
                                    },
-                   'optim_args' : {'free_parameters': {'p0' : {'bounds': [1e-1, 1e1]},
+                   'opt_args'   : {'free_parameters': {'p0' : {'bounds': [1e-1, 1e1]},
                                                        'p1' : {'bounds': [1e-1, 1e1]}
                                                        }
+                                   },
+                   'data_args'  : {'line_args' : {'color' : {0: 'cobalt',
+                                                             1: 'tangerine'
+                                                             },
+                                                  'marker'     : 'o', 
+                                                  'markersize' : 5, 
+                                                  'linestyle'  : 'None'
+                                                  }
                                    }
                    },
             'M2': {'states'     : {'x0': [1, 1], 
@@ -48,7 +59,7 @@ all_data = {'M1': {'states'     : {'x0': [1, 1],
                                    },
                    'int_args'   : {'method': 'LSODA'
                                    },
-                   'optim_args' : {'free_parameters': {'p0' : {'bounds': [1e-1, 1e1]},
+                   'opt_args'   : {'free_parameters': {'p0' : {'bounds': [1e-1, 1e1]},
                                                        'p1' : {'bounds': [1e-1, 1e1]}
                                                        }
                                    }
@@ -83,11 +94,6 @@ if __name__ == '__main__':
     y_data0 = np.e**(-time0)
     y_data1 = 2 -2*np.e**(-time1)
 
-    # cols1 = pd.MultiIndex.from_product([['x0', 'x1'], [0]])
-    # cols2 = pd.MultiIndex.from_product([['x0', 'x1'], [1]])
-    # df1 = pd.DataFrame(np.array([y_data0, y_data0]).T, index=time0, columns=cols1)
-    # df2 = pd.DataFrame(np.array([y_data1, y_data1]).T, index=time1, columns=cols2)
-    
     s0 = pd.Series(y_data0, index=time0)
     s1 = pd.Series(y_data1, index=time1)
     
@@ -176,5 +182,25 @@ if __name__ == '__main__':
     SSE      = get_SSE(p_array)
     print(SSE)
     assert np.isclose(842.5211496180012, SSE, rtol=1e-2)
+    
+    ###########################################################################
+    #Test Plotting
+    ###########################################################################
+    fig, AX = plt.subplots(1, 2)
+    
+    s0.sd = 0.1
+    s1.sd = s1/10
+    
+    get_SSE = ws.SSECalculator(model, by_scenario, by='scenario')
+    
+    get_SSE.plot_data(AX[0], 'x0')
+    get_SSE.plot_data(AX[1], 
+                      'x1', 
+                      colors         = {0: ['cobalt', 'light blue'], 
+                                        1: ['tangerine']
+                                        },
+                      ignore_default = True
+                      )
+    
     
     
