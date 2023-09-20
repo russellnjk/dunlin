@@ -156,7 +156,7 @@ class Optimizer(SensitivityMixin):
         x0   = []
         step = []
         for p in self.sampled_parameters:
-            b = p.scaled_bounds()
+            b = p.scaled_bounds
             step.append( (b[1] - b[0])/40 )
             
             if x0_nominal:

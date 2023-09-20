@@ -6,8 +6,6 @@ import dunlin.standardfile.dunl.delim as dm
 ###############################################################################
 # Substitution of Shorthands
 ###############################################################################
-
-
 def substitute(template, horizontals, verticals):
     temp = substitute_horizontals(template, horizontals)
     result = substitute_verticals(temp, verticals)
@@ -107,8 +105,6 @@ def format_string(string, max_brackets=2, /, **kwargs):
 ###############################################################################
 # Splitting of Element
 ###############################################################################
-
-
 def get_template_and_shorthands(element):
 
     template, found = string2chunks(element)

@@ -16,33 +16,6 @@ from ..ode.odemodel import ODEModel, ODEResultDict
 from .wrap_SSE      import SSECalculator, State, Parameter, Scenario
 
 ###############################################################################
-#High-Level Algorithms
-###############################################################################
-def fit_model(model : ODEModel, 
-              data  : dict[Scenario, dict[State, pd.Series]]|dict[State, dict[Scenario, pd.Series]], 
-              by    : Literal['scenario', 'state'] = 'scenario',
-              runs  : int                          = 1, 
-              algo  : str                          = 'differential_evolution', 
-              **kwargs
-              ):
-    curvefitters = []
-    curvefitter  = Curvefitter(model, data, by=by)
-    
-    for i in range(runs):
-        if i > 0:
-            curvefitter = curvefitter.seed(i)
-        
-        method = getattr(curvefitter, 'run_' + algo, None)
-        if method is None:
-            raise ValueError(f'No algorithm called "{algo}".')
-            
-        method(**kwargs)
-        
-        curvefitters.append(curvefitter)
-        
-    return curvefitters 
-
-###############################################################################
 #Curvefitter
 ###############################################################################
 class Curvefitter(opt.Optimizer):
@@ -230,4 +203,30 @@ class Curvefitter(opt.Optimizer):
         result.append(r)
         
         return result
+
+###############################################################################
+#High-Level Algorithms
+###############################################################################
+def fit_model(model : ODEModel, 
+              data  : dict[Scenario, dict[State, pd.Series]]|dict[State, dict[Scenario, pd.Series]], 
+              by    : Literal['scenario', 'state'] = 'scenario',
+              runs  : int                          = 1, 
+              algo  : str                          = 'differential_evolution', 
+              **kwargs
+              ) -> list[Curvefitter]:
+    curvefitters = []
+    curvefitter  = Curvefitter(model, data, by=by)
+    
+    for i in range(runs):
+        if i > 0:
+            curvefitter = curvefitter.seed(i)
         
+        method = getattr(curvefitter, 'run_' + algo, None)
+        if method is None:
+            raise ValueError(f'No algorithm called "{algo}".')
+            
+        method(**kwargs)
+        
+        curvefitters.append(curvefitter)
+        
+    return curvefitters 

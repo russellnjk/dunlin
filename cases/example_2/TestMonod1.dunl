@@ -20,23 +20,23 @@ ind     : [0.1: 0,     0.15: 0,     0.2: 0    ]
 mu : mu_max*S/(S + k_S)
 
 ;;reactions
-dil_x  : [x ->  , dil*x            ]
-dil_S  : [S ->  , dil*S            ]
-dil_H  : [H ->  , dil*H            ]
-feed   : [  -> S, dil*Sin          ]
-growth : [  -> x, mu*x             ]
-S_up   : [S ->  , mu*x*yield_S     ]
-syn_H  : [  -> H, ind/(ind + k_ind)]
+dil_x  : [rate : dil*x,             stoichiometry : [x : -1]]
+dil_S  : [rate : dil*S,             stoichiometry : [S : -1]]
+dil_H  : [rate : dil*H,             stoichiometry : [H : -1]]
+feed   : [rate : dil*Sin,           stoichiometry : [S :  1]]
+growth : [rate : mu*x,              stoichiometry : [x :  1]]
+S_up   : [rate : mu*x*yield_S,      stoichiometry : [S : -1]]
+syn_H  : [rate : ind/(ind + k_ind), stoichiometry : [H : 1]]
 
-;;tspan
-0.1  : !linspace, 0, 600, 61!
-0.15 : !linspace, 0, 600, 61!
-0.2  : !linspace, 0, 600, 61!
+;;tspans
+0.1  : !linspace, 0, 600, 31!
+0.15 : !linspace, 0, 600, 31!
+0.2  : !linspace, 0, 600, 31!
 
-;;optim_args
+;;opt_args
 free_parameters : [
 	mu_max  : [bounds: [1e-4, 1e-1], scale: lin, prior: [normal, 1e-2, 5e-3]],
-	k_S     : [bounds: [1e3,  1e4 ], scale: lin],
+	k_S     : [bounds: [1e3,  1e5 ], scale: log],
 	]
 settings : [
 	disp    : True
@@ -56,22 +56,27 @@ line_args : [
 		]
 	]
 
-;;data_args;dataset
+;;data_args
 line_args : [
-	color : [
+	linestyle  : 'None',
+	marker     : 'o',
+	markersize : 5,
+	color      : [
 		0.1  : coral,
 		0.15 : sea,
 		0.2  : cobalt
 		],
-	capsize : 5
+	capsize    : 5
 	]
 
 ;MonodData
-dtype : time_response_data
-model : Monod
+dtype : time_response
 
-;;file_data
-timeresponse.csv: [
-	header: 3, 
-	trial: True
-	]
+;;file0
+filename       : timeresponse.csv
+header         : [0, 1, 2]
+index_col      : 0
+state_level    : State
+scenario_level : Glu
+trial_level    : Replicate
+

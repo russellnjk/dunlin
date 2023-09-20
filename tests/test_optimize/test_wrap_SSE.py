@@ -184,12 +184,50 @@ if __name__ == '__main__':
     assert np.isclose(842.5211496180012, SSE, rtol=1e-2)
     
     ###########################################################################
+    #Test Multiple Trials(Replicates)
+    ###########################################################################    
+    s2 = s0 + 1
+    s3 = pd.concat({'a': s0, 'b': s2})
+    s3.index.names = ['trial', 'time']
+    
+    by_scenario = {0: {'x0': s3,
+                       'x1': s3,
+                       },
+                   1: {'x0': s1,
+                       'x1': s1
+                       },
+                   }
+    
+    get_SSE = ws.SSECalculator(model, by_scenario, by='scenario')
+    
+    #Test 0
+    print('Test wrap_get_SSE with multiple trials(replicates)')
+    gb = s3.groupby('time')
+    
+    assert all(get_SSE.scenario2sd_data[0]['x0'] == gb.std())
+    assert all(get_SSE.scenario2y_data[ 0]['x0'] == gb.mean())
+    
+    p_array  = np.array([1, 1])
+    SSE      = get_SSE(p_array)
+    print(SSE)
+    assert np.isclose(716.4965748640595, SSE, rtol=1e-2)
+    
+    ###########################################################################
     #Test Plotting
     ###########################################################################
+    print('Test plotting')
     fig, AX = plt.subplots(1, 2)
     
     s0.sd = 0.1
-    s1.sd = s1/10
+    s1.sd = 0.2
+    
+    by_scenario = {0: {'x0': s0,
+                        'x1': s0,
+                        },
+                    1: {'x0': s1,
+                        'x1': s1
+                        },
+                    }
     
     get_SSE = ws.SSECalculator(model, by_scenario, by='scenario')
     
@@ -202,5 +240,25 @@ if __name__ == '__main__':
                       ignore_default = True
                       )
     
+    print()
+    print('Test plotting with multiindex')
+    fig, AX = plt.subplots(1, 2)
+    by_scenario = {0: {'x0': s3,
+                       'x1': s3,
+                       },
+                   1: {'x0': s1,
+                       'x1': s1
+                       },
+                   }
     
+    get_SSE = ws.SSECalculator(model, by_scenario, by='scenario')
+    
+    get_SSE.plot_data(AX[0], 'x0')
+    get_SSE.plot_data(AX[1], 
+                      'x1', 
+                      colors         = {0: ['cobalt', 'light blue'], 
+                                        1: ['tangerine']
+                                        },
+                      ignore_default = True
+                      )
     

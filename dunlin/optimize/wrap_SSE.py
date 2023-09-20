@@ -20,7 +20,11 @@ class SSECalculator:
     def parse_data(model : ODEModel,
                    data  : dict[Scenario, dict[State, pd.Series]]|dict[State, dict[Scenario, pd.Series]], 
                    by    : Literal['scenario', 'state'] = 'scenario'
-                   ):
+                   ) -> tuple:
+        '''Series with only only level can have an attribute "sd" for manual sd 
+        input.
+        '''
+        
         #Check input
         if by != 'scenario' and by != 'state':
             msg = f'The "by" argument must be "scenario" or "state". Received {by}.'
@@ -51,6 +55,10 @@ class SSECalculator:
                 #Get the sd
                 sd = getattr(series, 'sd', None)
                 
+                if sd is not None and not isinstance(sd, Number):
+                    msg = 'User-provided standard deviation must be a scalar.'
+                    raise ValueError(msg)
+                
                 #Clean and copy the series
                 series_ = series.dropna()
                 
@@ -74,15 +82,16 @@ class SSECalculator:
                 
                 #Extract y, t, sd for SSE calculation and sd for plotting
                 #Reformat the series if it has a multiindex
+                #Add the attribute sd for errobar plotting
                 default  = np.percentile(series, 75)/20
                 if series_.index.nlevels == 1:
+                    mean = series_
+                    
                     if sd is None:
-                        sd  = default
-                        series_.sd = None
-                        # sd_ = pd.Series(np.zeros(len(series)), index=series_.index)
+                        sd      = default
+                        mean.sd = None
                     else:
-                        series_.sd = sd
-                        # sd_        = sd
+                        mean.sd = sd
                     
                     y_array  = series.values
                     t_array  = series.index.values
@@ -94,12 +103,12 @@ class SSECalculator:
                         msg = f'Multi-index Series {series.name} missing a level named "time".'
                         raise ValueError(msg)
                     
-                    mean       = groupby.mean()
-                    sd         = groupby.std()
-                    sd         = sd.fillna(default)
-                    series_.sd = sd
-                    y_array    = mean
-                    t_array    = series_.index.unique('time')
+                    mean    = groupby.mean()
+                    sd      = groupby.std() if sd is None else sd
+                    sd      = sd.fillna(default).values if type(sd) == pd.Series else sd
+                    mean.sd = sd
+                    y_array = mean.values
+                    t_array = series_.index.unique('time')
                     
                 #Update the result
                 scenario2y_data.setdefault(scenario, {})
@@ -111,11 +120,11 @@ class SSECalculator:
                 scenario2sd_data.setdefault(scenario, {})
                 scenario2sd_data[scenario][state] = sd
                 
-                scenario2tpoints.setdefault(scenario, set())
+                scenario2tpoints.setdefault(scenario, {0})
                 scenario2tpoints[scenario].update(t_array)
                 
                 cleaned_data.setdefault(scenario, {})
-                cleaned_data[scenario][state] = series_
+                cleaned_data[scenario][state] = mean
                 
         #Determine the indices for extracting y_model
         #Make the tspans for numerical integration
@@ -308,10 +317,21 @@ class SSECalculator:
         
         match var:
             case str(y):
-                x_vals = self.data[scenario][y].index
-                y_vals = self.data[scenario][y].values
-                xerr   = None
-                yerr   = self.data[scenario][y].sd
+                y_series = self.data[scenario][y]
+                
+                if y_series.index.nlevels == 1:
+                    x_vals = y_series.index.values
+                    y_vals = y_series.values
+                    xerr   = None
+                    yerr   = y_series.sd
+                else:
+                    x_vals = y_series.index.get_level_values('time').values
+                    y_vals = y_series.values
+                    xerr   = None
+                    yerr   = y_series.sd
+                
+                if type(yerr) == pd.Series:
+                    yerr = yerr.values
                 
             case [str(x), str(y)]:
                 x_series = self.data[scenario][x]

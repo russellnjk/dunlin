@@ -1,7 +1,8 @@
+import numpy as np
 from datetime import datetime
+from numbers  import Number
 
 import dunlin.standardfile.dunl.readprimitive as rpr
-import dunlin.standardfile.dunl.builtin       as bi
 import dunlin.standardfile.dunl.delim         as dm
 
 ###############################################################################
@@ -328,17 +329,18 @@ def read_value(x):
         line = x[1:-1]
         
         try:
-            func_name, *args = _read_string(line, read_flat)
+            args = _read_string(line, read_flat)
         except:
             raise InvalidFunction(x)
-            
-        if func_name in bi.builtin_functions:
-            try:
-                return bi.builtin_functions[func_name](*args)
-            except:
-                raise FailedFunction(x)
-        else:
-            raise NoFunction(func_name)
+        
+        return read_builtin(*args)
+        # if func_name in bi.builtin_functions:
+        #     try:
+        #         return bi.builtin_functions[func_name](*args)
+        #     except:
+        #         raise FailedFunction(x)
+        # else:
+        #     raise NoFunction(func_name)
 
     else:
         return rpr.read_primitive(x)
@@ -382,6 +384,60 @@ def split_top_delimiter(string, delimiter=dm.item):
             
     return chunks
 
+def read_builtin(*args):
+    match args:
+        case ('range', start, stop, step, *extras):
+            
+            if not isinstance(start, Number):
+                msg = 'When using range, the "start" argument must be a number.'
+                raise ValueError(msg)
+            
+            elif not isinstance(stop, Number):
+                msg = 'When using range, the "stop" argument must be a number.'
+                raise ValueError(msg)
+            
+            elif not isinstance(step, Number):
+                msg = 'When using range, the "step" argument must be a number.'
+                raise ValueError(msg)
+                
+            elif any([not isinstance(i, Number) for i in extras]):
+                msg = 'When using range, the "extras" argument can only contain numbers.'
+                raise ValueError(msg)
+            
+            array = np.arange(start, stop, step)
+            array = np.concatenate((array, extras))
+            array = np.unique(array)
+        
+            return list(array)
+        
+        case ('linspace', start, stop, points, *extras):
+            
+            if not isinstance(start, Number):
+                msg = 'When using range, the "start" argument must be a number.'
+                raise ValueError(msg)
+            
+            elif not isinstance(stop, Number):
+                msg = 'When using range, the "stop" argument must be a number.'
+                raise ValueError(msg)
+            
+            elif not isinstance(points, Number):
+                msg = 'When using range, the "points" argument must be a number.'
+                raise ValueError(msg)
+                
+            elif any([not isinstance(i, Number) for i in extras]):
+                msg = 'When using range, the "extras" argument can only contain numbers.'
+                raise ValueError(msg)
+            
+            array = np.linspace(start, stop, points)
+            array = np.concatenate((array, extras))
+            array = np.unique(array)
+        
+            return list(array)
+        
+        case _:
+            msg = f'Could not parse the builtin call {args}.'
+            raise ValueError(msg)
+            
 class InvalidFunction(Exception):
     def __init__(self, x):
         msg = f'Invalid function call {x}'
