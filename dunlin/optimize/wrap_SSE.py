@@ -18,17 +18,11 @@ Scenario  = Number|str
 class SSECalculator:
     @staticmethod
     def parse_data(model : ODEModel,
-                   data  : dict[Scenario, dict[State, pd.Series]]|dict[State, dict[Scenario, pd.Series]], 
-                   by    : Literal['scenario', 'state'] = 'scenario'
+                   data  : dict[tuple[State, Scenario], pd.Series]
                    ) -> tuple:
         '''Series with only only level can have an attribute "sd" for manual sd 
         input.
         '''
-        
-        #Check input
-        if by != 'scenario' and by != 'state':
-            msg = f'The "by" argument must be "scenario" or "state". Received {by}.'
-            raise ValueError(msg)
         
         #Extract the data and its corresponding time points
         #Calculate or extract standard deviation 
@@ -47,85 +41,92 @@ class SSECalculator:
                    *getattr(model, 'extra', [])
                    }
         
-        #Make cleaned copies of the data
-        cleaned_data = {}
+        #Make cleaned copies of the data for plotting
+        plotting_data = {}
+        var_names     = set()
         
-        for first, dct in data.items():
-            for second, series in dct.items():
-                #Get the sd
-                sd = getattr(series, 'sd', None)
-                
-                if sd is not None and not isinstance(sd, Number):
-                    msg = 'User-provided standard deviation must be a scalar.'
+        for key, series in data.items():
+            match key:
+                case str(state), scenario if is_scenario(scenario):
+                    var_names.add(state)
+                case _:
+                    msg  = 'Unexpected format in data. Keys must take the form '
+                    msg += '(state, scenario) where state is a string and scenario '
+                    msg += 'is a numbers, string, or tuple of numbers/strings.'
                     raise ValueError(msg)
+            
+            #Get the sd
+            user_sd = getattr(series, 'sd', None)
+            
+            if user_sd is not None and not isinstance(user_sd, Number):
+                msg = 'User-provided standard deviation must be a scalar.'
+                raise ValueError(msg)
+            
+            #Clean and copy the series
+            series_ = series.dropna()
+            
+            #Check the scenarios and state
+            if state not in allowed:
+                msg = f'Data contains the state "{state}" not found in model {model.ref}.'
+                raise ValueError(msg)
+            
+            
+            if scenario not in model.state_dict:
+                msg = f'Data contains a scenario "{scenario}" not found in model {model.ref}.'
+                raise ValueError(msg)
+            
+            #Extract y, t, sd for SSE calculation and sd for plotting
+            #Reformat the series if it has a multiindex
+            #Add the attribute sd for errobar plotting
+            default  = np.percentile(series, 75)/20
+            if series_.index.nlevels == 1:
+                mean = series_
                 
-                #Clean and copy the series
-                series_ = series.dropna()
-                
-                #Determine the scenario and state
-                if by == 'scenario':
-                    scenario = first
-                    state    = second
+                if user_sd is None:
+                    sd      = default
+                    mean.sd = None
                 else:
-                    scenario = second
-                    state    = first
+                    sd      = user_sd
+                    mean.sd = user_sd
                 
-                #Check the scenarios and state
-                if state not in allowed:
-                    msg = f'Data contains the state "{state}" not found in model {model.ref}.'
-                    raise ValueError(msg)
+                y_array  = series.values
+                t_array  = series.index.values
                 
-                
-                if scenario not in model.state_dict:
-                    msg = f'Data contains a scenario "{scenario}" not found in model {model.ref}.'
-                    raise ValueError(msg)
-                
-                #Extract y, t, sd for SSE calculation and sd for plotting
-                #Reformat the series if it has a multiindex
-                #Add the attribute sd for errobar plotting
-                default  = np.percentile(series, 75)/20
-                if series_.index.nlevels == 1:
-                    mean = series_
-                    
-                    if sd is None:
-                        sd      = default
-                        mean.sd = None
-                    else:
-                        mean.sd = sd
-                    
-                    y_array  = series.values
-                    t_array  = series.index.values
-                    
+            else:
+                if 'time' in series_.index.names:
+                    groupby = series_.groupby(by='time')
                 else:
-                    if 'time' in series_.index.names:
-                        groupby = series_.groupby(by='time')
-                    else:
-                        msg = f'Multi-index Series {series.name} missing a level named "time".'
-                        raise ValueError(msg)
-                    
-                    mean    = groupby.mean()
-                    sd      = groupby.std() if sd is None else sd
-                    sd      = sd.fillna(default).values if type(sd) == pd.Series else sd
+                    msg = f'Multi-index Series {series.name} missing a level named "time".'
+                    raise ValueError(msg)
+                
+                mean    = groupby.mean()
+                
+                if user_sd is None:
+                    sd      = groupby.std().fillna(default).values
                     mean.sd = sd
-                    y_array = mean.values
-                    t_array = series_.index.unique('time')
-                    
-                #Update the result
-                scenario2y_data.setdefault(scenario, {})
-                scenario2y_data[scenario][state] = y_array
+                else:
+                    sd      = user_sd
+                    mean.sd = user_sd
                 
-                scenario2t_data.setdefault(scenario, {})
-                scenario2t_data[scenario][state] = t_array
+                y_array = mean.values
+                # t_array = series_.index.unique('time')
+                t_array = np.array([i[0] for i in groupby])
                 
-                scenario2sd_data.setdefault(scenario, {})
-                scenario2sd_data[scenario][state] = sd
-                
-                scenario2tpoints.setdefault(scenario, {0})
-                scenario2tpoints[scenario].update(t_array)
-                
-                cleaned_data.setdefault(scenario, {})
-                cleaned_data[scenario][state] = mean
-                
+            #Update the result
+            scenario2y_data.setdefault(scenario, {})
+            scenario2y_data[scenario][state] = y_array
+            
+            scenario2t_data.setdefault(scenario, {})
+            scenario2t_data[scenario][state] = t_array
+            
+            scenario2sd_data.setdefault(scenario, {})
+            scenario2sd_data[scenario][state] = sd
+            
+            scenario2tpoints.setdefault(scenario, {0})
+            scenario2tpoints[scenario].update(t_array)
+            
+            plotting_data[state, scenario] = mean
+        
         #Determine the indices for extracting y_model
         #Make the tspans for numerical integration
         scenario2t_idxs = {}
@@ -150,7 +151,8 @@ class SSECalculator:
                 scenario2sd_data, 
                 scenario2t_idxs, 
                 scenario2tspan,
-                cleaned_data
+                plotting_data,
+                var_names
                 )
     
     ###########################################################################
@@ -190,12 +192,11 @@ class SSECalculator:
             raise ValueError('Parameters are missing one or more indices.')
             
     ###########################################################################
-    #Instantiators
+    #Instantiator
     ###########################################################################       
     def __init__(self, 
                  model : ODEModel,
-                 data  : dict[Scenario, dict[State, pd.Series]]|dict[State, dict[Scenario, pd.Series]], 
-                 by    : Literal['scenario', 'state'] = 'scenario'
+                 data  : dict[tuple[State, Scenario], pd.Series], 
                  ):
         
         #Determine the free parameters
@@ -226,7 +227,8 @@ class SSECalculator:
          self.scenario2sd_data, 
          self.scenario2t_idxs, 
          self.scenario2tspan,
-         self.data
+         self.data,
+         self.var_names
          ) = self.parse_data(model, data)
         
         #For plotting
@@ -282,27 +284,57 @@ class SSECalculator:
         return self.__repr__()
     
     ###########################################################################
+    #Access
+    ###########################################################################       
+    def contains_var(self, var_name: str|tuple[str]) -> bool:
+        if not var_name:
+            msg = 'Requires at least one var_name.'
+            raise ValueError(msg)
+        
+        if type(var_name) == str:
+            return var_name in self.var_names
+        else:
+            #If all var_names are in self.var_names, return True. 
+            for v in var_name:
+                if type(v) == str:
+                    if v not in self.var_names:
+                        return False
+                else:
+                    msg = f'var_name must be a string or tuple of strings. Received {type(var_name)}.'
+                    raise TypeError(msg)
+            
+            return True
+           
+    ###########################################################################
     #Plotting
     ###########################################################################
     def plot_data(self,
-                  ax            : axes.Axes,
-                  var           : str|tuple[str, str],
-                  scenarios     : Scenario|list[Scenario] = None,
+                  ax        : axes.Axes,
+                  var       : str|tuple[str, str],
+                  scenarios : Scenario|list[Scenario] = None,
                   **kwargs
                   ) -> axes.Axes:
+        
         match scenarios:
             case None:
-                scenarios = set(self.data)
-            case [*scenarios]:
+                scenarios = None
+            case scenario if is_scenario(scenario):
+                scenarios = {scenario}
+            case scenarios if all([is_scenario(c) for c in scenarios]):
                 scenarios = set(scenarios)
-            case c if isinstance(c, Scenario):
-                scenarios = {c}
             case _:
-                msg = ''
+                msg  = 'Unexpected format. The scenarios argument must be '
+                msg += 'a scenario or list of scenarios. '
+                msg += 'A single scenario is a string, number or tuple of strings/numbers.'
                 raise ValueError(msg)
         
         result = {}
-        for scenario in scenarios:
+
+        for scenario in self.scenario2y_data:
+            if scenarios is not None:
+                if scenario not in scenarios:
+                    continue
+                
             result[scenario] = self._plot_data(ax, var, scenario, **kwargs)
             
         return result
@@ -317,7 +349,7 @@ class SSECalculator:
         
         match var:
             case str(y):
-                y_series = self.data[scenario][y]
+                y_series = self.data[y, scenario]
                 
                 if y_series.index.nlevels == 1:
                     x_vals = y_series.index.values
@@ -334,8 +366,8 @@ class SSECalculator:
                     yerr = yerr.values
                 
             case [str(x), str(y)]:
-                x_series = self.data[scenario][x]
-                y_series = self.data[scenario][y]
+                x_series = self.data[x, scenario]
+                y_series = self.data[y, scenario]
                 
                 #The two series may not have the same indices
                 #Get only the common indices

@@ -70,11 +70,8 @@ r1 = rd.read_time_response(config1)
 
 for k, v in r0.items():
     assert k in r1
-    
-    for kk, vv in v.items():
-        assert kk in r1[k]
-        assert all(vv == r1[k][kk])
-    
+    assert all(v == r1[k])
+   
 r2 = rd.read_time_response(config2)
 
 try:

@@ -20,13 +20,13 @@ ind     : [0.1: 0,     0.15: 0,     0.2: 0    ]
 mu : mu_max*S/(S + k_S)
 
 ;;reactions
-dil_x  : [rate : dil*x,             stoichiometry : [x : -1]]
-dil_S  : [rate : dil*S,             stoichiometry : [S : -1]]
-dil_H  : [rate : dil*H,             stoichiometry : [H : -1]]
-feed   : [rate : dil*Sin,           stoichiometry : [S :  1]]
-growth : [rate : mu*x,              stoichiometry : [x :  1]]
-S_up   : [rate : mu*x*yield_S,      stoichiometry : [S : -1]]
-syn_H  : [rate : ind/(ind + k_ind), stoichiometry : [H : 1]]
+dil_x  : [rate : dil*x,             x : -1]
+dil_S  : [rate : dil*S,             S : -1]
+dil_H  : [rate : dil*H,             H : -1]
+feed   : [rate : dil*Sin,           S :  1]
+growth : [rate : mu*x,              x :  1]
+S_up   : [rate : mu*x*yield_S,      S : -1]
+syn_H  : [rate : ind/(ind + k_ind), H :  1]
 
 ;;tspans
 0.1  : !linspace, 0, 600, 31!

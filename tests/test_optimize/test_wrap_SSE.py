@@ -100,48 +100,24 @@ if __name__ == '__main__':
     s0.sd = 1
     s1.sd = 1
     
-    by_state = {'x0': {0: s0,
-                       1: s1,
-                       },
-                'x1': {0: s0,
-                       1: s1,
-                       },
-                } 
-    
-    by_scenario = {0: {'x0': s0,
-                       'x1': s0,
-                       },
-                   1: {'x0': s1,
-                       'x1': s1
-                       },
-                   }
+    data = {('x0', 0) : s0,
+            ('x0', 1) : s1,
+            ('x1', 0) : s0,
+            ('x1', 1) : s1
+            }
     
     model = dn.ODEModel.from_data(all_data, 'M1')
     
     ###########################################################################
     #Test Preprocessing
     ###########################################################################
-    r = ws.SSECalculator.parse_data(model, by_scenario, by='scenario')
+    r = ws.SSECalculator.parse_data(model, data)
     
     scenario2y_data0  = r[0]
     scenario2t_data0  = r[1]
     scenario2sd_data0 = r[2] 
     scenario2t_idxs0  = r[3] 
     scenario2tspan0   = r[4]
-    
-    r = ws.SSECalculator.parse_data(model, by_state, by='state')
-    
-    scenario2y_data1  = r[0]
-    scenario2t_data1  = r[1]
-    scenario2sd_data1 = r[2] 
-    scenario2t_idxs1  = r[3] 
-    scenario2tspan1   = r[4]
-    
-    test_equivalence(scenario2y_data0,  scenario2y_data1,  'scenario2y_data' )
-    test_equivalence(scenario2t_data0,  scenario2t_data1,  'scenario2t_data' )
-    test_equivalence(scenario2sd_data0, scenario2sd_data1, 'scenario2sd_data')
-    test_equivalence(scenario2t_idxs0,  scenario2t_idxs1,  'scenario2t_idxs' )
-    test_equivalence(scenario2tspan0,   scenario2tspan1,   'scenario2tspan'  )
     
     assert set(scenario2y_data0)  == {0, 1}
     assert set(scenario2t_data0)  == {0, 1}
@@ -152,12 +128,12 @@ if __name__ == '__main__':
     ###########################################################################
     #Test Instantiation
     ###########################################################################
-    get_SSE = ws.SSECalculator(model, by_scenario, by='scenario')
+    get_SSE = ws.SSECalculator(model, data)
     
     ###########################################################################
     #Test Calculation
     ###########################################################################    
-    get_SSE = ws.SSECalculator(model, by_scenario, by='scenario')
+    get_SSE = ws.SSECalculator(model, data)
     
     #Initialize variables
     init = model.state_dict
@@ -175,7 +151,7 @@ if __name__ == '__main__':
     delattr(s0, 'sd')
     delattr(s1, 'sd')
     
-    get_SSE = ws.SSECalculator(model, by_scenario, by='scenario')
+    get_SSE = ws.SSECalculator(model, data)
     
     print('Test wrap_get_SSE 0')
     p_array  = np.array([1, 1])
@@ -189,16 +165,14 @@ if __name__ == '__main__':
     s2 = s0 + 1
     s3 = pd.concat({'a': s0, 'b': s2})
     s3.index.names = ['trial', 'time']
+
+    data = {('x0', 0) : s3,
+            ('x0', 1) : s1,
+            ('x1', 0) : s3,
+            ('x1', 1) : s1
+            }
     
-    by_scenario = {0: {'x0': s3,
-                       'x1': s3,
-                       },
-                   1: {'x0': s1,
-                       'x1': s1
-                       },
-                   }
-    
-    get_SSE = ws.SSECalculator(model, by_scenario, by='scenario')
+    get_SSE = ws.SSECalculator(model, data)
     
     #Test 0
     print('Test wrap_get_SSE with multiple trials(replicates)')
@@ -221,15 +195,13 @@ if __name__ == '__main__':
     s0.sd = 0.1
     s1.sd = 0.2
     
-    by_scenario = {0: {'x0': s0,
-                        'x1': s0,
-                        },
-                    1: {'x0': s1,
-                        'x1': s1
-                        },
-                    }
+    data = {('x0', 0) : s0,
+            ('x0', 1) : s1,
+            ('x1', 0) : s0,
+            ('x1', 1) : s1
+            }
     
-    get_SSE = ws.SSECalculator(model, by_scenario, by='scenario')
+    get_SSE = ws.SSECalculator(model, data)
     
     get_SSE.plot_data(AX[0], 'x0')
     get_SSE.plot_data(AX[1], 
@@ -243,15 +215,13 @@ if __name__ == '__main__':
     print()
     print('Test plotting with multiindex')
     fig, AX = plt.subplots(1, 2)
-    by_scenario = {0: {'x0': s3,
-                       'x1': s3,
-                       },
-                   1: {'x0': s1,
-                       'x1': s1
-                       },
-                   }
+    data = {('x0', 0) : s3,
+            ('x0', 1) : s1,
+            ('x1', 0) : s3,
+            ('x1', 1) : s1
+            }
     
-    get_SSE = ws.SSECalculator(model, by_scenario, by='scenario')
+    get_SSE = ws.SSECalculator(model, data)
     
     get_SSE.plot_data(AX[0], 'x0')
     get_SSE.plot_data(AX[1], 
@@ -261,4 +231,11 @@ if __name__ == '__main__':
                                         },
                       ignore_default = True
                       )
+    
+    ###########################################################################
+    #Test Access
+    ###########################################################################
+    assert get_SSE.contains_var('x0') == True 
+    assert get_SSE.contains_var(('x0', 'x1')) == True 
+    
     

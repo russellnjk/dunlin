@@ -33,51 +33,28 @@ def read_time_response(config: dict) -> dict[Scenario, dict[State, pd.Series]]:
                 state_level    = kwargs.get('state_level', 'state')
                 scenario_level = kwargs.get('scenario_level', 'scenario')
                 trial_level    = kwargs.get('trial_level', 'trial')
+                df             = df.stack(trial_level)
                 
-                for scenario, v in df.groupby(axis=1, level=scenario_level):
-                    #Create the subdictionary if does not exist
-                    data.setdefault(scenario, {})
-                    
-                    #Remove the scenario from the columns
-                    v_ = v.droplevel(scenario_level, axis=1)
-
-                    for state, vv in v_.groupby(axis=1, level=state_level):
-                        #Get the series to add to data
-                        vv_      = vv.droplevel(level=state_level, axis=1)
-                        vv_      = vv_.T.stack()
-                        vv_.name = Name(scenario, state)
+                for state, v in df.groupby(axis=1, level=state_level):
+                    for scenario, vv in v.groupby(axis=1, level=scenario_level):
+                        #Create the key for indexing
+                        name = (state, scenario)
                         
-                        #Check the trial levels are valid
-                        vv__names  = {i for i in vv_.index.names if i != 'time'}
                         
-                        if type(trial_level) == str:
-                            if vv__names !=  {trial_level}:
-                                msg  = f'Expected the trial level(s) to be : {trial_level}. '
-                                msg += f'Received {vv__names}'
-                                raise ValueError(msg)
-                        else:
-                            if vv__names != set(trial_level):
-                                msg  = f'Expected the trial level(s) to be : {trial_level}. '
-                                msg += f'Received {vv__names}'
-                                raise ValueError(msg)
+                        #Update data
+                        vv_      = vv.squeeze().dropna()
+                        vv_.name = name
                         
-                        #Update the data
-                        if state in data[scenario]:
-                            #Check the index levels match
-                            old       = data[scenario][state] 
-                            old_names = {i for i in old.index.names if i != 'time'}
+                        #Check if an entry already exists in data
+                        if name in data:
+                            old = data[name]
+                            new = pd.concat([old, vv_])
+                            new = new.sort_index(level='time')
                             
-                            if old_names != vv__names:
-                                msg  = 'Index names do not match. '
-                                msg += 'Expected {old_names} but received {vv__names}.'
-                                raise ValueError(msg)
-                           
-                            #Merge the series and update data
-                            new                   = pd.concat([old, vv_])
-                            data[scenario][state] = new
+                            data[name] = new
                         
                         else:
-                            data[scenario][state] = vv_
+                            data[name] = vv_
              
             case _:
                 msg  = f'Could not parse data for {key}.'

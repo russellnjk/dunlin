@@ -1,7 +1,7 @@
 import numpy as np
 from numba       import njit
 from numbers     import Number
-from scipy.stats import norm, laplace, lognorm, loglaplace
+from scipy.stats import norm, laplace, lognorm, loglaplace, uniform
 from typing      import Literal
 
 ###############################################################################
@@ -129,7 +129,7 @@ class SampledParam:
         match sample:
             case None:
                 self.sample_type = 'uniform'
-                self.sample_calc = None
+                self.sample_calc = uniform(lb, ub-lb)
             
             case ['uniform', lb, ub] :
                 msg  = f'Error in instantiating sampled parameter {name}. '
@@ -180,29 +180,6 @@ class SampledParam:
                 msg += 'Received {sample}.'
                 
                 raise ValueError(msg)
-        
-        # if prior is None:
-        #     self.prior_type = 'uniform'
-        #     self.prior_calc = self._priors['uniform'](self.lb, self.ub)
-        # elif prior == 'uniform':
-        #     self.prior_type = 'uniform'
-        #     self.prior_calc = self._priors['uniform'](self.lb, self.ub)
-        # elif prior in self._priors:
-        #     if prior == 'uniform':
-        #         self.prior_type = 'uniform'
-        #         self.prior_calc = self._priors['uniform'](self.lb, self.ub)
-        #     else:
-        #         self.prior_type = prior
-        #         self.prior_calc = self._priors[prior](self.)
-            
-        
-        # #Create priors
-        # prior_                             = ['uniform', *self.bounds] if prior is None else prior
-        # sample_                            = prior_ if sample is None else sample
-        # self.prior_type, self.prior_calc   = self.read_prior(prior_,   scale)
-        # self.sample_type, self.sample_calc = self.read_prior(sample_, scale, 'sample')
-        
-        
         
         #Set guess. Set underlying attr first then use setter.
         self._guess = None

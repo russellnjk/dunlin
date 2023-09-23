@@ -16,24 +16,35 @@ model   = loaded.parsed['Monod']
 data    = loaded.parsed['MonodData']
 
 #Run algorithm
-curvefitters = dn.fit_model(model, data, runs=1, algo='simulated_annealing')
+curvefitters = dn.fit_model(model, 
+                            data, 
+                            runs = 3, 
+                            algo = 'simulated_annealing',
+                            lazy = True
+                            )
 
-fig, AX = dn.figure(2, 2)
+#This is required if lazy = True
+curvefitter_lst = []
 
-cf = curvefitters[0]
+for i, cf in enumerate(curvefitters):
+    fig, AX = dn.figure(2, 2)
+    
+    fig.suptitle(f'Run {i}')
+    
+    AX[0].set_title('x')
+    AX[1].set_title('S')
+    AX[2].set_title('H')
+    AX[3].set_title('S vs x')
+    
+    cf.plot_result(AX[0], 'x')
+    cf.plot_result(AX[1], 'S')
+    cf.plot_result(AX[2], 'H')
+    cf.plot_result(AX[3], ('S', 'x'))
+    
+    curvefitter_lst.append(cf)
 
-cf.plot_result(AX[0], 'x', )
+sorted_curvefitters = sorted(curvefitter_lst, key=lambda cf: cf.best_objective)
+print(sorted_curvefitters)
 
-# AX = dict(zip(['x', 'S', 'H', ('S', 'x')], AX_))
-
-
-
-# dn.plot_curvefit(AX, 
-#                  curvefitters=curvefitters, 
-#                  dataset=dataset, 
-#                  model=model
-#                  )
-
-# best = dn.get_best_optimization(curvefitters)
-# print(best.parameters)
-# print(best.posterior)
+#To manually instantiate a curvefitter
+#cf = dn.Curvefitter(model, data)

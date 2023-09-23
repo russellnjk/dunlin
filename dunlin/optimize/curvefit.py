@@ -20,16 +20,16 @@ from .wrap_SSE      import SSECalculator, State, Parameter, Scenario
 ###############################################################################
 class Curvefitter(opt.Optimizer):
     def __init__(self, 
-                 model : ODEModel,
-                 data  : dict[Scenario, dict[State, pd.Series]]|dict[State, dict[Scenario, pd.Series]], 
-                 by    : Literal['scenario', 'state'] = 'scenario',
+                 model            : ODEModel,
+                 data             : dict[tuple[State, Scenario], pd.Series],
+                 _nominal : pd.DataFrame = None
                  ):
         
-        get_SSE    = SSECalculator(model, data, by)
+        get_SSE    = SSECalculator(model, data)
         
         #Instantiate
-        nominal         = model.parameter_df
-        free_parameters = model.opt_args.get('free_parameters', {})
+        nominal         = model.parameter_df if _nominal is None else _nominal
+        free_parameters = model.opt_args.get('free_parameters', {}) 
         opt_args        = model.opt_args.get('opt_args',    {})
         trace_args      = model.trace_args
         
@@ -45,7 +45,7 @@ class Curvefitter(opt.Optimizer):
         self.ref   = model.ref
         self.model = model
         self.data  = get_SSE.data
-        self.by    = by
+        self._data = {k: v.copy() for k, v in data.items()}
         
         #Create a cache for the integration results
         self.cache = {}
@@ -85,6 +85,17 @@ class Curvefitter(opt.Optimizer):
             result['parameter_df'] = df
             
         return result
+    
+    ###############################################################################
+    #Seeding
+    ###############################################################################       
+    def seed(self, new_name=0):
+        nominal = self.nominal.copy()
+        for sp in self.sampled_parameters:
+            new_val          = sp.new_sample()
+            nominal[sp.name] = new_val
+
+        return type(self)(self.model, self._data, nominal)    
     
     ###########################################################################
     #Simulation
@@ -168,15 +179,16 @@ class Curvefitter(opt.Optimizer):
         result = []
         
         #Plot the data
-        data_ax     = ax if data_ax     is None else ax 
-        data_kwargs = {} if data_kwargs is None else data_kwargs
-        
-        r = self.plot_data(data_ax, 
-                           var       = var, 
-                           scenarios = scenarios, 
-                           **data_kwargs
-                           )
-        result.append(r)
+        if self.sse_calc.contains_var(var):
+            data_ax     = ax if data_ax     is None else ax 
+            data_kwargs = {} if data_kwargs is None else data_kwargs
+            
+            r = self.plot_data(data_ax, 
+                               var       = var, 
+                               scenarios = scenarios, 
+                               **data_kwargs
+                               )
+            result.append(r)
         
         #Plot the guess first
         default      = {'linestyle' : '--'}
@@ -208,17 +220,31 @@ class Curvefitter(opt.Optimizer):
 #High-Level Algorithms
 ###############################################################################
 def fit_model(model : ODEModel, 
-              data  : dict[Scenario, dict[State, pd.Series]]|dict[State, dict[Scenario, pd.Series]], 
-              by    : Literal['scenario', 'state'] = 'scenario',
-              runs  : int                          = 1, 
-              algo  : str                          = 'differential_evolution', 
+              data  : dict[tuple[State, Scenario], pd.Series], 
+              runs  : int  = 1, 
+              algo  : str  = 'differential_evolution', 
+              lazy  : bool = False,
               **kwargs
               ) -> list[Curvefitter]:
+    
+    if lazy:
+        return _fit_model_lazy(model, data, runs, algo, **kwargs)
+    else:
+        return _fit_model(model, data, runs, algo, **kwargs)
+
+def _fit_model(model : ODEModel, 
+               data  : dict[tuple[State, Scenario], pd.Series], 
+               runs  : int  = 1, 
+               algo  : str  = 'differential_evolution', 
+               **kwargs
+               ) -> list[Curvefitter]:
     curvefitters = []
-    curvefitter  = Curvefitter(model, data, by=by)
+    curvefitter  = None
     
     for i in range(runs):
-        if i > 0:
+        if i == 0:
+            curvefitter = Curvefitter(model, data)
+        else:
             curvefitter = curvefitter.seed(i)
         
         method = getattr(curvefitter, 'run_' + algo, None)
@@ -230,3 +256,29 @@ def fit_model(model : ODEModel,
         curvefitters.append(curvefitter)
         
     return curvefitters 
+
+def _fit_model_lazy(model : ODEModel, 
+                    data  : dict[tuple[State, Scenario], pd.Series], 
+                    runs  : int  = 1, 
+                    algo  : str  = 'differential_evolution', 
+                    **kwargs
+                    ) -> list[Curvefitter]:
+    curvefitters = []
+    curvefitter  = None
+    
+    for i in range(runs):
+        if i == 0:
+            curvefitter = Curvefitter(model, data)
+        else:
+            curvefitter = curvefitter.seed(i)
+        
+        method = getattr(curvefitter, 'run_' + algo, None)
+        if method is None:
+            raise ValueError(f'No algorithm called "{algo}".')
+            
+        method(**kwargs)
+        
+        curvefitters.append(curvefitter)
+        
+        yield curvefitter
+

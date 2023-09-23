@@ -133,7 +133,10 @@ reserved = {'states',
             'objective', 
             'all',
             'True', 
-            'False'
+            'False',
+            'bounds',
+            'rate',
+            'stoichiometry'
             }
 
 def check_valid_name(x, allow_reserved=False):

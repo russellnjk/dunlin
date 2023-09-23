@@ -16,13 +16,13 @@ import dunlin.utils_plot     as upp
 from .basemodel import BaseModel
 
 #Type hints
-Scenario = str|Number
+Scenario = str|Number|tuple[str|Number]
 
 def is_scenario(c: Any) -> bool:
     try:
-        if isinstance(c, Scenario):
+        if isinstance(c, (str, Number)):
             return True
-        elif all(isinstance(i, Scenario) for i in c):
+        elif all(isinstance(i, (str, Number)) for i in c):
             return True
         else:
             return False
@@ -298,19 +298,22 @@ class ODEResultDict:
         
         match scenarios:
             case None:
-                scenarios = set(self.scenario2intresult)
-            case [*scenarios]:
+                scenarios = None
+            case scenario if is_scenario(scenario):
+                scenarios = {scenario}
+            case scenarios if all([is_scenario(c) for c in scenarios]):
                 scenarios = set(scenarios)
-            case c if isinstance(c, Scenario):
-                scenarios = {c}
             case _:
-                msg = ''
+                msg  = 'Unexpected format. The scenarios argument must be '
+                msg += 'a scenario or list of scenarios. '
+                msg += 'A single scenario is a string, number or tuple of strings/numbers.'
                 raise ValueError(msg)
         
         result = {}
         for scenario, intresult in self.scenario2intresult.items():
-            if scenario not in scenarios:
-                continue
+            if scenarios is not None:
+                if scenario not in scenarios:
+                    continue
             
             result[scenario] = intresult.plot_line(ax, var, **kwargs)
         

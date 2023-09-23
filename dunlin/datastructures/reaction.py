@@ -77,22 +77,35 @@ class Reaction(DataValue):
                  states        : StateDict, 
                  states_set    : set,
                  name          : str, 
-                 stoichiometry : dict[str, Number],
                  rate          : str, 
-                 bounds        : list[Number, Number]=None,
-                 ) -> None:
-        
-        if type(stoichiometry) == dict:
-            stoichiometry_, reactants, products = self.parse_stoichiometry(name, stoichiometry)
-        elif type(stoichiometry) == str:
-            stoichiometry_, reactants, products = self.parse_equation(name, stoichiometry)
-        
+                 stoichiometry : dict[str, Number]    = None,
+                 bounds        : list[Number, Number] = None,
+                 **stoichiometry_args
+                 ):
         #Parse the reaction rates
         rate, rxn_namespace = self.get_rxn_rate(rate)
         
+        
+        #Parse the stoichiometry
+        if stoichiometry_args and stoichiometry:
+            msg  = f'Double definition of stoichiometry for reaction {name}.'
+            msg += 'Stoichiometry can be defined under a keyword argument '
+            msg += ' e.g. {"rate": <rate>, "stoichiometry": {<state0>: <coefficient0> ...} } '
+            msg += 'OR along with the rate e.g. {"rate": <rate>, <state0>: <coefficient0> ...} '
+            msg += 'but not both at the same time.'
+            raise ValueError(msg)
+            
+        elif stoichiometry_args:
+            stoichiometry = stoichiometry_args
+            
+        (stoichiometry_, 
+         reactants, 
+         products
+         ) = self.parse_stoichiometry(name, stoichiometry)
+            
         #Collect the namespace
         rxn_namespace.update(stoichiometry)
-        
+
         #Check namespaces
         undefined = rxn_namespace.difference(all_names)
         if undefined:

@@ -170,6 +170,7 @@ class Trace:
             n           : int|list[int] = 0, 
             sort        : bool = True, 
             ) -> dict|dict[int, dict]:
+        
         if type(n) == list:
             return {i: self.get(i, sort) for i in n}
         elif type(n) != int:
@@ -197,7 +198,7 @@ class Trace:
     
     @property
     def best(self):
-        return self.get(0, sort=True, reconstruct=True)
+        return self.get(0, sort=True)
     
     def var(self, last=0.5):
         df  = self.data.iloc[:, :len(self.free_parameters)]

@@ -36,23 +36,6 @@ def timer(func):
     return helper
     
 ###############################################################################
-#High-level Functions
-###############################################################################  
-best_result = namedtuple('Best', 'parameters objective posterior n')      
-def get_best_optimization(optimizers):
-    best_parameters, best_objective, best_posterior, n = None, None, None, 0
-    
-    for i, optimizer in enumerate(optimizers):
-        parameters, objective, posterior = optimizer.get_best()
-        
-        if best_parameters is None:
-            best_parameters, best_objective, best_posterior, n = parameters, objective, posterior, i
-        elif posterior > best_posterior:
-            best_parameters, best_objective, best_posterior, n = parameters, objective, posterior, i 
-    
-    return best_result(best_parameters, best_objective, best_posterior, n)
-    
-###############################################################################
 #Dunlin Classes
 ###############################################################################    
 class Optimizer(SensitivityMixin):
@@ -94,6 +77,7 @@ class Optimizer(SensitivityMixin):
         '''opt_args in this case does not include free parameters, only the 
         algorithm settings.
         '''
+        #General attributes and attributes for calculation
         self.ref                 = ref
         self.opt_args            = {} if opt_args   is None else opt_args
         self.trace_args          = {} if trace_args is None else trace_args
@@ -126,6 +110,9 @@ class Optimizer(SensitivityMixin):
         self.nominal_dct            = dict(zip(nominal.index, nominal.values))
         self.sampled_parameter_idxs = np.array(sampled_parameter_idxs)
 
+        #For tracking results
+        self._trace = None
+        
     ###########################################################################
     #Optimization and Calculation
     ###########################################################################       
@@ -343,18 +330,43 @@ class Optimizer(SensitivityMixin):
     #Access
     ###########################################################################      
     @property
-    def trace(self):
+    def trace(self) -> 'Trace':
         if self._trace is None:
             msg = 'Cannot return trace before running optimization.'
             raise AttributeError(msg)
         return self._trace
-        
+    
+    @property
+    def best(self) -> dict:
+        return self.trace.best
+    
+    @property
+    def best_objective(self) -> Number:
+        return self.best['objective']
+    
+    ###########################################################################
+    #Comparison
+    ###########################################################################      
+    def __gt__(self, other: 'Optimizer') -> bool:
+        return self.best['objective'] > other.best['objective']
+    
+    def __lt__(self, other: 'Optimizer') -> bool:
+        return self.best['objective'] < other.best['objective']
+    
+    def __eq__(self, other: 'Optimizer') -> bool:
+        return self.best['objective'] == other.best['objective']
+    
     ###########################################################################
     #Printing
     ###########################################################################    
     def __repr__(self):
         lst = ', '.join([sp.name for sp in self.sampled_parameters])
-        return f'{type(self).__name__}({lst})'
+        
+        if self._trace is None:
+            return f'{type(self).__name__}({lst})'
+        else:
+            best = '{:.6}'.format(self.best_objective)
+            return f'{type(self).__name__}({lst}, best_objective={best})'
     
     def __str__(self):
         return self.__repr__()
@@ -374,4 +386,23 @@ class Optimizer(SensitivityMixin):
                 'trace_args'      : self.trace_args,
                 'name'            : new_name
                 }
+        
         return type(self)(nominal, **args)        
+
+###############################################################################
+#High-level Functions
+###############################################################################  
+best_result = namedtuple('Best', 'parameters objective posterior n')  
+    
+def get_best_optimization(optimizers : list[Optimizer]) -> best_result:
+    best_parameters, best_objective, best_posterior, n = None, None, None, 0
+    
+    for i, optimizer in enumerate(optimizers):
+        parameters, objective, posterior = optimizer.get_best()
+        
+        if best_parameters is None:
+            best_parameters, best_objective, best_posterior, n = parameters, objective, posterior, i
+        elif posterior > best_posterior:
+            best_parameters, best_objective, best_posterior, n = parameters, objective, posterior, i 
+    
+    return best_result(best_parameters, best_objective, best_posterior, n)
