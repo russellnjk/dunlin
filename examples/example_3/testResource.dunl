@@ -128,7 +128,7 @@ line_args : [
 method : BDF
 
 ;;tspan
-{{scenario}} : !linspace(0, 900, 61)
+{{scenario}} : !linspace(0, 900, 61)!
 	$$scenario: 0, 1
 
 ;;optim_args

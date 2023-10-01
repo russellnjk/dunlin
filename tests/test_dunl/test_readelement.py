@@ -29,14 +29,27 @@ else:
 
 #Test read_element
 element = '''
-{{x}} : [`x` : [{x}]]
-    $x   : {x}
-    $x.x : 0, 1, 2, '"{4}"'
-    $$x  : x0, x1
+{x} : [`x` : [!range, 0, 1, 2!]]
+    $x  : x0, x1
 '''
 interpolators = {'x' : 'c0'}
 
 r = rel.read_element(element, interpolators)
-assert r == {'x0': {'c0': [0, 1, 2, '{4}']}, 'x1': {'c0': [0, 1, 2, '{4}']}}
+assert r == {'x0': {'c0': [0.0]}, 'x1': {'c0': [0.0]}}
 
+print(r)
+
+element = '''
+{x} : [c0: [!range, 0, 1, 0.5!]]
+    $x : j, k
+'''
+
+element = '''
+{x} : [c0: [!range, 0, 1, 0.5!]]
+    $x: j, k 
+'''
+
+interpolators = {'t' : '0'}
+
+r = rel.read_element(element, interpolators)
 print(r)

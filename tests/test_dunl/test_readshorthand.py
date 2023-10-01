@@ -1,112 +1,80 @@
 import addpath
 import dunlin as dn
-import dunlin.standardfile.dunl.readshorthand as rsh
-
-import dunlin.standardfile.dunl.delim as dm
-
-from dunlin.standardfile.dunl.readshorthand import (format_string, 
-                                                    zip_substitute,
-                                                    substitute_horizontals,
-                                                    substitute_verticals,
-                                                    substitute,
-                                                    string2chunks,
-                                                    read_shorthand
+from dunlin.standardfile.dunl.readshorthand import (read_shorthand,
+                                                    read_horizontal,
+                                                    split_interpolated,
+                                                    read_vertical
                                                     )
 
+###############################################################################
+#Test Horizontal Shorthands
+###############################################################################
+#Assume interpolation is complete
+#0, 0.5, 1, 1.5, 2
+interpolated = '!range, 0, 2, 0.5!'
+expanded     = read_horizontal(interpolated)
+# print(expanded)
+assert expanded == '0.000000, 0.500000, 1.000000, 1.500000'
 
-a = '"{a}", {a}'
-r = format_string(a, a=2)
-assert r == '"{a}", 2'
+#k_a_0, k_a_1, k_b_0, k_b_1
+interpolated = '!comma, k_{}_{}, a, 0, a, 1, b, 0!'
+expanded     = read_horizontal(interpolated)
+# print(expanded)
+assert expanded == 'k_a_0, k_a_1, k_b_0'
 
-a = '["{a}", {a}]'
-r = format_string(a, a=2)
-assert r == '["{a}", 2]'
-
-a = '[{a} : "{a}"]'
-r = format_string(a, a=2)
-assert r == '[2 : "{a}"]'
-
-a = '"{a}", {a}, {{b}}'
-r = format_string(a, a=2)
-assert r == '"{a}", 2, {b}'
-
-a = '"{a}", {a}, {{b}}, {{ {c} }}'
+#Test with faulty input
+interpolated = '!comma, k_{}_{}, a, 0, a, 1, b, 0,, !'
 try:
-    r = format_string(a, a=2)
+    expanded     = read_horizontal(interpolated)
 except Exception:
     assert True
 else:
     assert False
 
-#Set up horizontal
-horizontal          = rsh.Horizontal({'key'   : ['0', '1'],
-                                      'value' : ['2', '3']
-                                      }
-                                      )
-horizontal.join     = ', '
-horizontal.template = '[{key}: {value}]' 
+#k_a_0, k_a_1, k_b_0, k_b_1
+interpolated = '!plus, k_{}_{}, a, 0, a, 1, b, 0!'
+expanded     = read_horizontal(interpolated)
+# print(expanded)
+assert expanded == 'k_a_0 + k_a_1 + k_b_0'
 
-#Test single horizontal sub
-r = zip_substitute(horizontal.template, horizontal)
-r = horizontal.join.join(r)
-assert r == '[0: 2], [1: 3]'
+#k_a_0, k_a_1, k_b_0, k_b_1
+interpolated = '!plus, zip, k_{}_{}, a, a, b, 0, 1, 0!'
+expanded     = read_horizontal(interpolated)
+# print(expanded)
+assert expanded == 'k_a_0 + k_a_1 + k_b_0'
 
-#Test iterative horizontal sub
-template    = '{{x}} = {a}'
-horizontals = {'a': horizontal}
-r = substitute_horizontals(template, horizontals)
-assert r == '{x} = [0: 2], [1: 3]'
+###############################################################################
+#Test Vertical Shorthands
+###############################################################################
+interpolated = '''
+{mykey} : [c0: {myvalue}]
+    $mykey   : a, b, c
+    $myvalue : 0, 1, 2
+'''
 
-#Test verticals
-template  = '{x} = [0: 2], [1: 3]'
-verticals = {'x': ['x0', 'x1']}
-r = substitute_verticals(template, verticals)
-assert r == ['x0 = [0: 2], [1: 3]', 'x1 = [0: 2], [1: 3]']
+template, shorthands = split_interpolated(interpolated)
+# print(template)
+# print(shorthands)
 
-template  = '{{x}} = [0: 2], [1: 3]'
-verticals = {'x': ['x0', 'x1']}
-try:
-    r = substitute_verticals(template, verticals)
-except:
-    assert True
-else:
-    assert False
+assert template   == '{mykey} : [c0: {myvalue}]' 
+assert shorthands == {'mykey': ['a', 'b', 'c'], 'myvalue': ['0', '1', '2']}
 
-#Test substitution
-template    = '{{x}} = {a}'
-horizontals = {'a': horizontal}
-verticals = {'x': ['x0', 'x1']}
-substitute(template, horizontals, verticals)
-assert r == ['x0 = [0: 2], [1: 3]', 'x1 = [0: 2], [1: 3]']
+strings = read_vertical(interpolated)
+print(strings)
+assert strings == ['a : [c0: 0]', 'b : [c0: 1]', 'c : [c0: 2]']
 
-#Test with quotes and curly braces
-horizontal          = rsh.Horizontal({'key'   : ['0', '1'],
-                                      }
-                                      )
-horizontal.join     = ', '
-horizontal.template = '[{key}: "{s}"]' 
+###############################################################################
+#Test Vertical Shorthands
+###############################################################################
+interpolated = '''
+{mykey} : [!range, 0, 2, 0.5!]
+    $mykey   : a, b, c
+'''
+strings = read_shorthand(interpolated)
+print(strings)
 
-template    = '{{x}} = {a}'
-horizontals = {'a': horizontal}
-verticals = {'x': ['x0', 'x1']}
-r = substitute(template, horizontals, verticals)
-assert r == ['x0 = [0: "{s}"], [1: "{s}"]', 
-             'x1 = [0: "{s}"], [1: "{s}"]'
-             ]
-
-#Test string2chunks
-element = '[{a}] : "{s}" $a : {i} $a.i : 0, 1, 2 '
-r = string2chunks(element)
-template, shorthands = r
-assert template   == '[{a}] : "{s}" '
-assert shorthands == [['$', 'a ', ' {i} '], 
-                      ['$', 'a.i ', ' 0, 1, 2 ']
-                      ]
-
-#Read shorthands
-element = '[{a}] : "{s}" $a : {i} $a.i : 0, 1, 2 '
-r = read_shorthand(element)
-
-# print(r)
-# print(repr(r))
+assert strings == ['a : [0.000000, 0.500000, 1.000000, 1.500000]', 
+                   'b : [0.000000, 0.500000, 1.000000, 1.500000]', 
+                   'c : [0.000000, 0.500000, 1.000000, 1.500000]'
+                   ]
 

@@ -2,146 +2,68 @@
 #This is a comment
 
 #The semicolon ; denotes a directory 
-;M1 #Comments can come at the end of a line too
+;a #Comments can come at the end of a line too
 
-#This means params is nested under M1
-;M1;parameters
-#You do not actually need to define M1 first
-#This allows you to create nested structures easily
-v_uptake    : [1.1165e+03]*2 #Multipliers duplicate the values in lists
-k_uptake    : [2.0607e+05]*2
-Yield       : [9.7929]*2
-v_synprot   : [1.5800e+03]*2
-k_synprot   : [1.8833]*2
-jcon        : [0.4568]*2
-fR_con      : [1.0000]*2
-fR_var      : [1.0000]*2
-fM_con      : [0.1241]*2
-fM_var      : [19.4025]*2
-fU_con      : [4.5642]*2
-fU_var      : [0.0191]*2
-fH_con      : [0.01]*2
-fH_var      : [0.05]
-k_fR        : [3.1791e-05]*2
-n_fR        : [2.0000]*2
-k_fM        : [0.6051]*2
-k_fs        : [38.7304]*2
-n_fs        : [1.0000]*2
-n_fM        : [1.0000]*2
-k_fH        : [482.1578]*2
-n_fH        : [2.0000]*2
-k_P         : [0.0460]*2
-ind         : [0, 1]
-syng        : [1.2207e+05]*2
-k_ut        : [582.7975]*2
-k_ct        : [1.7564]*2
-degg        : [0.1653]*2
-degspot     : [0.4226]*2
-degrel      : [0.2812]*2
-fRel_con    : [1.0751e-06]*2
-fRel_var    : [6.2684e-03]*2
-k_fRel      : [0.3400]*2
-n_fRel      : [1.0000]*2
+;a;aa 
+#This means aa is nested under a
 
-#` is used to wrap interpolators 
-`pools`     : R, M, U, H, Rel
-`scenarios` : 0, 1
+#This code block corresponds to 
+#dct = {
+# 'aa0' : 0, 
+# 'aa1' : [1, 2], 
+# 'aa2' : [1, 1],
+# 'aa3' : {'x': 'xx', 'y': 'yy', 'z': 'zz'},
+# 'aa4' : {'x': 'xx', 'y': 'yy', 'z': 'zz'}
+#}
+#Where {'a': {'aa': dct}}
+aa0 : 0
+aa1 : [1, 2]
+aa2 : [1]*2
+aa3 : [x : xx, y : yy, z : zz]
+aa4 : [
+	x : xx, 
+	y : yy, 
+	z : zz
+	]
 
-#$$ and {{}} are for vertical shorthands
-#$ and {} are for horizontal shorthands
-#Use `scenarios` to access the interpolator
-;;states
-#A hard coded version of this would be
-# x   : [0 : 0.1, 1 : 0.1, 2 : 0.1, 3 : 0.1]
-# s   : [0 : 1e3, 1 : 1e3, 2 : 1e3, 3 : 1e3]
-# P   : [0 : 0,   1 : 0,   2 : 0,   3 : 0  ]
-# g   : [0 : 0.2, 1 : 0.2, 2 : 0.2, 3 : 0.2]
-# R   : [0 : 0.2, 1 : 0.2, 2 : 0.2, 3 : 0.2]
-# M   : [0 : 0,   1 : 0,   2 : 0,   3 : 0  ]
-# U   : [0 : 0,   1 : 0,   2 : 0,   3 : 0  ]
-# H   : [0 : 0,   1 : 0,   2 : 0,   3 : 0  ]
-# Rel : [0 : 0,   1 : 0,   2 : 0,   3 : 0  ]
+#When the code becomes repetitive, you can make use of shorthands and interpolators to simplify things
+;b;horizontal
+#This code block demonstrates horizontal shorthands
+#Horizontal shorthands let you compress an element when it contains repetitive code
+#Each pair contains the same values
+x0 : [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20]
+x1 : [!range, 0, 20, 2!] #This is useful when you specify the time span for numerical integration
 
-#With shorthands
-# ;;states
-# {{state}} : [{init}]
-	# $init          : {scenario} : {{value}}
-	# $init.scenario : 0, 1, 2, 3
-	# $$value        : 0.1, 1e3, 0, 0, 0.2,  0, 0, 0.03, 0
-	# $$state        : x,   s,   P, g, R,    M, U,    H, Rel
+x2 : [a, c, e, g, i, k, m, o, q]
+x3 : [!range, a, q, 2!] #This is useful when you work with many similar namespaces
 
-#With shorthands and interpolators
-{{state}} : [{init}]
-	$init          : {scenario} : {{value}}
-	$init.scenario : `scenarios`
-	$$value        : 0.1, 1e3, 0, 0, 0.2,  0, 0, 0.03, 0
-	$$state        : x,   s,   P, g, `pools`
+x4 : [constant_abc, constant_def, constant_hij, constant_klm, constant_nop, constant_qrs, constant_tuv, constant_wxy]
+x5 : [!comma, constant_{}, abc, def, hij, klm, nop, qrs, tuv, wxy!] #This is useful when you work with many similar namespaces
 
-;;variables
-#Definitions
-#v_uptake : Turnover number for uptake lumped with average mw of transporter
-#Proteins fRom aa
-n_R     : R/7459
-n_M     : M/300
-n_H     : H/230
-allprot : R+M+U+H
-R_frac  : R/allprot
-H_frac  : H/allprot
+x6 : constant_abc + constant_def + constant_hij + constant_klm + constant_nop + constant_qrs + constant_tuv + constant_wxy
+x7 : !plus, constant_{}, abc, def, hij, klm, nop, qrs, tuv, wxy! #This is useful when you work with many similar namespaces
 
-#Conversion between cell mass and aa
-x2aa_umol    : 1/110*1e6
-x_in_aa_umol : x*x2aa_umol
-#Uptake per umol of x_in_aa_umol
-uptake       : v_uptake*n_M*s/(k_uptake + s)
-synp         : uptake
-#Translation aa/min in 1 umol of x
-rsat    : P/(P + k_synprot)
-A       : rsat
-A_      : 1-rsat 
-synprot : v_synprot*n_R*rsat
-mu      : synprot
-#R regulation
-#Assume fast ppgpp regulation
-regR  : k_fR**n_fR/(g**n_fR + k_fR**n_fR)
-regM  : P**n_fM/(P**n_fM + k_fM**n_fM)*s**n_fs/(k_fs**n_fs+s**n_fs)
-regU  : 1
-regH  : ind*k_fH**n_fH/(k_fH**n_fH+s**n_fH)*P/(k_P+P)
-regRel: P**n_fRel/(P**n_fRel + k_fRel**n_fRel)
+#This code block demonstrates vertical shorthands
+#Vertical shorthands allow you to create multiple elements using a single template
+;;vertical;no_shorthands
+x : [a: 0, b:1, c: 2, d: 3, e: 4]
+y : [a: 0, b:1, c: 3, d: 3, e: 4]
+z : [a: 0, b:1, c: 4, d: 3, e: 4]
 
-jvar   : 1-jcon
+;;;with_shorthands
+{key}: [a: 0, b: 1, c: {value}, d: 3, e: 4]
+	$key   : x, y, z
+	$value : 2, 3, 4
 
-#These equations are hard coded. What if the number of pools were to change?
-#sum_con : fR_con + fM_con + fU_con + fH_con + fRel_con
-#sum_var : fR_var*regR + fM_var*regM + fU_var*regU + fH_var*regH + fRel_var*regRel
-#jR      : jcon*fR_con/sum_con + jvar*fR_var*regR/sum_var
-#jM      : jcon*fR_con/sum_con + jvar*fR_var*regR/sum_var
-#jU      : jcon*fR_con/sum_con + jvar*fR_var*regR/sum_var
-#jH      : jcon*fR_con/sum_con + jvar*fR_var*regR/sum_var
-#jRel    : jcon*fR_con/sum_con + jvar*fR_var*regR/sum_var
+#This code block demonstrates interpolators
+#Interpolators allow you to reuse chunks of code across your code
+`i` a: 0, b : 1, c: 2, d: {value}
 
-#These equations use shorthands and interpolators. They stay the same regardless of the number of pools?
-sum_con : {sum}
-	$sum      : f{i}
-	$sum.join : +
-	$sum.i    : `pools`
-sum_var : {sum}
-	$sum      : f{i}*reg{i}
-	$sum.join : +
-	$sum.i    : `pools`
-j{{i}} : jcon*f{{i}}_con/sum_con + jvar*f{{i}}_var*reg{{i}}/sum_var
-	$$i : `pools`
+`names` q, r, s, t, u, v, w, x,  y,  z
 
-syng_eff : syng*Rel*n_R*(A_*k_ut)/(1 +A_*k_ut +rsat*k_ct)
-degg_eff : degspot*rsat + degg
+;;interpolation
+{key} : [`i`, e: 4]
+	$key   : `names`
+	$value : 3, 4, 5, 6, 7, 8, 9, 10, 11, 12
 
-;;rates
-s   : -uptake*x_in_aa_umol
-x   :  mu*x 
-P   : -mu*P -synprot +synp*Yield 
-R   : -mu*R +syn_R
-M   : -mu*M +syn_M
-U   : -mu*U +syn_U
-H   : -mu*H +syn_H
-g   : -mu*g +syng_eff -degg_eff*g
-Rel : -mu*Rel +syn_Rel -degrel*Rel
-
+some_quantity : ( !plus, {}, `names` ! )/2

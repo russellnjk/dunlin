@@ -1,231 +1,364 @@
-from collections import UserDict
-
-import dunlin.standardfile.dunl.readstring as rst
-import dunlin.standardfile.dunl.delim as dm
-
-###############################################################################
-# Substitution of Shorthands
-###############################################################################
-def substitute(template, horizontals, verticals):
-    temp = substitute_horizontals(template, horizontals)
-    result = substitute_verticals(temp, verticals)
-
-    return result
-
-
-def substitute_horizontals(template, horizontals):
-    parsed_horizontals = {}
-    for key, dct in horizontals.items():
-        temp = zip_substitute(dct.template, dct)
-        temp = dct.join.join(temp)
-
-        parsed_horizontals[key] = temp
-
-    result = format_string(template, **parsed_horizontals)
-
-    return result
-
-
-def substitute_verticals(template, verticals):
-    return zip_substitute(template, verticals, max_brackets=1)
-
-
-def zip_substitute(template, dct, max_brackets=2):
-    if not dct:
-        return [format_string(template)]
-
-    result = []
-    keys = dct.keys()
-    for row in zip(*dct.values()):
-        local = dict(zip(keys, row))
-        temp = format_string(template, max_brackets, **local)
-        result.append(temp)
-
-    return result
-
-
-def read_shorthand(element):
-    temp = get_template_and_shorthands(element)
-    return substitute(*temp)
-
-
-def format_string(string, max_brackets=2, /, **kwargs):
-    result = []
-    curr = ''
-    quotes = []
-    for i, char in enumerate(string):
-        if char in dm.quotes:
-            if not quotes:
-                if curr:
-                    result.append(curr)
-
-                quotes.append(char)
-                curr = char
-
-            elif char == quotes[-1]:
-                curr += char
-                quotes.pop()
-                result.append(curr)
-                curr = ''
-
-            else:
-                curr += char
-                quotes.append(char)
-        else:
-            curr += char
-
-    result.append(curr)
-
-    # Perform substitution
-    for i in range(len(result)):
-        temp = result[i]
-        if not temp:
-            continue
-        elif temp[0] in dm.quotes:
-            continue
-
-        nospace = ''.join(temp.split())
-        if '{'*(max_brackets+1) in nospace or '}'*(max_brackets+1) in nospace:
-            msg = f'Max. ({max_brackets+1}) number of levels of curly braces exceeded.'
-            raise SyntaxError(msg)
-        else:
-            try:
-                result[i] = temp.format(**kwargs)
-            except KeyError as e:
-                msg = f'Unexpected field: {e.args[0]}'
-                
-                raise ValueError(msg)
-            except Exception as e:
-                raise e
-
-    # Join and return a string
-    result = ''.join(result)
-    return result
+import numpy as np
+from numbers     import Number
+from string      import ascii_letters, Formatter
 
 ###############################################################################
-# Splitting of Element
+#Top-level Function
 ###############################################################################
-def get_template_and_shorthands(element):
+def read_shorthand(interpolated: str) -> list[str]:
+    interpolated_ = read_horizontal(interpolated)
+    strings       = read_vertical(interpolated_)
+    
+    return strings
 
-    template, found = string2chunks(element)
-    vertical = {}
-    horizontal = {}
-
-    for shorthand_type, key, value in found:
-        key = key.strip()
-
-        check_valid_shorthand_key(shorthand_type, key, value)
-
-        if shorthand_type == dm.vertical:
-            values_ = rst.split_top_delimiter(value)
-            if not values_:
-                raise ValueError(
-                    f'Shorthand must have at least one value.\n{element}')
-
-            vertical[key] = values_
-
-        elif shorthand_type == dm.horizontal:
-            split = key.split('.')
-            if len(split) == 1:
-                horizontal.setdefault(key, Horizontal())
-                horizontal[key].template = value.strip()
-            else:
-                key, attr = split
-                key = key.strip()
-                attr = attr.strip()
-                horizontal.setdefault(key, Horizontal())
-
-                if attr == 'join' or attr == '_j':
-                    value = value.strip()
-                    if value[0] == value[-1] and value[0] in dm.quotes:
-                        join = value[1:-1]
-                    else:
-                        join = value
-
-                    horizontal[key].join = join
-                else:
-                    values_ = rst.split_top_delimiter(value, ',')
-                    # values_ = rst.split_top_delimiter(value, ',')
-                    if not values_:
-                        raise ValueError(
-                            f'Shorthand must have at least one value.\n{element}')
-
-                    horizontal[key][attr] = values_
-        else:
-            raise ValueError(
-                f'No shorthand type "{shorthand_type}"\n{element}')
-    return template, horizontal, vertical
-
-
-def check_valid_shorthand_key(shorthand_type, key, value):
-    if not value:
-        msg = 'No value associated with the following shorthand.'
-        msg += ' It may be missing a delimiter.'
-        msg += f'\n{(shorthand_type, key, value)}'
-        raise ValueError(msg)
-
-
-def string2chunks(string):
-    template = None
-    i0 = 0
-    quote = []
-    delimiter = ''
-    key = None
-    value = None
-    chunks = []
-
-    for i, char in enumerate(string):
-
-        if char == dm.horizontal and not quote:
-            if template is None:
-                template = string[i0:i]
-
-            if key is None and value is None:
-                delimiter += char
-                i0 = i + 1
-                continue
-            elif key is not None and value is not None:
-                chunks.append([delimiter, key, value])
-                delimiter = char
-                key = None
-                value = None
-                i0 = i + 1
-                continue
-            else:
-                msg0 = f'Missing or incomplete key-value pair in {string}.'
-                msg1 = f'Check {string[i-10: i+10]}'
-                msg = msg0 + '\n' + msg1
-                raise ValueError(msg)
-
-        elif char == dm.pair and not quote and template is not None and value is None:
-            value = ''
-            continue
-
-        elif char in dm.quotes:
+###############################################################################
+#Horizontal Shorthands
+###############################################################################
+def read_horizontal(interpolated) -> str:
+    global quotes
+    
+    i0            = 0
+    quote         = []
+    in_horizontal = False
+    result        = ''
+    
+    for i, char in enumerate(interpolated):
+        #Keep track of quotes
+        if char in quotes:
             if not quote:
                 quote.append(char)
             elif quote[-1] == char:
                 quote.pop()
             else:
                 quote.append(char)
+        
+        
+        elif char == '!' and not quote:
+            chunk = interpolated[i0:i]
+            
+            if in_horizontal:
+                chunk = _read_horizontal(chunk)
+                
+            result += chunk
+            
+            i0 = i + 1
+            in_horizontal = not in_horizontal
+            
+    chunk   = interpolated[i0:]
+    result += chunk
+    
+    return result
 
-        if template is not None:
-            if key is None:
-                key = char
-            elif value is None:
-                key += char
+def try_number(x: str, integer: bool=False) -> float|int|str:
+    '''Attempts to convert a string into a number. If it fails, this function 
+    returns a stripped version of the string.
+    '''
+    try:
+        f = float(x)
+        
+        if integer:
+            return int(f)
+        else:
+            return f
+    except:
+        return x.strip()
+    
+def _read_horizontal(chunk: str) -> str:
+    args = [i.strip() for i in chunk.split(',')]
+    
+    match args:
+        case 'range', start, stop, step, *extras:
+            new_chunk = make_range(start, stop, step, *extras)
+        
+        case 'linspace', start, stop, step, *extras:
+            new_chunk = make_linspace(start, stop, step, *extras)
+            
+        case 'comma', 'zip', template, *inputs:
+            new_chunk = make_zipped(template, *inputs, delimiter=', ')
+        
+        case 'plus', 'zip', template, *inputs:
+            new_chunk = make_zipped(template, *inputs, delimiter=' + ')
+        
+        case 'multiply', 'zip', template, *inputs:
+            new_chunk = make_zipped(template, *inputs, delimiter=' * ')
+            
+        case 'comma', template, *inputs:
+            new_chunk = make_joined(template, *inputs, delimiter=', ')
+        
+        case 'plus', template, *inputs:
+            new_chunk = make_joined(template, *inputs, delimiter=' + ')
+        
+        case 'multiply', template, *inputs:
+            new_chunk = make_joined(template, *inputs, delimiter=' * ')
+            
+        case _:
+            msg = f'Could not parse horizontal shorthand {chunk}'
+            raise NotImplementedError(msg)
+            
+    return new_chunk
+        
+def make_range(start: str, stop: str, step: str, *extras) -> str:
+    start_  = try_number(start)
+    stop_   = try_number(stop)
+    step_   = try_number(step)
+    extras_ = [try_number(i) for i in extras]
+    
+    all_args = [start_, stop_, *extras_]
+    
+    if all([isinstance(i, Number) for i in all_args]):
+        array = np.arange(start_, stop_, step_)
+        array = np.concatenate((array, extras_))
+        array = np.unique(array)
+        
+        to_join   = ['{:.6f}'.format(i) for i in array]
+        new_chunk = ', '.join(to_join)
+        
+        return new_chunk
+        
+    elif all([isinstance(i, str) for i in all_args]):
+        
+        to_join = []
+        add     = False
+        step_   = int(step_)
+        
+        if start_ not in ascii_letters:
+            s    = f'{[start, stop, step, *extras]}'
+            msg  = f'Error parsing range shorthand with arguments {s}. '
+            msg += f'{start_} not in ascii_letters.'
+            raise ValueError(msg)
+            
+        elif stop_ not in ascii_letters:
+            s    = f'{[start, stop, step, *extras]}'
+            msg  = f'Error parsing range shorthand with arguments {s}. '
+            msg += f'{stop_} not in ascii_letters.'
+            raise ValueError(msg)
+            
+        
+        for i in ascii_letters[::step_]:
+            
+            if i == start_:
+                add = True
+            elif i == stop_:
+                add = False
+                
+            if add:
+                to_join.append(i)
+        
+        to_join   += sorted(extras_)
+        new_chunk  = ', '.join(to_join)
+        
+        return new_chunk
+        
+    else:
+        s    = f'{[start, stop, step, *extras]}'
+        msg  = f'Error parsing range shorthand with arguments {s}. '
+        msg += 'Arguments must be all numbers or all strings. '
+        raise ValueError(msg)
+
+def make_linspace(start: str, stop: str, step: str, *extras) -> str:
+    start_  = try_number(start)
+    stop_   = try_number(stop)
+    step_   = try_number(step, integer=True)
+    extras_ = [try_number(i) for i in extras]
+    
+    all_args = [start_, stop_, *extras_]
+    
+    if all([isinstance(i, Number) for i in all_args]):
+        array = np.linspace(start_, stop_, step_)
+        array = np.concatenate((array, extras_))
+        array = np.unique(array)
+        
+        to_join   = ['{:.6f}'.format(i) for i in array]
+        new_chunk = ', '.join(to_join)
+        
+        return new_chunk
+    
+    else:
+        s    = f'{[start, stop, step, *extras]}'
+        msg  = f'Error parsing linspace shorthand with arguments {s}. '
+        msg += 'Arguments must be all numbers. '
+        raise ValueError(msg)
+
+def make_joined(template: str, *inputs, delimiter=', ') -> str:
+    template = template.strip()
+    n_fields = len([i for i in Formatter().parse(template) if i[1] is not None])
+    to_join  = []
+    
+    if n_fields == 0:
+        a   = f'{[template, *inputs]}'
+        msg = f'Error parsing joined shorthand with args {a}. The template has zero fields.'
+        raise ValueError(msg)
+    
+    i = 0
+    while i < len(inputs):
+        to_sub = []
+        for s in inputs[i: i+n_fields]:
+            s_ = s.strip() 
+            
+            if not s_:
+                a   = f'{[template, *inputs]}'
+                msg = f'Encountered a blank value in joined shorthand with args {a}.'
+                raise ValueError(msg)
             else:
-                value += char
+                to_sub.append(s_)
+            
+        new = template.format(*to_sub)
+        to_join.append(new)
+        i += n_fields
+    
+    new_chunk = delimiter.join(to_join)
+    
+    return new_chunk
 
+def make_zipped(template: str, *inputs, delimiter=', ') -> str:
+    template = template.strip()
+    n_fields = len([i for i in Formatter().parse(template) if i[1] is not None])
+    to_join  = []
+    
+    if n_fields == 0:
+        a   = f'{[template, *inputs]}'
+        msg = f'Error parsing zipped shorthand with args {a}. The template has zero fields.'
+        raise ValueError(msg)
+    
+    stride  = len(inputs)//n_fields
+    inputs_ = [inputs[i*stride:(i+1)*stride] for i in range(n_fields)]
+    
+    for group in zip(*inputs_):
+        to_sub = []
+        for s in group:
+            s_ = s.strip() 
+            
+            if not s_:
+                a   = f'{[template, *inputs]}'
+                msg = f'Encountered a blank value in joined shorthand with args {a}.'
+                raise ValueError(msg)
+            else:
+                to_sub.append(s_)
+            
+        new = template.format(*to_sub)
+        to_join.append(new)
+        
+    new_chunk = delimiter.join(to_join)
+    
+    return new_chunk
+
+###############################################################################
+#Vertical Shorthands
+###############################################################################
+def read_vertical(interpolated: str) -> list[str]:
+    template, shorthands = split_interpolated(interpolated)
+    
+    if not shorthands:
+        return [template]
+    
+    strings = []
+    keys    = list(shorthands)
+    
+    try:
+        values  = list(zip(*shorthands.values(), strict=True))
+    except Exception as e:
+        msg = f'Error parsing vertical shorthand for: {interpolated}'
+        
+        raise ExceptionGroup(msg, [e])
+    
+    for row in values:
+        to_sub = dict(zip(keys, row))
+        string = template.format(**to_sub)
+        
+        #Make sure there are no fields after substitution
+        n_fields = [i for i in Formatter().parse(string) if i[1]]
+        
+        if n_fields:
+            msg  = f'Error parsing vertical shorthand for: {interpolated}'
+            msg += 'Detected unused fields even after substitution.'
+            raise ValueError(msg)
+        
+        strings.append(string)
+    
+    return strings
+    
+quotes = '\'"'
+
+def split_interpolated(interpolated: str) -> tuple[str, str]:
+    global quotes
+    
+    def get_chunk(interpolated, i0, i):
+        raw = interpolated[i0: i].split(',')
+        
+        chunk = []
+        for i in raw:
+            i_ = i.strip()
+            
+            if not i:
+                msg = f'Encountered a blank value in chunk {raw}.'
+                raise ValueError(msg)
+            else:
+                chunk.append(i_)
+        
+        if chunk:
+            return chunk
+        else:
+            msg  = f'Error parsing element: {interpolated}\n'
+            msg += f'Detected a shorthand with {key} but missing values.'
+            raise ValueError(msg)
+        
+    def check_key(key):
+        if not key:
+            msg  = f'Error parsing element: {interpolated}\n'
+            msg += 'Detected a blank key.'
+            raise ValueError(msg)
+    
+    template   = None
+    i0         = 0
+    quote      = []
+    key        = None
+    shorthands = {}
+
+    for i, char in enumerate(interpolated):
+        #Keep track of quotes
+        if char in quotes:
+            if not quote:
+                quote.append(char)
+            elif quote[-1] == char:
+                quote.pop()
+            else:
+                quote.append(char)
+                
+        #The shorthand_type is being parsed
+        elif char == '$' and not quote:
+            #Check if template has been identified
+            #If no, update template
+            if template is None:
+                template = interpolated[:i].strip()
+
+            if key is None:
+                i0              = i + 1
+                
+            else:
+                chunk           = get_chunk(interpolated, i0, i,)
+                shorthands[key] = chunk
+                
+                i0             = i + 1
+                key            = None
+        
+        elif char == ':' and not quote and template is not None and key is None:
+            key = interpolated[i0:i].strip()
+            check_key(key)
+            i0  = i + 1
+            
+        else:
+            pass
+    
     if template is None:
-        return string, []
-
-    elif delimiter:
-        chunks.append([delimiter, key, value])
-
-    return template, chunks
-
-
-class Horizontal(UserDict):
-    template = ''
-    join = ', '
+        template = interpolated
+        
+    elif key is None:
+        msg  = f'Error parsing element: {interpolated}\n'
+        msg += 'Incomplete shorthand.'
+        raise ValueError(msg)
+        
+    else:
+        chunk           = get_chunk(interpolated, i0, len(interpolated))
+        shorthands[key] = chunk
+     
+    return template, shorthands

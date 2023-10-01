@@ -1,4 +1,6 @@
+from io      import StringIO
 from pathlib import Path
+from typing  import Callable
 
 import dunlin.standardfile.dunl.readelement   as rel
 import dunlin.standardfile.dunl.parsepath     as pp 
@@ -7,27 +9,36 @@ import dunlin.standardfile.dunl.delim         as dm
 ###############################################################################
 #Main Algorithm
 ###############################################################################
-def read_dunl_file(*filenames):
-    lines = []
-    for filename in filenames:
-        if type(filename) in [str, Path]:
-            with open(filename, 'r') as file:
-                lines += file.readlines()
+def read_dunl_file(filename: str|Path|StringIO) -> dict:
+    
+    if isinstance(filename, StringIO):
+        lines = filename
+        return read_lines(lines)
+    
+    elif isinstance(filename, (str, Path)):
+        path = Path(filename)
+        
+        if path.is_file() and path.exists():
+            with open(path, 'r') as file:
+                return read_lines(file)
+                
         else:
-            #Assumes a text io
-            lines += filename.readlines()
+            lines = path.splitlines()
+            return read_lines(lines)
     
-    dct = read_lines(lines, includes_newline=True, _element=rel.read_element)
-    return dct
+    else:
+        msg = 'Filename is not a StringIO, string or pathlib.Path.'
+        raise ValueError(msg)
     
-def read_dunl_code(code):
-    lines = code.split('\n')
-    return read_lines(lines, _element=rel.read_element)
+def read_dunl_code(code: str) -> dict:
+    lines = code.splitlines()
+    return read_lines(lines)
     
 ###############################################################################
 #Supporting Functions
 ###############################################################################
-def read_lines(lines, includes_newline=False, _element=rel.read_element):
+def read_lines(lines: list[str]|StringIO) -> dict:
+    
     '''Reads an iterable of lines.
     
 
@@ -38,9 +49,7 @@ def read_lines(lines, includes_newline=False, _element=rel.read_element):
     includes_newline : bool, optional
         True if the lines contain the new line character at the end and False 
         otherwise. The default is False.
-    _element : callable
-        The function for parsing elements.
-    
+
     Returns
     -------
     dct : dict
@@ -51,83 +60,92 @@ def read_lines(lines, includes_newline=False, _element=rel.read_element):
     curr_lst      = []
     curr_dct      = None
     interpolators = {}
-    chunk_lst     = []
-    join          = '' if includes_newline else '\n'
+    chunk         = ''
     
     for line in lines:
-        split = split_first(line, delimiter='#', expect_present=False)
-        if split:
-            line = split[0]
+        line = remove_comments(line)
         
         if not line:
-            chunk_lst.append(line)
+            continue
+        
         elif line[0].isspace():
-            chunk_lst.append(line)
-        else:
-            if chunk_lst:
-                chunk    = join.join(chunk_lst)
-                curr_dct = read_chunk(dct, curr_lst, curr_dct, interpolators, chunk, rel.read_element)
+            chunk += line
             
-            chunk_lst.clear()
-            chunk_lst.append(line)
+        else:
+            #Read the existing chunk
+            curr_dct = read_chunk(dct, curr_lst, curr_dct, interpolators, chunk)
+            
+            #Start a new chunk
+            chunk = line
     
-    if chunk_lst:
-        chunk    = join.join(chunk_lst)
-        curr_dct = read_chunk(dct, curr_lst, curr_dct, interpolators, chunk, rel.read_element)
+    #Read the existing chunk
+    curr_dct = read_chunk(dct, curr_lst, curr_dct, interpolators, chunk)
     
     return dct
+   
+def read_chunk(dct           : dict, 
+               curr_lst      : list, 
+               curr_dct      : dict, 
+               interpolators : dict, 
+               chunk         : str
+               ) -> dict:
+    '''Update in-place.
+    '''
     
-def read_chunk(dct, curr_lst, curr_dct, interpolators, chunk, _element=rel.read_element):
-    chunk  = chunk
-    chunk_ = chunk.strip()
+    chunk = chunk.strip()
     
-    if not chunk_:
+    if not chunk:
         pass
     
-    
     elif chunk[0] == '`':
-        split = split_first(chunk, expect_present=False)
+        key, value = read_interpolator(chunk)
         
-        if split is None:
-            # raise SyntaxError(f'Invalid interpolators. {chunk}')
-            if curr_dct is None:
-                msg = f'The section for this element has not been set yet\n{chunk}'
-                raise SyntaxError(msg)
-                
-            parsed_element = _element(chunk, interpolators=interpolators)
-            curr_dct.update(parsed_element)
-            
-            
-        elif len(split) != 2:
-            raise SyntaxError(f'Invalid interpolators. {chunk}')
-        else:
-            key, value = split
-            key        = key[1:-1].strip()
-            value      = value.strip()
-            
-            interpolators[key] = value
-    
+        interpolators[key] = value
+        
     elif chunk[0] == ';':
-        split = split_first(chunk, expect_present=False)
-        
-        if split is not None:
-            msg = 'Could not determine if this chunk is a directory or an element.'
-            msg = f'{msg} There appears to be both colons and semicolons used.\n{chunk}'
-            raise SyntaxError(msg)
-
-        curr_dct, curr_lst = pp.go_to(dct, chunk, curr_lst)
-        
+        #Note that curr_lst is modified in-place
+        curr_dct = pp.go_to(dct, chunk, curr_lst)
+    
     else:
         if curr_dct is None:
             msg = f'The section for this element has not been set yet\n{chunk}'
             raise SyntaxError(msg)
             
-        parsed_element = _element(chunk, interpolators=interpolators)
+        parsed_element = rel.read_element(chunk, interpolators=interpolators)
         curr_dct.update(parsed_element)
     
     return curr_dct
+        
+    
+def remove_comments(line: str) -> str:
+    raw = split_first(line, delimiter='#', expect_present=False)
+    
+    if raw is None:
+        return line
+    else:
+        cleaned, _ = raw
+        return cleaned
 
-def split_first(string, delimiter=dm.pair, expect_present=True):
+def read_interpolator(chunk: str) -> str:
+    #Key and value are already stripped
+    key, value = split_first(chunk[1:], delimiter='`', expect_present=True)
+    
+    #Check key and value
+    if not key.replace('_', '').isalnum():
+        msg = f'Interpolator key can onlz contain alphanumerics or underscores. Received: {key}'
+        raise ValueError(msg)
+    elif not key[0].isalpha():
+        msg = f'Interpolator key must start with alphabet. Received: {key}'
+        raise ValueError(msg)
+    
+    if not value:
+        msg = f'Interpolator value for {key} is blank.'
+        raise ValueError(msg)
+    elif len(value.splitlines()) > 1:
+        msg = f'Interpolator value for {key} has more than one line.'
+    return key, value
+
+def split_first(string, delimiter=':', expect_present=True) -> str|None:
     quote = []
     for i, char in enumerate(string):
         if char == delimiter and not quote:

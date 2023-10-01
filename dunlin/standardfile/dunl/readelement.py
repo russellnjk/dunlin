@@ -2,16 +2,15 @@ import re
 
 import dunlin.standardfile.dunl.readstring    as rst
 import dunlin.standardfile.dunl.readshorthand as rsh
-import dunlin.standardfile.dunl.delim         as dm
 
 def read_element(element, interpolators=None):
     try:
         interpolated = interpolate(element, interpolators)
-        substituted  = rsh.read_shorthand(interpolated)
+        strings      = rsh.read_shorthand(interpolated)
         result       = {} 
         
-        for s in substituted:
-            data   = rst.read_string(s)
+        for string in strings:
+            data   = rst.read_string(string)
             result = {**result, **data} 
             
     except Exception as e:
@@ -25,8 +24,11 @@ def read_element(element, interpolators=None):
 
 ###############################################################################
 #Interpolation
-###############################################################################    
+############################################################################### 
+quotes = '\'"'
+   
 def interpolate(element, interpolators):
+    global quotes
     result          = ''
     i0              = 0
     quote           = []
@@ -49,7 +51,7 @@ def interpolate(element, interpolators):
 
             i0 = i + 1
 
-        elif char in dm.quotes:
+        elif char in quotes:
             if not quote:
                 quote.append(char)
             elif quote[-1] == char:

@@ -1,10 +1,10 @@
-from datetime import datetime
+import dunlin.standardfile.dunl.readstring as rst
 
-import dunlin.standardfile.dunl.readprimitive as rpr
-import dunlin.standardfile.dunl.readstring    as rst
-import dunlin.standardfile.dunl.delim         as dm
+directory_delimiter = ';'
+quotes              = '\'"'
 
-def go_to(dct, path, curr_lst, assign=None):
+
+def go_to(dct: dict, path: str, curr_lst: list) -> dict:
     '''
     Recurses through a dictionary to reach a sub-dictionary, analagous to 
     traversing directories in paths in a system of folders.  
@@ -21,15 +21,9 @@ def go_to(dct, path, curr_lst, assign=None):
         A list of keys corresponding to the current directory. Allows the function 
         to parse relative paths such as `..b` which means b is a subdirectory 
         of the current directory.
-    assign : TYPE, optional
-        The value to assign to the directory. If not None, the directory is 
-        replaced with the value of this argument. The default is None.
-
+    
     Notes
     -----
-    Dunlin's language does not make use of the assign argument. May be removed 
-    in the future.
-    
     Important: `curr_lst` is modified in place. 
     
     Returns
@@ -38,22 +32,20 @@ def go_to(dct, path, curr_lst, assign=None):
         Returns the subdirectory. It will be created if it does not already exist. 
         If the `assign` argument is used, it will be the value of `assign` instead 
         of a dictionary.
-    curr_lst : list of str
-        A list of keys corresponding to the current directory.
-
+    
     '''
     #Preprocess
     path     = split_path(path) if type(path) == str else path
     path_lst = replace_relative_path(path, curr_lst)
     
     #Recurse and update curr_lst
-    dst = recurse(dct, path_lst, assign)
+    dst = recurse(dct, path_lst)
     curr_lst.clear()
     curr_lst.extend(path_lst)
     
-    return dst, curr_lst
+    return dst
 
-def split_path(string):
+def split_path(string: str) -> list[str]:
     '''
     Splits a path-like string into keys. Each key must be a valid primitive in 
     dunlin's language. The delimiter is ignored if it occurs inside a pair of 
@@ -63,10 +55,13 @@ def split_path(string):
     -----
     The delimiter is expected to occur at the start of the string.
     '''
+    global directory_delimiter
+    global quotes
+    
     string = string.strip()
     if not string:
         raise ValueError('Blank path.')
-    elif string[0] != dm.directory:
+    elif string[0] != directory_delimiter:
         raise ValueError('Directory must begin with delimiter.')
         
     string = string[1:]
@@ -75,7 +70,7 @@ def split_path(string):
     chunks = []
     
     for i, char in enumerate(string):
-        if char == dm.directory and not quote:
+        if char == directory_delimiter and not quote:
             chunk = string[i0:i]
             chunk = read_key(chunk)
                 
@@ -83,7 +78,7 @@ def split_path(string):
             
             i0 = i + 1
         
-        elif char in dm.quotes:
+        elif char in quotes:
             if not quote:
                 quote.append(char)
             elif quote[-1] == char:
@@ -97,7 +92,7 @@ def split_path(string):
     
     return chunks
 
-def read_key(string):
+def read_key(string: str) -> str:
     '''
     Parses the string into a key.
     '''
@@ -155,7 +150,7 @@ def replace_relative_path(path, curr_lst):
 
     return path_
 
-def recurse(dct, path_lst, assign=None):
+def recurse(dct, path_lst):
     '''The recursive function for accessing the subdirectory. Creates new 
     directories (dicts) if they do not already exist.
     '''
@@ -164,13 +159,9 @@ def recurse(dct, path_lst, assign=None):
     dct_       = dct.setdefault(next_level, type(dct)())
     
     if len(path_lst) == 1:
-        if assign is not None:
-            dct[next_level] = assign
-            return assign
-        else:
-            return dct_
+        return dct_
         
     else:
         path_lst_ = path_lst[1:]
 
-        return recurse(dct_, path_lst_, assign)
+        return recurse(dct_, path_lst_)
