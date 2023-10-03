@@ -1,15 +1,12 @@
 import addpath
-import readstring as rst
+import dunlin as dn
+import dunlin.standardfile.dunl.readstring as rst
 
 ###############################################################################
 #Test Parsing Individual Values
 ###############################################################################
 #Test read_value
-'''
-Parses values. Two cases are possible:
-    1. x is dunl builtin function call.
-    2. x is a primitive.
-'''
+
 a = 'a'
 r = rst.read_value(a)
 assert r == 'a'
@@ -22,9 +19,6 @@ a = 'a'
 r = rst.read_value(a)
 assert r == 'a'
 
-'''
-IMPORTANT: Parsing builtin functions will be left for later
-'''
 
 #Test read_key
 '''
@@ -354,24 +348,6 @@ a = 'a, b, c'
 r = rst.read_string(a, enforce_dict=False)
 assert r == ['a', 'b', 'c']
 
-#Test parsing builtins
-a = '!linspace, 0, 10, 11!'
-r = rst.read_value(a)
-assert r == list(range(11))
-
-a = '!linspace, 0, 10, 11!'
-r = rst.read_key(a)
-assert r == tuple(range(11))
-assert type(r) == tuple
-
-a = '[0, 1] : !linspace, 0, 10, 11!'
-r = rst._read_string(a)
-assert r == [['0', '1'], ':', '!linspace, 0, 10, 11!']
-
-a = '[0, 1] : !linspace, 0, 10, 11!'
-r = rst.read_string(a)
-assert r == {(0, 1) : list(range(11))}
-
 try:
     a = 'f(x, y) : x + y'
     r = rst.read_string(a)
@@ -380,4 +356,4 @@ except:
 else:
     assert False
     
-print(r)
+# print(r)

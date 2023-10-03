@@ -2,31 +2,48 @@ from datetime  import datetime
 from pyrfc3339 import generate
 
 import addpath
-from writeelement import write_primitive, write_list, write_dict
+from dunlin.standardfile.dunl.writeelement import (write_primitive, 
+                                                   write_list, 
+                                                   write_dict,
+                                                   write_string_primitive
+                                                   )
 
+import dunlin.standardfile.dunl.writeelement as we
+
+###############################################################################
+#Check write_string_primitive
+###############################################################################
+a = '1' 
+b = 'True'
+c = 'c'
+d = '"d"'
+e = '\'"e"\''
+f = '"'
+g = '"g'
+h = 'h!' 
+i = '"f(x, y)"'
+j = 'f(x, y)'
+
+assert write_string_primitive(a) == repr(a)
+assert write_string_primitive(b) == repr(repr(True))
+assert write_string_primitive(c) == c
+assert write_string_primitive(d) == d
+assert write_string_primitive(e) == e
+assert write_string_primitive(f) == repr(f)
+assert write_string_primitive(g) == repr(g)
+assert write_string_primitive(h) == repr(h)
+assert write_string_primitive(i) == i
+assert write_string_primitive(j) == repr(j)
+
+# print(repr(write_string_primitive(f)))
 ###############################################################################
 #Check write_primitive
 ###############################################################################
 #Tests for strings
-a = "'a'"
-r = write_primitive(a)
-assert r == a
-
+#Simple string
 a = "a"
 r = write_primitive(a)
 assert r == a
-
-a = "'1+2'"
-r = write_primitive(a)
-assert r == a
-
-a = '1+2'
-r = write_primitive(a)
-assert r == a
-
-a = '!'
-r = write_primitive(a)
-assert r == repr(a)
 
 #Tests for other primitives
 a = 123

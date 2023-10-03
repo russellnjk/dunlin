@@ -1,5 +1,3 @@
-import re
-
 import dunlin.standardfile.dunl.readstring    as rst
 import dunlin.standardfile.dunl.readshorthand as rsh
 
@@ -14,11 +12,9 @@ def read_element(element, interpolators=None):
             result = {**result, **data} 
             
     except Exception as e:
-        arg   = e.args[0]
-        arg   = f'Error trying to parse element:\n{element}\n{arg}'
-        error = type(e)(arg)
+        msg = f'Error trying to parse element:\n{element}'
         
-        raise error
+        raise ExceptionGroup(msg, [e])
         
     return result
 

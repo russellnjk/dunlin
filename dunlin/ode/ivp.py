@@ -41,7 +41,7 @@ def integrate(func,
     
     for event in list(events):
         y0, p0, events = event.setup(0, y0, p0, events)
-    
+   
     #Create caches
     t_result = []
     y_result = []

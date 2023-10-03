@@ -15,4 +15,3 @@ from .keywords         import (flatten_kwargs,
                                recursive_get, 
                                process_kwargs
                                )
-from .bar              import (plot_bar)  

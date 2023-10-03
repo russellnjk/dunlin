@@ -5,6 +5,8 @@ from numbers  import Number
 import dunlin.standardfile.dunl.readprimitive as rpr
 import dunlin.standardfile.dunl.delim         as dm
 
+#TODO: find ways to accomodate brackets
+
 ###############################################################################
 #Key-Value Reader for Substituted dun Strings
 ###############################################################################
@@ -28,12 +30,11 @@ def read_string(string, enforce_dict=True):
     '''
     try:
         result = _read_string(string, read_flat)
+    
     except Exception as e:
-        
-        msg    = e.args[0]
-        msg    = f'Error in parsing string:\n{string}\n\n{msg}'
+        msg = f'Error in parsing string:\n{string}\n'
 
-        raise type(e)(msg)
+        raise ExceptionGroup(msg, [e])
     
     if type(result) == list and enforce_dict:
         return dict(enumerate(result))
@@ -316,34 +317,16 @@ def read_key(x):
                 raise ValueError('Blank string cannot be used a key.')
         return key
 
-def read_value(x):
-    '''
-    Parses values. Two cases are possible:
-        1. x represents dunl builtin function call.
-        2. x represents a primitive.
-    '''
-    if not x:
-        raise ValueError(x)
-    
-    elif x[0] == '!':
-        line = x[1:-1]
-        
-        try:
-            args = _read_string(line, read_flat)
-        except:
-            raise InvalidFunction(x)
-        
-        return read_builtin(*args)
-        # if func_name in bi.builtin_functions:
-        #     try:
-        #         return bi.builtin_functions[func_name](*args)
-        #     except:
-        #         raise FailedFunction(x)
-        # else:
-        #     raise NoFunction(func_name)
-
-    else:
+def read_value(x: str) -> Number|str|bool|datetime:
+    try:
         return rpr.read_primitive(x)
+    except:
+        raise DunValueError(x)
+   
+class DunValueError(Exception):
+    def __init__(self, x):
+        super().__init__(f'Invalid value: {repr(x)}.')
+
 
 def split_top_delimiter(string, delimiter=dm.item):
     try:
@@ -383,72 +366,4 @@ def split_top_delimiter(string, delimiter=dm.item):
             raise ValueError(f'Encountered blank value or extra delimiters: {string}')
             
     return chunks
-
-def read_builtin(*args):
-    match args:
-        case ('range', start, stop, step, *extras):
-            
-            if not isinstance(start, Number):
-                msg = 'When using range, the "start" argument must be a number.'
-                raise ValueError(msg)
-            
-            elif not isinstance(stop, Number):
-                msg = 'When using range, the "stop" argument must be a number.'
-                raise ValueError(msg)
-            
-            elif not isinstance(step, Number):
-                msg = 'When using range, the "step" argument must be a number.'
-                raise ValueError(msg)
-                
-            elif any([not isinstance(i, Number) for i in extras]):
-                msg = 'When using range, the "extras" argument can only contain numbers.'
-                raise ValueError(msg)
-            
-            array = np.arange(start, stop, step)
-            array = np.concatenate((array, extras))
-            array = np.unique(array)
-        
-            return list(array)
-        
-        case ('linspace', start, stop, points, *extras):
-            
-            if not isinstance(start, Number):
-                msg = 'When using range, the "start" argument must be a number.'
-                raise ValueError(msg)
-            
-            elif not isinstance(stop, Number):
-                msg = 'When using range, the "stop" argument must be a number.'
-                raise ValueError(msg)
-            
-            elif not isinstance(points, Number):
-                msg = 'When using range, the "points" argument must be a number.'
-                raise ValueError(msg)
-                
-            elif any([not isinstance(i, Number) for i in extras]):
-                msg = 'When using range, the "extras" argument can only contain numbers.'
-                raise ValueError(msg)
-            
-            array = np.linspace(start, stop, points)
-            array = np.concatenate((array, extras))
-            array = np.unique(array)
-        
-            return list(array)
-        
-        case _:
-            msg = f'Could not parse the builtin call {args}.'
-            raise ValueError(msg)
-            
-class InvalidFunction(Exception):
-    def __init__(self, x):
-        msg = f'Invalid function call {x}'
-        super().__init__(msg)
-
-class NoFunction(Exception):
-    def __init__(self, f):
-        msg = f'No function "{f}"'
-        super().__init__(msg)
-
-class FailedFunction(Exception):
-    def __init__(self, x):
-        msg = f'Could not execute "{x}". Some arguments may be wrong.'
-        super().__init__(msg)
+      

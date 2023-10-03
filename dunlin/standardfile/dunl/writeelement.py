@@ -78,28 +78,49 @@ def write_dict(dct            : dict,
 def write_primitive(x: Primitive, n_format: Callable=str) -> str:
     if isinstance(x, Number):
         return n_format(x)
-    elif type(x) == str:
-        if needs_quotes(x):
-            return repr(x)
-        else:
-            return x
-    elif type(x) == bool:
+    
+    elif isinstance(x, bool):
         return str(x)
-    elif type(x) == datetime:
+    
+    elif isinstance(x, datetime):
         return repr(generate(x, accept_naive=True, microseconds=True))
+    
+    elif isinstance(x, str):
+        return write_string_primitive(x)
+    
     else:
         raise TypeError(f'Unexpected type: {type(x).__name__}')
     
 special_characters = set('!$#`;:,')
-def needs_quotes(string: str) -> bool:
-    if special_characters.intersection(string):
-        return True
+
+def write_string_primitive(x: str) -> str:
+    global special_characters
     
-    if len(string) >= 2:
-        return string[0] in '\'"' and string[0] != string[-1]
-    try:
-        r = rpr.read_primitive(string) != string
-    except:
-        return True
+    #Check for unbalanced quotes and dunlin syntax characters
+    quote                  = []
+    has_special_characters = False
     
-    return r
+    for i in x:
+        if i in '\'"':
+            if not quote:
+                quote.append(i)
+            elif quote[-1] == i:
+                quote.pop(-1)
+            else:
+                quote.append(i)
+        
+        elif i in special_characters and not quote:
+            has_special_characters = True
+            
+    
+    if quote or has_special_characters:
+        return repr(x)
+    
+    #Check if the readout is a number, boolean or datetime    
+    readout = rpr.read_primitive(x)
+    
+    if not isinstance(readout, str):
+        return repr(x)
+    
+    #Otherwise return x as-is
+    return x

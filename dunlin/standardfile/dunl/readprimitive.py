@@ -1,17 +1,14 @@
-import pyrfc3339 as datetime
+# import pyrfc3339 as datetime
+from datetime  import datetime
+from pyrfc3339 import parse as parse_datetime
+from numbers   import Number
 
-# illegals = [':', ';', '?', '%', '$', 
-#             '#', '@', '!', '`', '~', '&', 
-#             '{', '}', '|',  
-#             '\\', '__',
-#             ]
-illegals = ['__']
+illegals = {'__'}
 
-def read_primitive(x):
+def read_primitive(x: str) -> Number|str|bool|datetime:
     '''
     Reads a single value "x" which corresponds to one of the 4 cases:
-        1. x is a number.
-        2. x is a math expression.
+        1. x is a number/math expression
         3. x is a datetime
         4. x is a Boolean
         5. x is a string
@@ -22,72 +19,63 @@ def read_primitive(x):
     -----
     Double underscores are illegal for safety reasons. To change set of illegal 
     characters, you can modify the global variable ```illegals```.
+    
     '''
     
-    #Case 1: x is a number
-    try:
-        return int(x)
-    except:
-        try:
-            return float(x)
-        except:
-            pass
+    x = x.strip()
     
-    #Case 2: x is a math expression
-    if ismath(x):
-        try:
-            return eval(x, {}, {})
-        except:
-            raise DunValueError(x)
+    #Raise an exception in these cases
+    if not x:
+        msg = 'Encountered a blank value when reading a string.'
+        raise ValueError(msg)
+    elif '__' in x:
+        msg  = f'Error reading the following: {x}'
+        msg += 'Double underscores are not allowed.'
+        raise ValueError(msg)
+    
+    #Case 1: x is a boolean
+    elif x == 'True':
+        return True
+    elif x == 'False':
+        return False
+    
+    #Case 2: x is a number or mathematical expression
+    elif ismath(x):
+        return eval(x, {}, {})
             
     #Case 3: x is a datetime 
     try:
-        return datetime.parse(x)
+        return parse_datetime(x)
     except:
         pass
     
-    #Case 4: x is a boolean
-    lower =  x.lower()
-    if lower == 'true':
-        return True
-    elif lower == 'false':
-        return False
-        
-    #Case 5: x is a string
-    #Case 5a: x is a string with quotes.
-    #Strip quotes ONCE and continue to next
-    if x[0] in ['"', "'"]:
-        if x[0] == x[-1]:
-            x = x[1:-1]
-        else:
-            raise DunValueError(x)
-    
-    
-    #Case 5b: x is a string without quotes
-    #Check for illegal symbols
-    if hasillegals(x):
-        raise DunValueError(x)
-        
-    return x
-
-def hasillegals(x):
-    global illegals
-    for s in  illegals:
-        if s in x:
-            return True
-    return False
+    #Case 4: x is a string
+    if len(x) == 1:
+        return x
+    elif x[0] == x[-1] and x[0] in '\'"':
+        return x[1:-1]
+    else:
+        return x
     
 notnum = set('.+-*/%() \n\t\r')
 math   = set('0123456789.+-*/%() \n\t\r')
-def ismath(x):
+def ismath(x: str) -> bool:
     '''Tests if a string is a math expression. Assumes the string is not a number.
     '''
     global notnum
     global math
-
-    return all([char in math for char in x]) and not all([char in notnum for char in x])
-
-class DunValueError(Exception):
-    def __init__(self, x):
-        super().__init__(f'Invalid value: {repr(x)}.')
+    
+    has_numbers = False
+    for char in x:
+        if char not in math:
+            return False
+    
+        elif char not in notnum:
+            has_numbers = True
+            
+    if has_numbers:
+        return True
+    else:
+        return False
+    
 

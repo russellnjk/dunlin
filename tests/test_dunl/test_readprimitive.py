@@ -13,7 +13,6 @@ e = 'a + b'
 f = '1 + 2'
 g = '1979-05-27T07:32:00Z'
 h = 'True'
-i = '!linspace(0, 10, 11)'
 
 r = rpr.read_primitive(a)
 assert r == 'a'
@@ -38,9 +37,6 @@ assert type(r) == datetime
 
 r = rpr.read_primitive(h)
 assert r is True
-
-r = rpr.read_primitive(i)
-assert list(r) == list(range(11))
 
 #Trick cases
 a = 'a.b.3'

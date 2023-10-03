@@ -11,9 +11,9 @@ plt.close('all')
 #Read files
 model_filename = 'testMonod1.dunl'
 
-loaded  = dn.load_file(model_filename)
-model   = loaded.parsed['Monod'] 
-data    = loaded.parsed['MonodData']
+raw, instantiated  = dn.load_file(model_filename)
+model   = instantiated['Monod'] 
+data    = instantiated['MonodData']
 
 #Run algorithm
 curvefitters = dn.fit_model(model, 
@@ -27,14 +27,14 @@ curvefitters = dn.fit_model(model,
 curvefitter_lst = []
 
 for i, cf in enumerate(curvefitters):
-    fig, AX = dn.figure(2, 2)
+    fig, AX = plt.subplots(2, 2)
     
     fig.suptitle(f'Run {i}')
     
-    AX[0].set_title('x')
-    AX[1].set_title('S')
-    AX[2].set_title('H')
-    AX[3].set_title('S vs x')
+    AX[0, 0].set_title('x')
+    AX[0, 1].set_title('S')
+    AX[1, 0].set_title('H')
+    AX[1, 1].set_title('S vs x')
     
     cf.plot_result(AX[0], 'x')
     cf.plot_result(AX[1], 'S')

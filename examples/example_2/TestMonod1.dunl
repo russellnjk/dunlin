@@ -29,9 +29,9 @@ S_up   : [rate : mu*x*yield_S,      S : -1]
 syn_H  : [rate : ind/(ind + k_ind), H :  1]
 
 ;;tspans
-0.1  : !linspace, 0, 600, 31!
-0.15 : !linspace, 0, 600, 31!
-0.2  : !linspace, 0, 600, 31!
+0.1  : [!linspace, 0, 600, 31!]
+0.15 : [!linspace, 0, 600, 31!]
+0.2  : [!linspace, 0, 600, 31!]
 
 ;;opt_args
 free_parameters : [
