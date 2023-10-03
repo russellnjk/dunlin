@@ -8,9 +8,9 @@ print(p)
 
 setuptools.setup(
     name                          = "dunlin", 
-    version                       = "0.0.1",
+    version                       = "0.0.2",
     author                        = "Russell Ngo",
-    author_email                  = "biernjk@gmail.com",
+    author_email                  = "russellnjk@gmail.com",
     description                   = "A package ODE modeling (Still in development).",
     long_description              = long_description,
     long_description_content_type = "text/markdown",
@@ -22,7 +22,7 @@ setuptools.setup(
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent"
     ],
-    python_requires='>=3.7',
+    python_requires='>=3.10',
     include_package_data = True,
     package_dir          = {'dunlin': 'dunlin'},
     package_data         = {'dunlin': ['_test/*.ini',
